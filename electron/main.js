@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const { setupServiceHandlers } = require('./services/serviceManager');
 const { setupTerminalHandlers } = require('./services/terminalManager');
 const { setupClaudeHandlers } = require('./services/claudeManager');
@@ -196,6 +196,34 @@ function setupFileSystemHandlers() {
       return { success: true, files: files.slice(0, MAX_RESULTS), contentMatches: contentMatches.slice(0, MAX_RESULTS) };
     } catch (error) {
       return { success: false, error: error.message, files: [], contentMatches: [] };
+    }
+  });
+
+  ipcMain.handle('fs:git-status', async (_, projectPath) => {
+    try {
+      const normalizedProjectPath = normalizeWithinProject(projectPath);
+      const result = await new Promise((resolve) => {
+        execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
+          if (error) {
+            resolve({ success: false, error: stderr || error.message, entries: [] });
+            return;
+          }
+
+          const entries = stdout
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .map((line) => ({
+              code: line.slice(0, 2).trim() || '??',
+              path: line.slice(3).trim(),
+            }));
+
+          resolve({ success: true, entries });
+        });
+      });
+
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message, entries: [] };
     }
   });
 

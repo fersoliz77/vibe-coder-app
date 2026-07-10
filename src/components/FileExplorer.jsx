@@ -1,29 +1,7 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import CodeMirror from '@uiw/react-codemirror';
-import { oneDark } from '@codemirror/theme-one-dark';
-import { javascript } from '@codemirror/lang-javascript';
-import { json } from '@codemirror/lang-json';
-import { html } from '@codemirror/lang-html';
-import { css } from '@codemirror/lang-css';
-import { markdown } from '@codemirror/lang-markdown';
-import { python } from '@codemirror/lang-python';
-import { sql } from '@codemirror/lang-sql';
-import { yaml } from '@codemirror/lang-yaml';
-import Prism from 'prismjs';
-import 'prismjs/themes/prism-tomorrow.css';
-import 'prismjs/components/prism-markup';
-import 'prismjs/components/prism-css';
-import 'prismjs/components/prism-javascript';
-import 'prismjs/components/prism-jsx';
-import 'prismjs/components/prism-typescript';
-import 'prismjs/components/prism-tsx';
-import 'prismjs/components/prism-json';
-import 'prismjs/components/prism-python';
-import 'prismjs/components/prism-sql';
-import 'prismjs/components/prism-yaml';
-import 'prismjs/components/prism-bash';
-import 'prismjs/components/prism-markdown';
+import { useState, useEffect, useCallback, useMemo, useRef, lazy, Suspense } from 'react';
 import './FileExplorer.css';
+
+const CodeEditor = lazy(() => import('./CodeEditor'));
 
 const FILE_META = {
   js: { label: 'JS', color: '#f7df1e' },
@@ -57,58 +35,6 @@ const FILE_META = {
 
 const STORAGE_PREFIX = 'fileExplorerState:';
 
-const LANGUAGE_BY_EXTENSION = {
-  js: 'javascript',
-  jsx: 'jsx',
-  ts: 'typescript',
-  tsx: 'tsx',
-  json: 'json',
-  md: 'markdown',
-  css: 'css',
-  scss: 'css',
-  html: 'markup',
-  htm: 'markup',
-  py: 'python',
-  sql: 'sql',
-  yml: 'yaml',
-  yaml: 'yaml',
-  sh: 'bash',
-  bat: 'bash',
-  ps1: 'bash',
-};
-
-function getCodeMirrorExtensions(extension) {
-  const ext = (extension || '').replace('.', '').toLowerCase();
-  switch (ext) {
-    case 'js':
-      return [javascript({ jsx: false, typescript: false })];
-    case 'jsx':
-      return [javascript({ jsx: true, typescript: false })];
-    case 'ts':
-      return [javascript({ jsx: false, typescript: true })];
-    case 'tsx':
-      return [javascript({ jsx: true, typescript: true })];
-    case 'json':
-      return [json()];
-    case 'html':
-    case 'htm':
-      return [html()];
-    case 'css':
-    case 'scss':
-      return [css()];
-    case 'md':
-      return [markdown()];
-    case 'py':
-      return [python()];
-    case 'sql':
-      return [sql()];
-    case 'yml':
-    case 'yaml':
-      return [yaml()];
-    default:
-      return [];
-  }
-}
 
 function getExtension(name) {
   const parts = name.split('.');
@@ -166,12 +92,6 @@ function updatePathPrefix(value, oldPath, nextPath) {
     return `${nextPath}${value.slice(oldPath.length)}`;
   }
   return value;
-}
-
-function highlightContent(content, extension) {
-  const languageName = LANGUAGE_BY_EXTENSION[(extension || '').replace('.', '')] || 'clike';
-  const grammar = Prism.languages[languageName] || Prism.languages.clike || Prism.languages.markup;
-  return Prism.highlight(content || '', grammar, languageName);
 }
 
 function TreeNode({
@@ -413,6 +333,23 @@ function ActionModal({ action, onClose, onConfirm }) {
   );
 }
 
+function ConfirmModal({ state, onCancel, onConfirm }) {
+  if (!state) return null;
+
+  return (
+    <div className="file-modal-backdrop" onClick={onCancel}>
+      <div className="file-modal" onClick={(event) => event.stopPropagation()}>
+        <h3 className="file-modal__title">Unsaved Changes</h3>
+        <p className="file-modal__text">{state.message}</p>
+        <div className="file-modal__actions">
+          <button className="btn btn--small" type="button" onClick={onCancel}>Keep Editing</button>
+          <button className="btn btn--small btn--danger" type="button" onClick={onConfirm}>Discard</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function FileExplorer({ project }) {
   const [rootItems, setRootItems] = useState([]);
   const [expandedPaths, setExpandedPaths] = useState(new Set());
@@ -434,10 +371,14 @@ export default function FileExplorer({ project }) {
   const [renamingPath, setRenamingPath] = useState(null);
   const [renamingValue, setRenamingValue] = useState('');
   const [showDiff, setShowDiff] = useState(false);
+  const [confirmState, setConfirmState] = useState(null);
+  const [highlightedContent, setHighlightedContent] = useState('');
+  const [savedHighlightedContent, setSavedHighlightedContent] = useState('');
 
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
   const activeTabDirty = activeTab?.type === 'text' && activeTab.draftContent !== activeTab.savedContent;
   const hasDirtyTabs = tabs.some((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent);
+  const dirtyTabs = tabs.filter((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent);
 
   const loadDirectory = useCallback(async (dirPath) => {
     return window.electronAPI.fs.readDir(dirPath);
@@ -821,14 +762,7 @@ export default function FileExplorer({ project }) {
     setContextMenu(null);
   }, [refreshTree]);
 
-  const closeTab = useCallback((tabId) => {
-    const targetTab = tabs.find((tab) => tab.id === tabId);
-    const isDirty = targetTab?.type === 'text' && targetTab.draftContent !== targetTab.savedContent;
-    if (isDirty) {
-      const shouldClose = window.confirm(`Close ${targetTab.name} without saving?`);
-      if (!shouldClose) return;
-    }
-
+  const closeTabImmediate = useCallback((tabId) => {
     setTabs((prev) => {
       const remaining = prev.filter((item) => item.id !== tabId);
       setActiveTabId((currentActive) => {
@@ -837,7 +771,37 @@ export default function FileExplorer({ project }) {
       });
       return remaining;
     });
-  }, [tabs]);
+  }, []);
+
+  const closeTab = useCallback((tabId) => {
+    const targetTab = tabs.find((tab) => tab.id === tabId);
+    const isDirty = targetTab?.type === 'text' && targetTab.draftContent !== targetTab.savedContent;
+    if (isDirty) {
+      setConfirmState({
+        message: `Close ${targetTab.name} without saving?`,
+        onConfirm: () => {
+          closeTabImmediate(tabId);
+          setConfirmState(null);
+        },
+      });
+      return;
+    }
+
+    closeTabImmediate(tabId);
+  }, [closeTabImmediate, tabs]);
+
+  const reorderTabs = useCallback((draggedId, targetId) => {
+    if (!draggedId || !targetId || draggedId === targetId) return;
+    setTabs((prev) => {
+      const next = [...prev];
+      const from = next.findIndex((tab) => tab.id === draggedId);
+      const to = next.findIndex((tab) => tab.id === targetId);
+      if (from === -1 || to === -1) return prev;
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
 
   const contextActions = useMemo(() => {
     if (!contextMenu?.node) return [];
@@ -856,20 +820,28 @@ export default function FileExplorer({ project }) {
     ].filter((item) => !item.hidden);
   }, [clipboardEntry, contextMenu, handleCopyEntry, handleCutEntry, handleDuplicateEntry, handlePasteInto, openCreateAction, openDeleteAction, openExternal, openRenameAction, revealFolder]);
 
-  const highlightedContent = useMemo(() => {
-    if (!activeTab || activeTab.type !== 'text') return '';
-    return highlightContent(activeTab.draftContent ?? '', activeTab.extension);
-  }, [activeTab]);
+  useEffect(() => {
+    if (!activeTab || activeTab.type !== 'text' || !showDiff) {
+      setHighlightedContent('');
+      setSavedHighlightedContent('');
+      return;
+    }
 
-  const savedHighlightedContent = useMemo(() => {
-    if (!activeTab || activeTab.type !== 'text') return '';
-    return highlightContent(activeTab.savedContent ?? '', activeTab.extension);
-  }, [activeTab]);
+    let cancelled = false;
+    import('../utils/highlightCode').then(({ highlightCode }) => {
+      if (cancelled) return;
+      setHighlightedContent(highlightCode(activeTab.draftContent ?? '', activeTab.extension));
+      setSavedHighlightedContent(highlightCode(activeTab.savedContent ?? '', activeTab.extension));
+    }).catch(() => {
+      if (cancelled) return;
+      setHighlightedContent(activeTab.draftContent ?? '');
+      setSavedHighlightedContent(activeTab.savedContent ?? '');
+    });
 
-  const codeMirrorExtensions = useMemo(() => {
-    if (!activeTab || activeTab.type !== 'text') return [];
-    return getCodeMirrorExtensions(activeTab.extension);
-  }, [activeTab]);
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, showDiff]);
 
   const showSearch = searchQuery.trim().length >= 2;
 
@@ -956,13 +928,33 @@ export default function FileExplorer({ project }) {
 
       <section className="file-explorer__workspace">
         <div className="file-explorer__editor-shell">
+          {dirtyTabs.length > 0 && (
+            <div className="file-explorer__changes-bar">
+              <span className="file-explorer__changes-title">Unsaved</span>
+              <div className="file-explorer__changes-list">
+                {dirtyTabs.map((tab) => (
+                  <button key={`dirty:${tab.id}`} className="file-explorer__changes-item" type="button" onClick={() => setActiveTabId(tab.id)}>
+                    {tab.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="file-explorer__tabs">
             {tabs.length === 0 ? (
               <div className="file-explorer__tabs-empty">No file open</div>
             ) : tabs.map((tab) => {
               const dirty = tab.type === 'text' && tab.draftContent !== tab.savedContent;
               return (
-                <div key={tab.id} className={`file-explorer__tab ${tab.id === activeTabId ? 'file-explorer__tab--active' : ''}`} onClick={() => setActiveTabId(tab.id)}>
+                <div
+                  key={tab.id}
+                  className={`file-explorer__tab ${tab.id === activeTabId ? 'file-explorer__tab--active' : ''}`}
+                  onClick={() => setActiveTabId(tab.id)}
+                  draggable
+                  onDragStart={(event) => event.dataTransfer.setData('application/tab-id', tab.id)}
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => reorderTabs(event.dataTransfer.getData('application/tab-id'), tab.id)}
+                >
                   <span className="file-explorer__tab-name">{tab.name}</span>
                   {dirty && <span className="file-explorer__tab-dirty" />}
                   <button className="file-explorer__tab-close" type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
@@ -1008,4 +1000,41 @@ export default function FileExplorer({ project }) {
                     <section className="file-explorer__diff-pane">
                       <header className="file-explorer__diff-head">Current</header>
                       <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: highlightedContent }} />
-                 
+                    </section>
+                  </div>
+                ) : (
+                  <Suspense fallback={<div className="file-tree-loading">Loading editor...</div>}>
+                    <CodeEditor
+                      extension={activeTab.extension}
+                      value={activeTab.draftContent ?? ''}
+                      onChange={(value) => setTabs((prev) => prev.map((tab) => tab.id === activeTab.id ? { ...tab, draftContent: value } : tab))}
+                    />
+                  </Suspense>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {contextMenu && (
+        <div className="file-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
+          {contextActions.map((action) => (
+            <button
+              key={action.id}
+              className={`file-context-menu__item ${action.danger ? 'file-context-menu__item--danger' : ''}`}
+              type="button"
+              disabled={action.disabled}
+              onClick={action.onClick}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <ActionModal action={modalAction} onClose={() => setModalAction(null)} onConfirm={handleConfirmModal} />
+      <ConfirmModal state={confirmState} onCancel={() => setConfirmState(null)} onConfirm={() => confirmState?.onConfirm?.()} />
+    </div>
+  );
+}

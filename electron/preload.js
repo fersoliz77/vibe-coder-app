@@ -34,6 +34,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openFile: (filePath) => ipcRenderer.invoke('fs:open-file', filePath),
     openFolder: (folderPath) => ipcRenderer.invoke('fs:open-folder', folderPath),
     search: (projectPath, query) => ipcRenderer.invoke('fs:search', projectPath, query),
+    gitStatus: (projectPath) => ipcRenderer.invoke('fs:git-status', projectPath),
     createFile: (targetDir, fileName) => ipcRenderer.invoke('fs:create-file', targetDir, fileName),
     createFolder: (targetDir, folderName) => ipcRenderer.invoke('fs:create-folder', targetDir, folderName),
     renameEntry: (targetPath, nextName) => ipcRenderer.invoke('fs:rename-entry', targetPath, nextName),

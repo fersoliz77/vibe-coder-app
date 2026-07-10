@@ -46,10 +46,13 @@ async function runCommand(command) {
 }
 
 async function checkVercel(projectPath) {
+  // Always get global state first
+  const res = await runCommand(`${CLI.vercel} whoami`);
+  const globalConnected = res.success && res.stdout.length > 0 && !res.stdout.toLowerCase().includes('error');
+  const user = globalConnected ? res.stdout.split('\n')[0].trim() : null;
+
   if (!projectPath) {
-    const res = await runCommand(`${CLI.vercel} whoami`);
-    const connected = res.success && res.stdout.length > 0 && !res.stdout.toLowerCase().includes('error');
-    return { id: 'vercel', name: 'Vercel', connected, user: connected ? res.stdout.split('\n')[0].trim() : null, checking: false };
+    return { id: 'vercel', name: 'Vercel', connected: globalConnected, user, checking: false };
   }
   
   const vercelDir = path.join(projectPath, '.vercel');
@@ -66,59 +69,49 @@ async function checkVercel(projectPath) {
   }
   return {
     id: 'vercel', name: 'Vercel', connected: isLinked,
-    user: isLinked ? 'Linked' : null,
+    user, // Display global account name
     project: vercelProject,
     details: isLinked ? { platform: 'Vercel', type: 'Deployment' } : { error: 'Run: vercel link' },
   };
 }
 
 async function checkSupabase(projectPath) {
-  if (!projectPath) {
-    // Primary: supabase orgs list — gives us the org/account name
-    // Add --output json to force JSON output instead of a formatted table
-    const orgsRes = await runCommand(`${CLI.supabase} orgs list --output json`);
-    
-    console.log('[Supabase] orgs stdout:', JSON.stringify(orgsRes.stdout?.slice(0, 100)));
-    console.log('[Supabase] orgs success:', orgsRes.success);
+  // Always get global state first
+  const orgsRes = await runCommand(`${CLI.supabase} orgs list --output json`);
+  let globalConnected = false;
+  let user = null;
 
-    let connected = false;
-    let user = null;
+  if (orgsRes.stdout) {
+    try {
+      const match = orgsRes.stdout.match(/\[[\s\S]*\]/);
+      if (match) {
+        const data = JSON.parse(match[0]);
+        if (Array.isArray(data) && data.length > 0) {
+          globalConnected = true;
+          user = data[0].name;
+        }
+      }
+    } catch (e) {}
+  }
 
-    if (orgsRes.stdout) {
+  if (!globalConnected) {
+    const projRes = await runCommand(`${CLI.supabase} projects list --output json`);
+    if (projRes.stdout) {
       try {
-        // Extract JSON array to ignore any ANSI spinner codes
-        const match = orgsRes.stdout.match(/\[[\s\S]*\]/);
+        const match = projRes.stdout.match(/\[[\s\S]*\]/);
         if (match) {
           const data = JSON.parse(match[0]);
-          if (Array.isArray(data) && data.length > 0) {
-            connected = true;
-            user = data[0].name;
+          if (Array.isArray(data)) {
+            globalConnected = true;
+            user = 'Logged in';
           }
         }
-      } catch (e) {
-        console.log('[Supabase] JSON parse error:', e.message);
-      }
+      } catch (e) {}
     }
+  }
 
-    // Fallback: if orgs failed, try projects list
-    if (!connected) {
-      const projRes = await runCommand(`${CLI.supabase} projects list --output json`);
-      console.log('[Supabase] projects stdout:', JSON.stringify(projRes.stdout?.slice(0, 100)));
-      if (projRes.stdout) {
-        try {
-          const match = projRes.stdout.match(/\[[\s\S]*\]/);
-          if (match) {
-            const data = JSON.parse(match[0]);
-            if (Array.isArray(data)) {
-              connected = true;
-              user = 'Logged in';
-            }
-          }
-        } catch (e) { /* ignore */ }
-      }
-    }
-
-    return { id: 'supabase', name: 'Supabase', connected, user, checking: false };
+  if (!projectPath) {
+    return { id: 'supabase', name: 'Supabase', connected: globalConnected, user, checking: false };
   }
 
   // Project-level: check for supabase/config.toml and extract project name
@@ -134,29 +127,30 @@ async function checkSupabase(projectPath) {
   }
   return {
     id: 'supabase', name: 'Supabase', connected: isLinked,
-    user: isLinked ? 'Linked' : null,
+    user, // Display global account name
     project: projectName,
     details: isLinked ? { platform: 'Supabase', type: 'Backend' } : { error: 'Run: supabase init' },
   };
 }
 
 async function checkGitHub(projectPath) {
+  // Always get global state first
+  const res = await runCommand(`${CLI.gh} auth status`);
+  const output = res.stdout + ' ' + res.stderr;
+  const match = output.match(/account\s+(\S+)/i);
+  const globalConnected = res.success || output.includes('Logged in');
+  const user = match ? match[1] : (globalConnected ? 'Logged in' : null);
+
   if (!projectPath) {
-    const res = await runCommand(`${CLI.gh} auth status`);
-    const output = res.stdout + ' ' + res.stderr;
-    const match = output.match(/account\s+(\S+)/i);
-    const connected = res.success || output.includes('Logged in');
-    const user = match ? match[1] : (connected ? 'Logged in' : null);
-    return { id: 'github', name: 'GitHub', connected, user, checking: false };
+    return { id: 'github', name: 'GitHub', connected: globalConnected, user, checking: false };
   }
 
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
-  if (!isGit) return { id: 'github', name: 'GitHub', connected: false, details: { error: 'Not a git repository' }};
+  if (!isGit) return { id: 'github', name: 'GitHub', connected: false, user, details: { error: 'Not a git repository' }};
   
   const result = await runCommand(`cd "${projectPath}" && git remote -v`);
   const isLinked = result.success && result.stdout.includes('github.com');
   
-  // Extract repo name from remote URL: github.com/owner/repo
   let repoName = null;
   if (isLinked) {
     const repoMatch = result.stdout.match(/github\.com[:/]([^/]+\/[^\s.]+)/);
@@ -165,22 +159,24 @@ async function checkGitHub(projectPath) {
   
   return {
     id: 'github', name: 'GitHub', connected: isLinked,
-    user: isLinked ? 'Linked' : null,
+    user, // Display global account name
     project: repoName,
     details: isLinked ? { platform: 'GitHub', type: 'Repository' } : { error: 'Run: git remote add origin' },
   };
 }
 
 async function checkGit(projectPath) {
+  // Always get global state first
+  const versionRes = await runCommand(`${CLI.git} --version`);
+  const globalConnected = versionRes.success && versionRes.stdout.includes('git version');
+  let user = null;
+  if (globalConnected) {
+    const emailRes = await runCommand(`${CLI.git} config --global user.email`);
+    user = emailRes.success && emailRes.stdout.length > 0 ? emailRes.stdout.trim() : 'Installed';
+  }
+
   if (!projectPath) {
-    const versionRes = await runCommand(`${CLI.git} --version`);
-    const connected = versionRes.success && versionRes.stdout.includes('git version');
-    let user = null;
-    if (connected) {
-      const emailRes = await runCommand(`${CLI.git} config --global user.email`);
-      user = emailRes.success && emailRes.stdout.length > 0 ? emailRes.stdout.trim() : 'Installed';
-    }
-    return { id: 'git', name: 'Git', connected, user, checking: false };
+    return { id: 'git', name: 'Git', connected: globalConnected, user, checking: false };
   }
 
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
@@ -191,41 +187,42 @@ async function checkGit(projectPath) {
   }
   return {
     id: 'git', name: 'Git', connected: isGit,
-    user: isGit ? 'Initialized' : null,
+    user, // Display global account name
     project: branch ? `branch: ${branch}` : null,
     details: isGit ? { platform: 'Git', type: 'Local Tool' } : { error: 'Run: git init' },
   };
 }
 
 async function checkFirebase(projectPath) {
+  // Always get global state first
+  const res = await runCommand(`${CLI.firebase} login:list`);
+  let globalConnected = false;
+  let user = null;
+  if (res.success) {
+    const match = res.stdout.match(/Logged in as\s+(\S+)/i);
+    if (match) {
+      globalConnected = true;
+      user = match[1];
+    } else if (res.stdout.includes('@')) {
+      const emailMatch = res.stdout.match(/[\w.-]+@[\w.-]+\.\w+/);
+      if (emailMatch) { globalConnected = true; user = emailMatch[0]; }
+    }
+  }
+  if (!globalConnected) {
+    const fallback = await runCommand(`${CLI.firebase} projects:list`);
+    if (fallback.success && fallback.stdout.includes('project(s) total')) {
+      globalConnected = true;
+      user = 'Logged in';
+    }
+  }
+
   if (!projectPath) {
-    const res = await runCommand(`${CLI.firebase} login:list`);
-    let connected = false;
-    let user = null;
-    if (res.success) {
-      const match = res.stdout.match(/Logged in as\s+(\S+)/i);
-      if (match) {
-        connected = true;
-        user = match[1];
-      } else if (res.stdout.includes('@')) {
-        const emailMatch = res.stdout.match(/[\w.-]+@[\w.-]+\.\w+/);
-        if (emailMatch) { connected = true; user = emailMatch[0]; }
-      }
-    }
-    if (!connected) {
-      const fallback = await runCommand(`${CLI.firebase} projects:list`);
-      if (fallback.success && fallback.stdout.includes('project(s) total')) {
-        connected = true;
-        user = 'Logged in';
-      }
-    }
-    return { id: 'firebase', name: 'Firebase', connected, user, checking: false };
+    return { id: 'firebase', name: 'Firebase', connected: globalConnected, user, checking: false };
   }
 
   const firebasercPath = path.join(projectPath, '.firebaserc');
   const isLinked = fs.existsSync(path.join(projectPath, 'firebase.json')) || fs.existsSync(firebasercPath);
   
-  // Extract project name from .firebaserc
   let projectName = null;
   if (fs.existsSync(firebasercPath)) {
     try {
@@ -236,7 +233,7 @@ async function checkFirebase(projectPath) {
   
   return {
     id: 'firebase', name: 'Firebase', connected: isLinked,
-    user: isLinked ? 'Linked' : null,
+    user, // Display global account name
     project: projectName,
     details: isLinked ? { platform: 'Firebase', type: 'Backend' } : { error: 'Run: firebase init' },
   };
