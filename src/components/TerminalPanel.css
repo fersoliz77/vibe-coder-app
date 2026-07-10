@@ -1,0 +1,128 @@
+/* ─── Terminal Panel ──────────────────────────────────────────────── */
+.terminal-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-deepest);
+}
+
+/* Tabs */
+.terminal-panel__tabs {
+  display: flex;
+  align-items: center;
+  background: var(--bg-base);
+  border-bottom: 1px solid var(--glass-border);
+  padding: 0 var(--space-sm);
+  height: 40px;
+  gap: var(--space-xs);
+}
+
+.terminal-panel__tabs-list {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+  overflow-x: auto;
+}
+
+.terminal-panel__tabs-list::-webkit-scrollbar {
+  display: none;
+}
+
+.terminal-panel__tab {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  padding: var(--space-xs) var(--space-md);
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.terminal-panel__tab:hover {
+  background: var(--glass-hover);
+  color: var(--text-secondary);
+}
+
+.terminal-panel__tab--active {
+  background: var(--bg-deepest);
+  color: var(--text-primary);
+  border-bottom: 2px solid var(--accent-primary);
+}
+
+.terminal-panel__tab-close {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary);
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  opacity: 0;
+  transition: all var(--transition-fast);
+}
+
+.terminal-panel__tab:hover .terminal-panel__tab-close {
+  opacity: 1;
+}
+
+.terminal-panel__tab-close:hover {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+}
+
+.terminal-panel__new-tab {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.terminal-panel__new-tab:hover {
+  background: var(--glass-hover);
+  color: var(--accent-primary);
+}
+
+/* Terminal Content */
+.terminal-panel__content {
+  flex: 1;
+  padding: var(--space-sm);
+  overflow: hidden;
+}
+
+.terminal-panel__instance {
+  width: 100%;
+  height: 100%;
+}
+
+.terminal-panel__instance .xterm {
+  height: 100%;
+}
+
+.terminal-panel__empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: var(--space-md);
+}

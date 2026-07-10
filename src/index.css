@@ -1,0 +1,499 @@
+/* ═══════════════════════════════════════════════════════════════════
+   VibeCoder Launch — Design System
+   Premium dark theme with glassmorphism, gradients & micro-animations
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── CSS Custom Properties ──────────────────────────────────────── */
+:root {
+  /* Background layers */
+  --bg-deepest: hsl(225, 25%, 6%);
+  --bg-deep: hsl(225, 22%, 9%);
+  --bg-base: hsl(225, 20%, 12%);
+  --bg-raised: hsl(225, 18%, 15%);
+  --bg-surface: hsl(225, 16%, 18%);
+  --bg-overlay: hsl(225, 14%, 22%);
+
+  /* Glass effect */
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-hover: rgba(255, 255, 255, 0.06);
+  --glass-active: rgba(255, 255, 255, 0.1);
+  --glass-blur: 20px;
+
+  /* Accent colors */
+  --accent-primary: hsl(195, 100%, 55%);
+  --accent-primary-dim: hsl(195, 80%, 35%);
+  --accent-secondary: hsl(265, 90%, 65%);
+  --accent-gradient: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  --accent-gradient-soft: linear-gradient(135deg, hsla(195, 100%, 55%, 0.15), hsla(265, 90%, 65%, 0.15));
+  --accent-glow: 0 0 20px hsla(195, 100%, 55%, 0.3);
+
+  /* Status colors */
+  --status-success: hsl(145, 70%, 50%);
+  --status-success-bg: hsla(145, 70%, 50%, 0.1);
+  --status-success-glow: 0 0 12px hsla(145, 70%, 50%, 0.4);
+  --status-error: hsl(0, 75%, 60%);
+  --status-error-bg: hsla(0, 75%, 60%, 0.1);
+  --status-warning: hsl(40, 90%, 55%);
+  --status-warning-bg: hsla(40, 90%, 55%, 0.1);
+  --status-checking: hsl(195, 100%, 55%);
+
+  /* Text */
+  --text-primary: hsl(220, 20%, 95%);
+  --text-secondary: hsl(220, 15%, 65%);
+  --text-tertiary: hsl(220, 10%, 45%);
+  --text-accent: var(--accent-primary);
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+
+  /* Spacing */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* Transitions */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Sidebar */
+  --sidebar-width: 72px;
+  --sidebar-expanded: 240px;
+  --titlebar-height: 40px;
+}
+
+/* ─── Light Theme Overrides ─────────────────────────────────────── */
+.light-theme {
+  /* Background layers */
+  --bg-deepest: hsl(220, 20%, 97%);
+  --bg-deep: hsl(220, 20%, 94%);
+  --bg-base: hsl(220, 20%, 90%);
+  --bg-raised: hsl(220, 20%, 86%);
+  --bg-surface: hsl(220, 20%, 82%);
+  --bg-overlay: hsl(220, 20%, 78%);
+
+  /* Glass effect (More opaque for light mode) */
+  --glass-bg: rgba(255, 255, 255, 0.6);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-hover: rgba(255, 255, 255, 0.8);
+  --glass-active: rgba(255, 255, 255, 1);
+  
+  /* Text (Darker for contrast) */
+  --text-primary: hsl(220, 30%, 15%);
+  --text-secondary: hsl(220, 15%, 35%);
+  --text-tertiary: hsl(220, 10%, 45%);
+  
+  /* Adjust accents for light mode */
+  --accent-glow: 0 4px 12px hsla(195, 100%, 45%, 0.3);
+  --status-success-glow: 0 2px 8px hsla(145, 70%, 40%, 0.3);
+}
+
+.light-theme .glass-card {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.light-theme .glass-card:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background-color: var(--bg-deepest);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  user-select: text;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--glass-border);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* ─── Custom Titlebar ────────────────────────────────────────────── */
+.titlebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-sm);
+  background: var(--bg-deep);
+  -webkit-app-region: drag;
+  z-index: 9999;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.titlebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding-left: var(--space-sm);
+  position: relative;
+  z-index: 2;
+}
+
+.titlebar__project {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: min(56vw, 760px);
+  -webkit-app-region: no-drag;
+  pointer-events: auto;
+}
+
+.titlebar__project-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.titlebar__project-path {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-app-region: no-drag;
+  transition: color var(--transition-fast), opacity var(--transition-fast);
+}
+
+.titlebar__project-path:hover {
+  color: var(--accent-primary);
+}
+
+.titlebar__project-path:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.titlebar__logo {
+  width: 20px;
+  height: 20px;
+  background: var(--accent-gradient);
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  color: white;
+}
+
+.titlebar__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+
+.titlebar__controls {
+  display: flex;
+  -webkit-app-region: no-drag;
+  position: relative;
+  z-index: 2;
+}
+
+.titlebar__btn {
+  width: 46px;
+  height: var(--titlebar-height);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.titlebar__btn:hover {
+  background: var(--glass-hover);
+  color: var(--text-primary);
+}
+
+.titlebar__btn--close:hover {
+  background: var(--status-error);
+  color: white;
+}
+
+.titlebar__btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────── */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  padding-top: var(--titlebar-height);
+}
+
+.main-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+}
+
+@media (max-width: 900px) {
+  .titlebar__project {
+    max-width: min(46vw, 420px);
+  }
+
+  .titlebar__project-path {
+    display: none;
+  }
+}
+
+/* ─── Glass Card ─────────────────────────────────────────────────── */
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-normal);
+}
+
+.glass-card:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255, 255, 255, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  background: var(--glass-bg);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  white-space: nowrap;
+}
+
+.btn:hover {
+  background: var(--glass-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(0);
+}
+
+.btn--primary {
+  background: var(--accent-gradient);
+  border-color: transparent;
+  color: white;
+  font-weight: 600;
+}
+
+.btn--primary:hover {
+  box-shadow: var(--accent-glow);
+  filter: brightness(1.1);
+}
+
+.btn--danger {
+  border-color: hsla(0, 75%, 60%, 0.3);
+  color: var(--status-error);
+}
+
+.btn--danger:hover {
+  background: var(--status-error-bg);
+  border-color: hsla(0, 75%, 60%, 0.5);
+}
+
+.btn--small {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: 12px;
+  border-radius: var(--radius-sm);
+}
+
+.btn--icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: var(--radius-md);
+}
+
+/* ─── Status Indicators ─────────────────────────────────────────── */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot--connected {
+  background: var(--status-success);
+  box-shadow: var(--status-success-glow);
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+.status-dot--disconnected {
+  background: var(--text-tertiary);
+}
+
+.status-dot--checking {
+  background: var(--status-checking);
+  animation: pulse-glow 1s ease-in-out infinite;
+}
+
+/* ─── Animations ─────────────────────────────────────────────────── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-left {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-fade-in {
+  animation: fade-in var(--transition-normal) ease-out;
+}
+
+.animate-slide-up {
+  animation: slide-up var(--transition-slow) ease-out;
+}
+
+/* ─── Utility Classes ────────────────────────────────────────────── */
+.text-mono {
+  font-family: var(--font-mono);
+}
+
+.text-secondary {
+  color: var(--text-secondary);
+}
+
+.text-tertiary {
+  color: var(--text-tertiary);
+}
+
+.text-accent {
+  color: var(--accent-primary);
+}
+
+.text-gradient {
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}

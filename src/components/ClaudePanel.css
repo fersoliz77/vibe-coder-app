@@ -1,0 +1,254 @@
+/* ─── Claude Panel ────────────────────────────────────────────────── */
+.claude-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-deep);
+}
+
+/* Header */
+.claude-panel__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--glass-border);
+  background: var(--bg-base);
+}
+
+.claude-panel__header-left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.claude-panel__avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, #D97757, #C4613E);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.claude-panel__title {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.claude-panel__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-xs);
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.claude-panel__status--available {
+  color: var(--status-success);
+}
+
+.claude-panel__header-actions {
+  display: flex;
+  gap: var(--space-sm);
+}
+
+/* Messages */
+.claude-panel__messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* Welcome */
+.claude-panel__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--space-2xl);
+  gap: var(--space-md);
+  animation: fade-in 0.5s ease-out;
+}
+
+.claude-panel__welcome-icon {
+  color: var(--text-tertiary);
+  opacity: 0.4;
+}
+
+.claude-panel__welcome-title {
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.claude-panel__welcome-desc {
+  max-width: 400px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.claude-panel__suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  justify-content: center;
+  margin-top: var(--space-sm);
+}
+
+.claude-panel__suggestion {
+  font-size: 12px;
+}
+
+/* Message */
+.claude-panel__message {
+  display: flex;
+  gap: var(--space-md);
+  animation: slide-up 0.3s ease-out;
+}
+
+.claude-panel__message-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.claude-panel__message-avatar--user {
+  background: var(--accent-gradient-soft);
+  color: var(--accent-primary);
+  border: 1px solid hsla(195, 100%, 55%, 0.2);
+}
+
+.claude-panel__message-avatar--assistant {
+  background: linear-gradient(135deg, rgba(217, 119, 87, 0.15), rgba(196, 97, 62, 0.15));
+  color: #D97757;
+  border: 1px solid rgba(217, 119, 87, 0.2);
+}
+
+.claude-panel__message-avatar--error {
+  background: var(--status-error-bg);
+  color: var(--status-error);
+  border: 1px solid hsla(0, 75%, 60%, 0.2);
+}
+
+.claude-panel__message-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.claude-panel__message-text {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
+.claude-panel__message--user .claude-panel__message-text {
+  color: var(--text-secondary);
+}
+
+.claude-panel__message--error .claude-panel__message-text {
+  color: var(--status-error);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* Streaming cursor */
+.claude-panel__cursor {
+  display: inline-block;
+  width: 8px;
+  height: 16px;
+  background: var(--accent-primary);
+  border-radius: 2px;
+  margin-top: var(--space-xs);
+  animation: pulse-glow 0.8s ease-in-out infinite;
+}
+
+/* Thinking */
+.claude-panel__thinking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+}
+
+.claude-panel__thinking-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.claude-panel__thinking-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--text-tertiary);
+  animation: pulse-glow 1.2s ease-in-out infinite;
+}
+
+.claude-panel__thinking-dots span:nth-child(2) { animation-delay: 0.2s; }
+.claude-panel__thinking-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+/* Input Area */
+.claude-panel__input-area {
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--glass-border);
+  background: var(--bg-base);
+}
+
+.claude-panel__input-wrap {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-sm);
+  background: var(--bg-deepest);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  transition: border-color var(--transition-fast);
+}
+
+.claude-panel__input-wrap:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px hsla(195, 100%, 55%, 0.1);
+}
+
+.claude-panel__input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  outline: none;
+  padding: var(--space-xs);
+  max-height: 120px;
+}
+
+.claude-panel__input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.claude-panel__input-actions {
+  flex-shrink: 0;
+}
+
+.claude-panel__input-hint {
+  font-size: 11px;
+  margin-top: var(--space-xs);
+  padding-left: var(--space-xs);
+}
