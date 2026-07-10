@@ -3,6 +3,10 @@ import './FileExplorer.css';
 
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
+const STORAGE_PREFIX = 'fileExplorerState:';
+const ROW_HEIGHT = 30;
+const OVERSCAN = 10;
+
 const FILE_META = {
   js: { label: 'JS', color: '#f7df1e' },
   jsx: { label: 'JSX', color: '#61dafb' },
@@ -33,13 +37,13 @@ const FILE_META = {
   default: { label: 'FILE', color: '#9aa5ce' },
 };
 
-const STORAGE_PREFIX = 'fileExplorerState:';
-
+function getStorageKey(projectPath) {
+  return `${STORAGE_PREFIX}${projectPath}`;
+}
 
 function getExtension(name) {
   const parts = name.split('.');
-  if (parts.length <= 1) return '';
-  return parts.pop().toLowerCase();
+  return parts.length <= 1 ? '' : parts.pop().toLowerCase();
 }
 
 function getFileMeta(name, isDirectory) {
@@ -67,10 +71,6 @@ function formatBytes(size) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getStorageKey(projectPath) {
-  return `${STORAGE_PREFIX}${projectPath}`;
-}
-
 function makeTab(file) {
   return {
     id: file.path,
@@ -92,160 +92,6 @@ function updatePathPrefix(value, oldPath, nextPath) {
     return `${nextPath}${value.slice(oldPath.length)}`;
   }
   return value;
-}
-
-function TreeNode({
-  node,
-  depth,
-  activePath,
-  expandedPaths,
-  loadDirectory,
-  toggleDirectory,
-  onSelectNode,
-  onPreviewFile,
-  onOpenExternal,
-  onContextMenu,
-  onDropMove,
-  onDragStartPath,
-  onDragEndPath,
-  dropTargetPath,
-  renamingPath,
-  renamingValue,
-  onRenameChange,
-  onRenameSubmit,
-  onRenameCancel,
-}) {
-  const [children, setChildren] = useState(node.children || []);
-  const isOpen = expandedPaths.has(node.path);
-  const meta = getFileMeta(node.name, node.isDirectory);
-
-  useEffect(() => {
-    setChildren(node.children || []);
-  }, [node.children]);
-
-  useEffect(() => {
-    if (!node.isDirectory || !isOpen) return undefined;
-    let cancelled = false;
-
-    loadDirectory(node.path).then((items) => {
-      if (!cancelled && items) setChildren(items);
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, loadDirectory, node.isDirectory, node.path]);
-
-  const handleClick = useCallback(() => {
-    onSelectNode(node);
-    if (node.isDirectory) {
-      toggleDirectory(node.path);
-      return;
-    }
-    onPreviewFile(node.path);
-  }, [node, node.isDirectory, node.path, onPreviewFile, onSelectNode, toggleDirectory]);
-
-  const handleDoubleClick = useCallback(() => {
-    if (!node.isDirectory) onOpenExternal(node.path);
-  }, [node.isDirectory, node.path, onOpenExternal]);
-
-  const handleDragStart = useCallback((event) => {
-    event.dataTransfer.setData('text/plain', node.path);
-    event.dataTransfer.effectAllowed = 'move';
-    onDragStartPath(node.path);
-  }, [node.path, onDragStartPath]);
-
-  const handleDragOver = useCallback((event) => {
-    if (!node.isDirectory) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = 'move';
-  }, [node.isDirectory]);
-
-  const handleDrop = useCallback((event) => {
-    if (!node.isDirectory) return;
-    event.preventDefault();
-    const sourcePath = event.dataTransfer.getData('text/plain');
-    if (sourcePath) onDropMove(sourcePath, node.path);
-  }, [node.isDirectory, node.path, onDropMove]);
-
-  const paddingLeft = 10 + depth * 16;
-  const isDropTarget = dropTargetPath === node.path;
-
-  return (
-    <div className="file-tree-node">
-      <button
-        className={`file-tree-item ${activePath === node.path ? 'file-tree-item--selected' : ''} ${isDropTarget ? 'file-tree-item--drop-target' : ''}`}
-        style={{ paddingLeft: `${paddingLeft}px`, '--file-accent': meta.color }}
-        type="button"
-        onClick={handleClick}
-        onDoubleClick={handleDoubleClick}
-        onContextMenu={(event) => onContextMenu(event, node)}
-        draggable={!node.isRoot}
-        onDragStart={handleDragStart}
-        onDragEnd={onDragEndPath}
-        onDragOver={handleDragOver}
-        onDragEnter={() => node.isDirectory && onDragStartPath(node.path, true)}
-        onDragLeave={() => node.isDirectory && onDragStartPath(null, true)}
-        onDrop={handleDrop}
-        title={node.path}
-      >
-        <span className="file-tree-caret">{node.isDirectory ? (isOpen ? '⌄' : '›') : ''}</span>
-        <span className={`file-tree-icon ${node.isDirectory ? 'file-tree-icon--folder' : ''}`}>
-          {node.isDirectory ? (
-            <svg viewBox="0 0 16 16" fill="currentColor" className={`folder-icon ${isOpen ? 'folder-icon--open' : ''}`}>
-              <path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/>
-            </svg>
-          ) : (
-            <span className="file-badge">{meta.label}</span>
-          )}
-        </span>
-        {renamingPath === node.path ? (
-          <input
-            className="file-tree-rename-input"
-            value={renamingValue}
-            onChange={(event) => onRenameChange(event.target.value)}
-            onClick={(event) => event.stopPropagation()}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') onRenameSubmit(node);
-              if (event.key === 'Escape') onRenameCancel();
-            }}
-            onBlur={() => onRenameSubmit(node)}
-            autoFocus
-          />
-        ) : (
-          <span className="file-tree-name">{node.name}</span>
-        )}
-      </button>
-      {node.isDirectory && isOpen && (
-        <div className="file-tree-children">
-          {children.length > 0 ? children.map((child) => (
-            <TreeNode
-              key={child.path}
-              node={child}
-              depth={depth + 1}
-              activePath={activePath}
-              expandedPaths={expandedPaths}
-              loadDirectory={loadDirectory}
-              toggleDirectory={toggleDirectory}
-              onSelectNode={onSelectNode}
-              onPreviewFile={onPreviewFile}
-              onOpenExternal={onOpenExternal}
-              onContextMenu={onContextMenu}
-              onDropMove={onDropMove}
-              onDragStartPath={onDragStartPath}
-              onDragEndPath={onDragEndPath}
-              dropTargetPath={dropTargetPath}
-              renamingPath={renamingPath}
-              renamingValue={renamingValue}
-              onRenameChange={onRenameChange}
-              onRenameSubmit={onRenameSubmit}
-              onRenameCancel={onRenameCancel}
-            />
-          )) : <div className="file-tree-empty" style={{ paddingLeft: `${paddingLeft + 26}px` }}>Empty folder</div>}
-        </div>
-      )}
-    </div>
-  );
 }
 
 function SearchResults({ results, query, onOpen }) {
@@ -286,25 +132,28 @@ function ActionModal({ action, onClose, onConfirm }) {
 
   useEffect(() => {
     if (!action) return;
-    setValue(action.type === 'rename' ? action.node.name : '');
+    setValue('');
   }, [action]);
 
   if (!action) return null;
 
   const isDelete = action.type === 'delete';
+  const isBulkDelete = action.type === 'bulk-delete';
   const titles = {
     'new-file': 'Create File',
     'new-folder': 'Create Folder',
-    rename: 'Rename',
     delete: `Delete ${action.node?.isDirectory ? 'Folder' : 'File'}`,
+    'bulk-delete': 'Delete Selected Items',
   };
 
   return (
     <div className="file-modal-backdrop" onClick={onClose}>
       <div className="file-modal" onClick={(event) => event.stopPropagation()}>
         <h3 className="file-modal__title">{titles[action.type]}</h3>
-        {isDelete ? (
-          <p className="file-modal__text">This permanently deletes <strong>{action.node?.name}</strong>.</p>
+        {isDelete || isBulkDelete ? (
+          <p className="file-modal__text">
+            {isBulkDelete ? `This permanently deletes ${action.count} selected items.` : <>This permanently deletes <strong>{action.node?.name}</strong>.</>}
+          </p>
         ) : (
           <>
             <p className="file-modal__text">{action.targetDir}</p>
@@ -319,13 +168,8 @@ function ActionModal({ action, onClose, onConfirm }) {
         )}
         <div className="file-modal__actions">
           <button className="btn btn--small" type="button" onClick={onClose}>Cancel</button>
-          <button
-            className={`btn btn--small ${isDelete ? 'btn--danger' : 'btn--primary'}`}
-            type="button"
-            onClick={() => onConfirm(value.trim())}
-            disabled={!isDelete && !value.trim()}
-          >
-            {isDelete ? 'Delete' : action.type === 'rename' ? 'Rename' : 'Create'}
+          <button className={`btn btn--small ${(isDelete || isBulkDelete) ? 'btn--danger' : 'btn--primary'}`} type="button" onClick={() => onConfirm(value.trim())} disabled={!isDelete && !isBulkDelete && !value.trim()}>
+            {(isDelete || isBulkDelete) ? 'Delete' : 'Create'}
           </button>
         </div>
       </div>
@@ -350,16 +194,30 @@ function ConfirmModal({ state, onCancel, onConfirm }) {
   );
 }
 
+function Pane({ title, active, onActivate, children }) {
+  return (
+    <section className={`file-explorer__pane ${active ? 'file-explorer__pane--active' : ''}`} onClick={onActivate}>
+      <header className="file-explorer__pane-head">{title}</header>
+      <div className="file-explorer__pane-body">{children}</div>
+    </section>
+  );
+}
+
 export default function FileExplorer({ project }) {
   const [rootItems, setRootItems] = useState([]);
+  const [directoryCache, setDirectoryCache] = useState({});
   const [expandedPaths, setExpandedPaths] = useState(new Set());
-  const [selectedPath, setSelectedPath] = useState(null);
+  const [selectedPaths, setSelectedPaths] = useState([]);
+  const [selectionAnchor, setSelectionAnchor] = useState(null);
   const [selectedEntry, setSelectedEntry] = useState(null);
   const [tabs, setTabs] = useState([]);
-  const [activeTabId, setActiveTabId] = useState(null);
+  const [paneTabs, setPaneTabs] = useState({ primary: null, secondary: null });
+  const [activePane, setActivePane] = useState('primary');
+  const [splitView, setSplitView] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [contextMenu, setContextMenu] = useState(null);
   const [modalAction, setModalAction] = useState(null);
+  const [confirmState, setConfirmState] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
   const [dragSourcePath, setDragSourcePath] = useState(null);
   const [dropTargetPath, setDropTargetPath] = useState(null);
@@ -367,42 +225,66 @@ export default function FileExplorer({ project }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState({ files: [], contentMatches: [] });
   const [isSearching, setIsSearching] = useState(false);
-  const hydratedProjectRef = useRef(null);
   const [renamingPath, setRenamingPath] = useState(null);
   const [renamingValue, setRenamingValue] = useState('');
   const [showDiff, setShowDiff] = useState(false);
-  const [confirmState, setConfirmState] = useState(null);
   const [highlightedContent, setHighlightedContent] = useState('');
   const [savedHighlightedContent, setSavedHighlightedContent] = useState('');
+  const [gitStatus, setGitStatus] = useState([]);
+  const [gitStatusError, setGitStatusError] = useState('');
+  const [scrollTop, setScrollTop] = useState(0);
+  const [treeHeight, setTreeHeight] = useState(480);
+  const hydratedProjectRef = useRef(null);
+  const treeRef = useRef(null);
 
+  const activeTabId = paneTabs[activePane];
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
-  const activeTabDirty = activeTab?.type === 'text' && activeTab.draftContent !== activeTab.savedContent;
-  const hasDirtyTabs = tabs.some((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent);
   const dirtyTabs = tabs.filter((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent);
+  const activeTabDirty = activeTab?.type === 'text' && activeTab.draftContent !== activeTab.savedContent;
+  const hasDirtyTabs = dirtyTabs.length > 0;
 
   const loadDirectory = useCallback(async (dirPath) => {
-    return window.electronAPI.fs.readDir(dirPath);
+    const items = await window.electronAPI.fs.readDir(dirPath);
+    setDirectoryCache((prev) => ({ ...prev, [dirPath]: items }));
+    return items;
   }, []);
 
-  const loadProjectTree = useCallback(async () => {
+  const loadGitStatus = useCallback(async () => {
     if (!project?.path) return;
-    setIsLoading(true);
-    const items = await loadDirectory(project.path);
-    setRootItems(items);
-    setIsLoading(false);
-  }, [loadDirectory, project?.path]);
+    const result = await window.electronAPI.fs.gitStatus(project.path);
+    if (!result.success) {
+      setGitStatus([]);
+      setGitStatusError(result.error || 'No git repository detected.');
+      return;
+    }
+    setGitStatus(result.entries || []);
+    setGitStatusError('');
+  }, [project?.path]);
+
+  const refreshTree = useCallback(async () => {
+    if (!project?.path) return;
+    const root = await loadDirectory(project.path);
+    setRootItems(root);
+    await Promise.all(Array.from(expandedPaths).filter((path) => path !== project.path).map((path) => loadDirectory(path)));
+    await loadGitStatus();
+  }, [expandedPaths, loadDirectory, loadGitStatus, project?.path]);
 
   useEffect(() => {
     if (!project?.path) return;
-    const storageKey = getStorageKey(project.path);
-    const persisted = window.localStorage.getItem(storageKey);
+    const persisted = window.localStorage.getItem(getStorageKey(project.path));
     const parsed = persisted ? JSON.parse(persisted) : null;
 
     setExpandedPaths(new Set(parsed?.expandedPaths?.length ? parsed.expandedPaths : [project.path]));
-    setSelectedPath(null);
+    setSelectedPaths([]);
+    setSelectionAnchor(null);
     setSelectedEntry(null);
     setTabs([]);
-    setActiveTabId(null);
+    setPaneTabs({ primary: null, secondary: null });
+    setActivePane('primary');
+    setSplitView(Boolean(parsed?.splitView));
+    setContextMenu(null);
+    setModalAction(null);
+    setConfirmState(null);
     setStatusMessage('');
     setClipboardEntry(null);
     setSearchQuery('');
@@ -410,20 +292,49 @@ export default function FileExplorer({ project }) {
     setRenamingPath(null);
     setRenamingValue('');
     setShowDiff(false);
+    setHighlightedContent('');
+    setSavedHighlightedContent('');
+    setDirectoryCache({});
     hydratedProjectRef.current = parsed;
-    loadProjectTree();
-  }, [loadProjectTree, project?.path]);
+
+    setIsLoading(true);
+    loadDirectory(project.path).then((items) => {
+      setRootItems(items);
+      setIsLoading(false);
+      loadGitStatus();
+    });
+  }, [loadDirectory, loadGitStatus, project?.path]);
 
   useEffect(() => {
     if (!project?.path) return;
-    const storageKey = getStorageKey(project.path);
-    window.localStorage.setItem(storageKey, JSON.stringify({
+    window.localStorage.setItem(getStorageKey(project.path), JSON.stringify({
       expandedPaths: Array.from(expandedPaths),
+      selectedPaths,
       openTabPaths: tabs.map((tab) => tab.path),
-      activeTabId,
-      selectedPath,
+      paneTabs,
+      splitView,
     }));
-  }, [activeTabId, expandedPaths, project?.path, selectedPath, tabs]);
+  }, [expandedPaths, paneTabs, project?.path, selectedPaths, splitView, tabs]);
+
+  useEffect(() => {
+    const pending = hydratedProjectRef.current;
+    if (!project?.path || !pending) return;
+    hydratedProjectRef.current = null;
+
+    const paths = pending.openTabPaths || [];
+    if (pending.selectedPaths?.length) setSelectedPaths(pending.selectedPaths);
+
+    if (paths.length > 0) {
+      Promise.all(paths.map((path) => window.electronAPI.fs.readFile(path))).then((results) => {
+        const validTabs = results.filter((result) => result.success).map(makeTab);
+        setTabs(validTabs);
+        setPaneTabs({
+          primary: validTabs.some((tab) => tab.id === pending.paneTabs?.primary) ? pending.paneTabs.primary : validTabs[0]?.id || null,
+          secondary: validTabs.some((tab) => tab.id === pending.paneTabs?.secondary) ? pending.paneTabs.secondary : null,
+        });
+      }).catch(() => {});
+    }
+  }, [project?.path]);
 
   useEffect(() => {
     if (!contextMenu) return undefined;
@@ -431,6 +342,15 @@ export default function FileExplorer({ project }) {
     window.addEventListener('click', close);
     return () => window.removeEventListener('click', close);
   }, [contextMenu]);
+
+  useEffect(() => {
+    if (!treeRef.current) return undefined;
+    const update = () => setTreeHeight(treeRef.current?.clientHeight || 480);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(treeRef.current);
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (!project?.path || searchQuery.trim().length < 2) {
@@ -452,20 +372,11 @@ export default function FileExplorer({ project }) {
   useEffect(() => {
     const handler = (event) => {
       const target = event.target;
-      const isTypingField = target instanceof HTMLElement && (
-        target.tagName === 'INPUT' ||
-        target.tagName === 'TEXTAREA' ||
-        target.closest('.cm-editor')
-      );
+      const isTyping = target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.cm-editor'));
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
         event.preventDefault();
-        if (activeTabDirty) {
-          window.requestAnimationFrame(() => {
-            const button = document.querySelector('.file-explorer__save-btn');
-            button?.click();
-          });
-        }
+        if (activeTabDirty) document.querySelector('.file-explorer__save-btn')?.click();
         return;
       }
 
@@ -475,27 +386,28 @@ export default function FileExplorer({ project }) {
         return;
       }
 
-      if (isTypingField) return;
+      if (isTyping) return;
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedEntry && !selectedEntry.isRoot) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedPaths.length > 0) {
         event.preventDefault();
-        setClipboardEntry({ path: selectedEntry.path, isDirectory: selectedEntry.isDirectory, name: selectedEntry.name, mode: 'copy' });
-        setStatusMessage(`Copied ${selectedEntry.name}.`);
+        const path = selectedPaths[0];
+        setClipboardEntry({ path, name: getName(path), mode: 'copy' });
+        setStatusMessage(`Copied ${getName(path)}.`);
         return;
       }
 
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && selectedEntry && !selectedEntry.isRoot) {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && selectedPaths.length > 0) {
         event.preventDefault();
-        setClipboardEntry({ path: selectedEntry.path, isDirectory: selectedEntry.isDirectory, name: selectedEntry.name, mode: 'cut' });
-        setStatusMessage(`Cut ${selectedEntry.name}.`);
+        const path = selectedPaths[0];
+        setClipboardEntry({ path, name: getName(path), mode: 'cut' });
+        setStatusMessage(`Cut ${getName(path)}.`);
         return;
       }
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && clipboardEntry) {
         event.preventDefault();
-        const pasteTarget = selectedEntry || { path: project.path, isDirectory: true };
-        const targetDir = pasteTarget.isDirectory ? pasteTarget.path : getParentDirectory(pasteTarget.path);
-        handlePasteInto({ path: targetDir, isDirectory: true, name: getName(targetDir) });
+        const targetPath = selectedEntry?.isDirectory ? selectedEntry.path : selectedEntry?.path ? getParentDirectory(selectedEntry.path) : project.path;
+        handlePasteInto({ path: targetPath, isDirectory: true, name: getName(targetPath) });
         return;
       }
 
@@ -508,7 +420,7 @@ export default function FileExplorer({ project }) {
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeTabDirty, clipboardEntry, handlePasteInto, project?.path, selectedEntry]);
+  }, [activeTabDirty, clipboardEntry, handlePasteInto, project?.path, selectedEntry, selectedPaths]);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -516,49 +428,108 @@ export default function FileExplorer({ project }) {
       event.preventDefault();
       event.returnValue = '';
     };
-
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [hasDirtyTabs]);
 
-  const refreshTree = useCallback(async () => {
-    const root = await loadDirectory(project.path);
-    setRootItems(root);
-  }, [loadDirectory, project?.path]);
+  useEffect(() => {
+    if (!activeTab || activeTab.type !== 'text' || !showDiff) {
+      setHighlightedContent('');
+      setSavedHighlightedContent('');
+      return;
+    }
+    let cancelled = false;
+    import('../utils/highlightCode').then(({ highlightCode }) => {
+      if (cancelled) return;
+      setHighlightedContent(highlightCode(activeTab.draftContent ?? '', activeTab.extension));
+      setSavedHighlightedContent(highlightCode(activeTab.savedContent ?? '', activeTab.extension));
+    }).catch(() => {
+      if (cancelled) return;
+      setHighlightedContent(activeTab.draftContent ?? '');
+      setSavedHighlightedContent(activeTab.savedContent ?? '');
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, showDiff]);
 
-  const handleSelectNode = useCallback((node) => {
-    setSelectedEntry(node);
-    setSelectedPath(node.path);
+  const visibleRows = useMemo(() => {
+    const rows = [];
+    const walk = (items, depth) => {
+      items.forEach((node) => {
+        rows.push({ node, depth });
+        if (node.isDirectory && expandedPaths.has(node.path)) {
+          const children = directoryCache[node.path] || [];
+          walk(children, depth + 1);
+        }
+      });
+    };
+    walk(rootItems, 0);
+    return rows;
+  }, [directoryCache, expandedPaths, rootItems]);
+
+  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endIndex = Math.min(visibleRows.length, Math.ceil((scrollTop + treeHeight) / ROW_HEIGHT) + OVERSCAN);
+  const renderedRows = visibleRows.slice(startIndex, endIndex);
+
+  const remapPaths = useCallback((oldPath, nextPath) => {
+    setSelectedPaths((prev) => prev.map((value) => updatePathPrefix(value, oldPath, nextPath)));
+    setSelectedEntry((prev) => prev ? { ...prev, path: updatePathPrefix(prev.path, oldPath, nextPath), name: getName(updatePathPrefix(prev.path, oldPath, nextPath)) } : prev);
+    setTabs((prev) => prev.map((tab) => {
+      const remappedPath = updatePathPrefix(tab.path, oldPath, nextPath);
+      return remappedPath === tab.path ? tab : { ...tab, id: remappedPath, path: remappedPath, name: getName(remappedPath) };
+    }));
+    setPaneTabs((prev) => ({
+      primary: updatePathPrefix(prev.primary, oldPath, nextPath),
+      secondary: updatePathPrefix(prev.secondary, oldPath, nextPath),
+    }));
+    setExpandedPaths((prev) => {
+      const next = new Set();
+      prev.forEach((value) => next.add(updatePathPrefix(value, oldPath, nextPath)));
+      return next;
+    });
+    setClipboardEntry((prev) => prev ? { ...prev, path: updatePathPrefix(prev.path, oldPath, nextPath), name: getName(updatePathPrefix(prev.path, oldPath, nextPath)) } : prev);
   }, []);
 
-  const toggleDirectory = useCallback((dirPath) => {
+  const selectNode = useCallback((node, event) => {
+    const path = node.path;
+    setSelectedEntry(node);
+
+    if (event?.shiftKey && selectionAnchor) {
+      const allPaths = visibleRows.map((row) => row.node.path);
+      const from = allPaths.indexOf(selectionAnchor);
+      const to = allPaths.indexOf(path);
+      if (from !== -1 && to !== -1) {
+        const [start, end] = from < to ? [from, to] : [to, from];
+        setSelectedPaths(allPaths.slice(start, end + 1));
+        return;
+      }
+    }
+
+    if (event?.ctrlKey || event?.metaKey) {
+      setSelectedPaths((prev) => prev.includes(path) ? prev.filter((value) => value !== path) : [...prev, path]);
+      setSelectionAnchor(path);
+      return;
+    }
+
+    setSelectedPaths([path]);
+    setSelectionAnchor(path);
+  }, [selectionAnchor, visibleRows]);
+
+  const toggleDirectory = useCallback(async (dirPath) => {
     setExpandedPaths((prev) => {
       const next = new Set(prev);
       if (next.has(dirPath)) next.delete(dirPath);
       else next.add(dirPath);
       return next;
     });
-  }, []);
-
-  const remapPaths = useCallback((oldPath, nextPath) => {
-    setSelectedPath((prev) => updatePathPrefix(prev, oldPath, nextPath));
-    setSelectedEntry((prev) => prev ? { ...prev, path: updatePathPrefix(prev.path, oldPath, nextPath), name: getName(updatePathPrefix(prev.path, oldPath, nextPath)) } : prev);
-    setTabs((prev) => prev.map((tab) => {
-      const remappedPath = updatePathPrefix(tab.path, oldPath, nextPath);
-      if (remappedPath === tab.path) return tab;
-      return { ...tab, id: remappedPath, path: remappedPath, name: getName(remappedPath) };
-    }));
-    setActiveTabId((prev) => updatePathPrefix(prev, oldPath, nextPath));
-    setExpandedPaths((prev) => {
-      const next = new Set();
-      prev.forEach((value) => next.add(updatePathPrefix(value, oldPath, nextPath)));
-      return next;
-    });
-    setClipboardEntry((prev) => prev ? { ...prev, path: updatePathPrefix(prev.path, oldPath, nextPath) } : prev);
-  }, []);
+    if (!directoryCache[dirPath]) {
+      await loadDirectory(dirPath);
+    }
+  }, [directoryCache, loadDirectory]);
 
   const openPreview = useCallback(async (filePath) => {
-    setSelectedPath(filePath);
+    setSelectedPaths([filePath]);
     setSelectedEntry({ path: filePath, name: getName(filePath), isDirectory: false });
     const result = await window.electronAPI.fs.readFile(filePath);
     if (!result.success) {
@@ -569,36 +540,13 @@ export default function FileExplorer({ project }) {
     setTabs((prev) => {
       const existing = prev.find((tab) => tab.id === result.path);
       if (existing) {
-        return prev.map((tab) => tab.id === result.path
-          ? { ...tab, ...makeTab(result), draftContent: tab.draftContent ?? result.content, savedContent: result.content }
-          : tab);
+        return prev.map((tab) => tab.id === result.path ? { ...tab, ...makeTab(result), draftContent: tab.draftContent ?? result.content, savedContent: result.content } : tab);
       }
       return [...prev, makeTab(result)];
     });
-    setActiveTabId(result.path);
+    setPaneTabs((prev) => ({ ...prev, [activePane]: result.path }));
     setStatusMessage('');
-  }, []);
-
-  useEffect(() => {
-    const pendingState = hydratedProjectRef.current;
-    if (!project?.path || !pendingState) return;
-
-    hydratedProjectRef.current = null;
-    const openTabPaths = pendingState.openTabPaths || [];
-    if (pendingState.selectedPath) setSelectedPath(pendingState.selectedPath);
-
-    if (openTabPaths.length > 0) {
-      Promise.all(openTabPaths.map((tabPath) => window.electronAPI.fs.readFile(tabPath)))
-        .then((results) => {
-          const validTabs = results.filter((result) => result.success).map(makeTab);
-          setTabs(validTabs);
-          setActiveTabId(validTabs.some((tab) => tab.id === pendingState.activeTabId)
-            ? pendingState.activeTabId
-            : validTabs[0]?.id || null);
-        })
-        .catch(() => {});
-    }
-  }, [project?.path]);
+  }, [activePane]);
 
   const openExternal = useCallback((filePath) => {
     window.electronAPI.fs.openFile(filePath);
@@ -609,32 +557,20 @@ export default function FileExplorer({ project }) {
   }, []);
 
   const openCreateAction = useCallback((type, node = null) => {
-    const fallbackNode = node || selectedEntry;
-    const targetDir = fallbackNode ? (fallbackNode.isDirectory ? fallbackNode.path : getParentDirectory(fallbackNode.path)) : project.path;
-    setModalAction({ type, targetDir, node });
+    const target = node || selectedEntry;
+    const targetDir = target ? (target.isDirectory ? target.path : getParentDirectory(target.path)) : project.path;
+    setModalAction({ type, targetDir, node: target });
     setContextMenu(null);
   }, [project?.path, selectedEntry]);
 
-  const openRenameAction = useCallback((node) => {
-    setRenamingPath(node.path);
-    setRenamingValue(node.name);
-    setContextMenu(null);
-  }, []);
-
   const openDeleteAction = useCallback((node) => {
-    setModalAction({ type: 'delete', targetDir: getParentDirectory(node.path), node });
+    if (selectedPaths.length > 1 && selectedPaths.includes(node.path)) {
+      setModalAction({ type: 'bulk-delete', count: selectedPaths.length });
+    } else {
+      setModalAction({ type: 'delete', node });
+    }
     setContextMenu(null);
-  }, []);
-
-  const handleContextMenu = useCallback((event, node) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, node });
-  }, []);
-
-  const handleRootContextMenu = useCallback((event) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, node: { name: project.name, path: project.path, isDirectory: true, isRoot: true } });
-  }, [project?.name, project?.path]);
+  }, [selectedPaths]);
 
   const submitInlineRename = useCallback(async (node) => {
     const nextName = renamingValue.trim();
@@ -643,52 +579,67 @@ export default function FileExplorer({ project }) {
       setRenamingValue('');
       return;
     }
-
     const result = await window.electronAPI.fs.renameEntry(node.path, nextName);
     if (!result.success) {
       setStatusMessage(result.error || 'Rename failed.');
       return;
     }
-
     remapPaths(result.oldPath, result.path);
     setRenamingPath(null);
     setRenamingValue('');
     await refreshTree();
     setStatusMessage('Renamed successfully.');
-  }, [remapPaths, refreshTree, renamingPath, renamingValue]);
+  }, [refreshTree, remapPaths, renamingPath, renamingValue]);
 
-  const cancelInlineRename = useCallback(() => {
-    setRenamingPath(null);
-    setRenamingValue('');
-  }, []);
+  const handleContextMenu = useCallback((event, node) => {
+    event.preventDefault();
+    selectNode(node);
+    setContextMenu({ x: event.clientX, y: event.clientY, node });
+  }, [selectNode]);
+
+  const handleRootContextMenu = useCallback((event) => {
+    event.preventDefault();
+    const node = { name: project.name, path: project.path, isDirectory: true, isRoot: true };
+    setSelectedEntry(node);
+    setSelectedPaths([project.path]);
+    setContextMenu({ x: event.clientX, y: event.clientY, node });
+  }, [project?.name, project?.path]);
 
   const handleConfirmModal = useCallback(async (value) => {
     if (!modalAction) return;
     let result;
+
     if (modalAction.type === 'new-file') result = await window.electronAPI.fs.createFile(modalAction.targetDir, value);
     if (modalAction.type === 'new-folder') result = await window.electronAPI.fs.createFolder(modalAction.targetDir, value);
-    if (modalAction.type === 'rename') result = await window.electronAPI.fs.renameEntry(modalAction.node.path, value);
     if (modalAction.type === 'delete') result = await window.electronAPI.fs.deleteEntry(modalAction.node.path);
+    if (modalAction.type === 'bulk-delete') {
+      const results = await Promise.all(selectedPaths.map((path) => window.electronAPI.fs.deleteEntry(path)));
+      result = { success: results.every((entry) => entry.success) };
+    }
 
     if (!result?.success) {
       setStatusMessage(result?.error || 'Action failed.');
       return;
     }
 
-    if (modalAction.type === 'rename') remapPaths(result.oldPath, result.path);
-
-    if (modalAction.type === 'delete') {
-      setTabs((prev) => prev.filter((tab) => !tab.path.startsWith(modalAction.node.path)));
-      setActiveTabId((prev) => (prev && prev.startsWith(modalAction.node.path) ? null : prev));
-      setSelectedPath((prev) => (prev && prev.startsWith(modalAction.node.path) ? null : prev));
-      setSelectedEntry((prev) => (prev && prev.path.startsWith(modalAction.node.path) ? null : prev));
+    if (modalAction.type === 'delete' || modalAction.type === 'bulk-delete') {
+      const targets = modalAction.type === 'bulk-delete' ? selectedPaths : [modalAction.node.path];
+      setTabs((prev) => prev.filter((tab) => !targets.some((path) => tab.path.startsWith(path))));
+      setSelectedPaths([]);
+      setSelectedEntry(null);
+      setPaneTabs((prev) => ({
+        primary: targets.some((path) => prev.primary?.startsWith(path)) ? null : prev.primary,
+        secondary: targets.some((path) => prev.secondary?.startsWith(path)) ? null : prev.secondary,
+      }));
     }
 
     await refreshTree();
     setModalAction(null);
-    setStatusMessage(modalAction.type === 'delete' ? 'Deleted successfully.' : modalAction.type === 'rename' ? 'Renamed successfully.' : 'Created successfully.');
-    if (modalAction.type === 'new-file' && result.path) await openPreview(result.path);
-  }, [modalAction, openPreview, refreshTree, remapPaths]);
+    setStatusMessage(modalAction.type === 'bulk-delete' ? 'Deleted selected items.' : modalAction.type === 'delete' ? 'Deleted successfully.' : 'Created successfully.');
+    if (modalAction.type === 'new-file' && result.path) {
+      await openPreview(result.path);
+    }
+  }, [modalAction, openPreview, refreshTree, selectedPaths]);
 
   const saveActiveTab = useCallback(async () => {
     if (!activeTab || activeTab.type !== 'text') return;
@@ -697,37 +648,29 @@ export default function FileExplorer({ project }) {
       setStatusMessage(result.error || 'Save failed.');
       return;
     }
-
     setTabs((prev) => prev.map((tab) => tab.id === activeTab.id ? { ...tab, savedContent: tab.draftContent, content: tab.draftContent } : tab));
     setStatusMessage('Saved.');
-  }, [activeTab]);
+    await loadGitStatus();
+  }, [activeTab, loadGitStatus]);
 
   const handleDropMove = useCallback(async (sourcePath, targetDir) => {
     setDropTargetPath(null);
     setDragSourcePath(null);
     if (!sourcePath || !targetDir || getParentDirectory(sourcePath) === targetDir) return;
-
     const result = await window.electronAPI.fs.moveEntry(sourcePath, targetDir);
     if (!result.success) {
       setStatusMessage(result.error || 'Move failed.');
       return;
     }
-
     remapPaths(result.oldPath, result.path);
     await refreshTree();
     setStatusMessage(`Moved ${getName(result.oldPath)} into ${getName(targetDir)}.`);
   }, [refreshTree, remapPaths]);
 
-  const handleCopyEntry = useCallback((node) => {
-    setClipboardEntry({ path: node.path, isDirectory: node.isDirectory, name: node.name, mode: 'copy' });
+  const handleCopyEntry = useCallback((node, mode = 'copy') => {
+    setClipboardEntry({ path: node.path, name: node.name, mode, isDirectory: node.isDirectory });
     setContextMenu(null);
-    setStatusMessage(`Copied ${node.name}.`);
-  }, []);
-
-  const handleCutEntry = useCallback((node) => {
-    setClipboardEntry({ path: node.path, isDirectory: node.isDirectory, name: node.name, mode: 'cut' });
-    setContextMenu(null);
-    setStatusMessage(`Cut ${node.name}.`);
+    setStatusMessage(`${mode === 'cut' ? 'Cut' : 'Copied'} ${node.name}.`);
   }, []);
 
   const handlePasteInto = useCallback(async (node) => {
@@ -740,12 +683,10 @@ export default function FileExplorer({ project }) {
       setStatusMessage(result.error || 'Paste failed.');
       return;
     }
-
     if (clipboardEntry.mode === 'cut') {
       remapPaths(result.oldPath, result.path);
       setClipboardEntry(null);
     }
-
     await refreshTree();
     setStatusMessage(`${clipboardEntry.mode === 'cut' ? 'Moved' : 'Pasted'} ${clipboardEntry.name} into ${getName(targetDir)}.`);
     setContextMenu(null);
@@ -763,22 +704,19 @@ export default function FileExplorer({ project }) {
   }, [refreshTree]);
 
   const closeTabImmediate = useCallback((tabId) => {
-    setTabs((prev) => {
-      const remaining = prev.filter((item) => item.id !== tabId);
-      setActiveTabId((currentActive) => {
-        if (currentActive !== tabId) return currentActive;
-        return remaining[remaining.length - 1]?.id || null;
-      });
-      return remaining;
-    });
+    setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
+    setPaneTabs((prev) => ({
+      primary: prev.primary === tabId ? null : prev.primary,
+      secondary: prev.secondary === tabId ? null : prev.secondary,
+    }));
   }, []);
 
   const closeTab = useCallback((tabId) => {
-    const targetTab = tabs.find((tab) => tab.id === tabId);
-    const isDirty = targetTab?.type === 'text' && targetTab.draftContent !== targetTab.savedContent;
-    if (isDirty) {
+    const target = tabs.find((tab) => tab.id === tabId);
+    const dirty = target?.type === 'text' && target.draftContent !== target.savedContent;
+    if (dirty) {
       setConfirmState({
-        message: `Close ${targetTab.name} without saving?`,
+        message: `Close ${target.name} without saving?`,
         onConfirm: () => {
           closeTabImmediate(tabId);
           setConfirmState(null);
@@ -786,7 +724,6 @@ export default function FileExplorer({ project }) {
       });
       return;
     }
-
     closeTabImmediate(tabId);
   }, [closeTabImmediate, tabs]);
 
@@ -809,39 +746,16 @@ export default function FileExplorer({ project }) {
     return [
       { id: 'new-file', label: 'New File', onClick: () => openCreateAction('new-file', node) },
       { id: 'new-folder', label: 'New Folder', onClick: () => openCreateAction('new-folder', node) },
-      { id: 'rename', label: 'Rename', onClick: () => openRenameAction(node), hidden: node.isRoot },
-      { id: 'copy', label: 'Copy', onClick: () => handleCopyEntry(node), hidden: node.isRoot },
-      { id: 'cut', label: 'Cut', onClick: () => handleCutEntry(node), hidden: node.isRoot },
+      { id: 'rename', label: 'Rename', onClick: () => { setRenamingPath(node.path); setRenamingValue(node.name); setContextMenu(null); }, hidden: node.isRoot },
+      { id: 'copy', label: 'Copy', onClick: () => handleCopyEntry(node, 'copy'), hidden: node.isRoot },
+      { id: 'cut', label: 'Cut', onClick: () => handleCopyEntry(node, 'cut'), hidden: node.isRoot },
       { id: 'paste', label: 'Paste Into', onClick: () => handlePasteInto(node), disabled: !clipboardEntry },
       { id: 'duplicate', label: 'Duplicate', onClick: () => handleDuplicateEntry(node), hidden: node.isRoot },
       { id: 'reveal', label: 'Open in Explorer', onClick: () => revealFolder(node.isDirectory ? node.path : getParentDirectory(node.path)) },
       { id: 'open', label: 'Open File', onClick: () => openExternal(node.path), hidden: node.isDirectory },
-      { id: 'delete', label: 'Delete', danger: true, onClick: () => openDeleteAction(node), hidden: node.isRoot },
+      { id: 'delete', label: selectedPaths.length > 1 && selectedPaths.includes(node.path) ? `Delete ${selectedPaths.length} Selected` : 'Delete', danger: true, onClick: () => openDeleteAction(node), hidden: node.isRoot && selectedPaths.length <= 1 },
     ].filter((item) => !item.hidden);
-  }, [clipboardEntry, contextMenu, handleCopyEntry, handleCutEntry, handleDuplicateEntry, handlePasteInto, openCreateAction, openDeleteAction, openExternal, openRenameAction, revealFolder]);
-
-  useEffect(() => {
-    if (!activeTab || activeTab.type !== 'text' || !showDiff) {
-      setHighlightedContent('');
-      setSavedHighlightedContent('');
-      return;
-    }
-
-    let cancelled = false;
-    import('../utils/highlightCode').then(({ highlightCode }) => {
-      if (cancelled) return;
-      setHighlightedContent(highlightCode(activeTab.draftContent ?? '', activeTab.extension));
-      setSavedHighlightedContent(highlightCode(activeTab.savedContent ?? '', activeTab.extension));
-    }).catch(() => {
-      if (cancelled) return;
-      setHighlightedContent(activeTab.draftContent ?? '');
-      setSavedHighlightedContent(activeTab.savedContent ?? '');
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, showDiff]);
+  }, [clipboardEntry, contextMenu, handleCopyEntry, handleDuplicateEntry, handlePasteInto, openCreateAction, openDeleteAction, openExternal, revealFolder, selectedPaths]);
 
   const showSearch = searchQuery.trim().length >= 2;
 
@@ -867,23 +781,19 @@ export default function FileExplorer({ project }) {
         </div>
 
         <div className="file-explorer__search-wrap">
-          <input
-            className="file-explorer__search"
-            type="text"
-            placeholder="Search files and content..."
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-          />
+          <input className="file-explorer__search" type="text" placeholder="Search files and content..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
           {clipboardEntry && <div className="file-explorer__clipboard">Clipboard ({clipboardEntry.mode}): {clipboardEntry.name}</div>}
           {dragSourcePath && <div className="file-explorer__drag-hint">Dragging: {getName(dragSourcePath)}</div>}
+          {selectedPaths.length > 1 && <div className="file-explorer__multi-count">{selectedPaths.length} selected</div>}
         </div>
 
         <div className="file-explorer__root" onContextMenu={handleRootContextMenu}>
-          <button className="file-explorer__root-row" type="button" title={project.path} onClick={() => { setSelectedEntry({ name: project.name, path: project.path, isDirectory: true, isRoot: true }); setSelectedPath(project.path); toggleDirectory(project.path); }}>
+          <button className="file-explorer__root-row" type="button" title={project.path} onClick={() => { setSelectedEntry({ name: project.name, path: project.path, isDirectory: true, isRoot: true }); setSelectedPaths([project.path]); toggleDirectory(project.path); }}>
             <span className="file-explorer__root-caret">{expandedPaths.has(project.path) ? '⌄' : '›'}</span>
             <span className="file-explorer__root-name">{project.name}</span>
           </button>
-          <div className="file-explorer__tree">
+
+          <div ref={treeRef} className="file-explorer__tree" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
             {showSearch ? (
               isSearching ? <div className="file-tree-loading">Searching...</div> : <SearchResults results={searchResults} query={searchQuery} onOpen={openPreview} />
             ) : isLoading ? (
@@ -891,38 +801,98 @@ export default function FileExplorer({ project }) {
             ) : rootItems.length === 0 ? (
               <div className="file-tree-empty-root">Empty project folder</div>
             ) : (
-              rootItems.map((item) => (
-                <TreeNode
-                  key={item.path}
-                  node={item}
-                  depth={0}
-                  activePath={selectedPath}
-                  expandedPaths={expandedPaths}
-                  loadDirectory={loadDirectory}
-                  toggleDirectory={toggleDirectory}
-                  onSelectNode={handleSelectNode}
-                  onPreviewFile={openPreview}
-                  onOpenExternal={openExternal}
-                  onContextMenu={handleContextMenu}
-                  onDropMove={handleDropMove}
-                  onDragStartPath={(path, isHoverOnly = false) => {
-                    if (isHoverOnly) setDropTargetPath(path);
-                    else setDragSourcePath(path);
-                  }}
-                  onDragEndPath={() => {
-                    setDragSourcePath(null);
-                    setDropTargetPath(null);
-                  }}
-                  dropTargetPath={dropTargetPath}
-                  renamingPath={renamingPath}
-                  renamingValue={renamingValue}
-                  onRenameChange={setRenamingValue}
-                  onRenameSubmit={submitInlineRename}
-                  onRenameCancel={cancelInlineRename}
-                />
-              ))
+              <div className="file-explorer__virtual" style={{ height: `${visibleRows.length * ROW_HEIGHT}px` }}>
+                {renderedRows.map(({ node, depth }, index) => {
+                  const rowIndex = startIndex + index;
+                  const meta = getFileMeta(node.name, node.isDirectory);
+                  const isSelected = selectedPaths.includes(node.path);
+                  const isExpanded = expandedPaths.has(node.path);
+                  const isDropTarget = dropTargetPath === node.path;
+                  return (
+                    <div key={node.path} className="file-explorer__row-wrap" style={{ top: `${rowIndex * ROW_HEIGHT}px` }}>
+                      <button
+                        className={`file-tree-item ${isSelected ? 'file-tree-item--selected' : ''} ${isDropTarget ? 'file-tree-item--drop-target' : ''}`}
+                        style={{ paddingLeft: `${12 + depth * 16}px`, '--file-accent': meta.color }}
+                        type="button"
+                        title={node.path}
+                        draggable={!node.isRoot}
+                        onClick={(event) => {
+                          selectNode(node, event);
+                          if (node.isDirectory) toggleDirectory(node.path);
+                          else openPreview(node.path);
+                        }}
+                        onDoubleClick={() => !node.isDirectory && openExternal(node.path)}
+                        onContextMenu={(event) => handleContextMenu(event, node)}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData('text/plain', node.path);
+                          setDragSourcePath(node.path);
+                        }}
+                        onDragEnd={() => {
+                          setDragSourcePath(null);
+                          setDropTargetPath(null);
+                        }}
+                        onDragOver={(event) => {
+                          if (!node.isDirectory) return;
+                          event.preventDefault();
+                        }}
+                        onDragEnter={() => node.isDirectory && setDropTargetPath(node.path)}
+                        onDragLeave={() => node.isDirectory && setDropTargetPath(null)}
+                        onDrop={(event) => {
+                          if (!node.isDirectory) return;
+                          event.preventDefault();
+                          handleDropMove(event.dataTransfer.getData('text/plain'), node.path);
+                        }}
+                      >
+                        <span className="file-tree-indent" style={{ width: `${Math.max(depth, 0) * 14}px` }} />
+                        <span className="file-tree-caret">{node.isDirectory ? (isExpanded ? '⌄' : '›') : ''}</span>
+                        <span className={`file-tree-icon ${node.isDirectory ? 'file-tree-icon--folder' : ''}`}>
+                          {node.isDirectory ? (
+                            <svg viewBox="0 0 16 16" fill="currentColor" className={`folder-icon ${isExpanded ? 'folder-icon--open' : ''}`}><path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/></svg>
+                          ) : (
+                            <span className="file-badge">{meta.label}</span>
+                          )}
+                        </span>
+                        {renamingPath === node.path ? (
+                          <input
+                            className="file-tree-rename-input"
+                            value={renamingValue}
+                            onChange={(event) => setRenamingValue(event.target.value)}
+                            onClick={(event) => event.stopPropagation()}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') submitInlineRename(node);
+                              if (event.key === 'Escape') { setRenamingPath(null); setRenamingValue(''); }
+                            }}
+                            onBlur={() => submitInlineRename(node)}
+                            autoFocus
+                          />
+                        ) : (
+                          <span className="file-tree-name">{node.name}</span>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
+        </div>
+
+        <div className="file-explorer__git-panel">
+          <div className="file-explorer__git-title">Changes</div>
+          {gitStatusError ? (
+            <div className="file-explorer__git-empty">{gitStatusError}</div>
+          ) : gitStatus.length === 0 ? (
+            <div className="file-explorer__git-empty">Working tree clean</div>
+          ) : (
+            <div className="file-explorer__git-list">
+              {gitStatus.slice(0, 40).map((entry) => (
+                <button key={`${entry.code}:${entry.path}`} className="file-explorer__git-item" type="button" onClick={() => openPreview(`${project.path}\${entry.path}`)}>
+                  <span className="file-explorer__git-code">{entry.code}</span>
+                  <span className="file-explorer__git-path">{entry.path}</span>
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </aside>
 
@@ -933,13 +903,14 @@ export default function FileExplorer({ project }) {
               <span className="file-explorer__changes-title">Unsaved</span>
               <div className="file-explorer__changes-list">
                 {dirtyTabs.map((tab) => (
-                  <button key={`dirty:${tab.id}`} className="file-explorer__changes-item" type="button" onClick={() => setActiveTabId(tab.id)}>
+                  <button key={`dirty:${tab.id}`} className="file-explorer__changes-item" type="button" onClick={() => setPaneTabs((prev) => ({ ...prev, [activePane]: tab.id }))}>
                     {tab.name}
                   </button>
                 ))}
               </div>
             </div>
           )}
+
           <div className="file-explorer__tabs">
             {tabs.length === 0 ? (
               <div className="file-explorer__tabs-empty">No file open</div>
@@ -949,7 +920,7 @@ export default function FileExplorer({ project }) {
                 <div
                   key={tab.id}
                   className={`file-explorer__tab ${tab.id === activeTabId ? 'file-explorer__tab--active' : ''}`}
-                  onClick={() => setActiveTabId(tab.id)}
+                  onClick={() => setPaneTabs((prev) => ({ ...prev, [activePane]: tab.id }))}
                   draggable
                   onDragStart={(event) => event.dataTransfer.setData('application/tab-id', tab.id)}
                   onDragOver={(event) => event.preventDefault()}
@@ -957,61 +928,76 @@ export default function FileExplorer({ project }) {
                 >
                   <span className="file-explorer__tab-name">{tab.name}</span>
                   {dirty && <span className="file-explorer__tab-dirty" />}
-                  <button className="file-explorer__tab-close" type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>×</button>
+                  <button className="file-explorer__tab-close" type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>x</button>
                 </div>
               );
             })}
+            <button className="file-explorer__split-toggle" type="button" onClick={() => setSplitView((value) => !value)}>{splitView ? 'Single' : 'Split'}</button>
           </div>
 
-          {!activeTab ? (
+          {!activeTab && !splitView ? (
             <div className="file-explorer__workspace-card">
               <h2 className="file-explorer__workspace-title">Project Explorer</h2>
-              <p className="file-explorer__workspace-text">Search inside files, copy and paste entries, duplicate files, drag items between folders, and edit text files with inline syntax highlighting.</p>
+              <p className="file-explorer__workspace-text">Virtualized tree, multi-select, Git changes, split editor, drag-and-drop tabs, and full project file actions are all active now.</p>
               <p className="file-explorer__workspace-path">{project.path}</p>
               {statusMessage && <p className="file-explorer__status">{statusMessage}</p>}
             </div>
           ) : (
-            <div className="file-explorer__preview">
-              <div className="file-explorer__preview-header">
-                <div>
-                  <h2 className="file-explorer__workspace-title">{activeTab.name}</h2>
-                  <p className="file-explorer__workspace-path">{activeTab.path}</p>
-                </div>
-                <div className="file-explorer__preview-actions">
-                  <span className="file-explorer__meta-pill">{activeTab.extension || 'no ext'}</span>
-                  <span className="file-explorer__meta-pill">{formatBytes(activeTab.size)}</span>
-                  {activeTab.type === 'text' && <button className="btn btn--small" type="button" onClick={() => setShowDiff((value) => !value)}>{showDiff ? 'Editor' : 'Diff'}</button>}
-                  {activeTab.type === 'text' && <button className="btn btn--small btn--primary file-explorer__save-btn" type="button" onClick={saveActiveTab}>Save</button>}
-                  <button className="btn btn--small" type="button" onClick={() => openExternal(activeTab.path)}>Open</button>
-                  <button className="btn btn--small" type="button" onClick={() => revealFolder(getParentDirectory(activeTab.path))}>Reveal</button>
-                </div>
-              </div>
-              <div className="file-explorer__preview-body">
-                {activeTab.type === 'image' ? (
-                  <div className="file-explorer__image-wrap">
-                    <img className="file-explorer__image" src={activeTab.content} alt={activeTab.name} />
-                  </div>
-                ) : showDiff ? (
-                  <div className="file-explorer__diff">
-                    <section className="file-explorer__diff-pane">
-                      <header className="file-explorer__diff-head">Saved</header>
-                      <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: savedHighlightedContent }} />
-                    </section>
-                    <section className="file-explorer__diff-pane">
-                      <header className="file-explorer__diff-head">Current</header>
-                      <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: highlightedContent }} />
-                    </section>
-                  </div>
-                ) : (
-                  <Suspense fallback={<div className="file-tree-loading">Loading editor...</div>}>
-                    <CodeEditor
-                      extension={activeTab.extension}
-                      value={activeTab.draftContent ?? ''}
-                      onChange={(value) => setTabs((prev) => prev.map((tab) => tab.id === activeTab.id ? { ...tab, draftContent: value } : tab))}
-                    />
-                  </Suspense>
-                )}
-              </div>
+            <div className={`file-explorer__panes ${splitView ? 'file-explorer__panes--split' : ''}`}>
+              {['primary', ...(splitView ? ['secondary'] : [])].map((paneKey) => {
+                const paneTab = tabs.find((tab) => tab.id === paneTabs[paneKey]) || null;
+                return (
+                  <Pane key={paneKey} title={paneKey === 'primary' ? 'Primary' : 'Secondary'} active={activePane === paneKey} onActivate={() => setActivePane(paneKey)}>
+                    {!paneTab ? (
+                      <div className="file-explorer__workspace-card file-explorer__workspace-card--empty">
+                        <p className="file-explorer__workspace-text">Select a file to open it in the {paneKey} pane.</p>
+                        {statusMessage && paneKey === 'primary' && <p className="file-explorer__status">{statusMessage}</p>}
+                      </div>
+                    ) : (
+                      <div className="file-explorer__preview">
+                        <div className="file-explorer__preview-header">
+                          <div>
+                            <h2 className="file-explorer__workspace-title">{paneTab.name}</h2>
+                            <p className="file-explorer__workspace-path">{paneTab.path}</p>
+                          </div>
+                          <div className="file-explorer__preview-actions">
+                            <span className="file-explorer__meta-pill">{paneTab.extension || 'no ext'}</span>
+                            <span className="file-explorer__meta-pill">{formatBytes(paneTab.size)}</span>
+                            {paneTab.type === 'text' && paneKey === activePane && <button className="btn btn--small" type="button" onClick={() => setShowDiff((value) => !value)}>{showDiff ? 'Editor' : 'Diff'}</button>}
+                            {paneTab.type === 'text' && paneKey === activePane && <button className="btn btn--small btn--primary file-explorer__save-btn" type="button" onClick={saveActiveTab}>Save</button>}
+                            <button className="btn btn--small" type="button" onClick={() => openExternal(paneTab.path)}>Open</button>
+                            <button className="btn btn--small" type="button" onClick={() => revealFolder(getParentDirectory(paneTab.path))}>Reveal</button>
+                          </div>
+                        </div>
+                        <div className="file-explorer__preview-body">
+                          {paneTab.type === 'image' ? (
+                            <div className="file-explorer__image-wrap"><img className="file-explorer__image" src={paneTab.content} alt={paneTab.name} /></div>
+                          ) : showDiff && paneKey === activePane ? (
+                            <div className="file-explorer__diff">
+                              <section className="file-explorer__diff-pane">
+                                <header className="file-explorer__diff-head">Saved</header>
+                                <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: savedHighlightedContent }} />
+                              </section>
+                              <section className="file-explorer__diff-pane">
+                                <header className="file-explorer__diff-head">Current</header>
+                                <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: highlightedContent }} />
+                              </section>
+                            </div>
+                          ) : (
+                            <Suspense fallback={<div className="file-tree-loading">Loading editor...</div>}>
+                              <CodeEditor
+                                extension={paneTab.extension}
+                                value={paneTab.draftContent ?? ''}
+                                onChange={(value) => setTabs((prev) => prev.map((tab) => tab.id === paneTab.id ? { ...tab, draftContent: value } : tab))}
+                              />
+                            </Suspense>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </Pane>
+                );
+              })}
             </div>
           )}
         </div>
@@ -1020,13 +1006,7 @@ export default function FileExplorer({ project }) {
       {contextMenu && (
         <div className="file-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }}>
           {contextActions.map((action) => (
-            <button
-              key={action.id}
-              className={`file-context-menu__item ${action.danger ? 'file-context-menu__item--danger' : ''}`}
-              type="button"
-              disabled={action.disabled}
-              onClick={action.onClick}
-            >
+            <button key={action.id} className={`file-context-menu__item ${action.danger ? 'file-context-menu__item--danger' : ''}`} type="button" disabled={action.disabled} onClick={action.onClick}>
               {action.label}
             </button>
           ))}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 
-const POLL_INTERVAL = 30000; // 30 seconds
+const POLL_INTERVAL = 300000; // 5 minutes
 
 export function useServices(projectPath) {
   const [services, setServices] = useState([
@@ -12,10 +12,12 @@ export function useServices(projectPath) {
   ]);
   const intervalRef = useRef(null);
 
-  const checkAll = useCallback(async (pathOverride) => {
+  const checkAll = useCallback(async (pathOverride = null, silent = false) => {
     const p = pathOverride || projectPath || null;
     
-    setServices((prev) => prev.map((s) => ({ ...s, checking: true })));
+    if (!silent) {
+      setServices((prev) => prev.map((s) => ({ ...s, checking: true })));
+    }
 
     try {
       const results = await window.electronAPI.services.checkAll(p);
@@ -69,8 +71,9 @@ export function useServices(projectPath) {
   }, [checkOne, projectPath]);
 
   useEffect(() => {
-    checkAll();
-    intervalRef.current = setInterval(checkAll, POLL_INTERVAL);
+    checkAll(null, false);
+    // Silent background refresh every 5 minutes
+    intervalRef.current = setInterval(() => checkAll(null, true), POLL_INTERVAL);
     return () => clearInterval(intervalRef.current);
   }, [checkAll]);
 
