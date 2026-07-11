@@ -1,7 +1,7 @@
 {
-  "name": "vibecoder-launch",
+  "name": "vibe-ide-coder",
   "version": "1.0.0",
-  "description": "VibeCoder Launch — IDE para Vibecoding con IA",
+  "description": "Vibe IDE Coder — IDE para Vibecoding con IA",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -36,12 +36,13 @@
     "electron": "^34.3.0",
     "electron-builder": "^25.1.0",
     "electron-rebuild": "^3.2.9",
+    "playwright": "^1.61.1",
     "vite": "^6.3.0",
     "wait-on": "^8.0.0"
   },
   "build": {
-    "appId": "com.vibecoder.launch",
-    "productName": "VibeCoder Launch",
+    "appId": "com.vibeidecoder.app",
+    "productName": "Vibe IDE Coder",
     "directories": {
       "output": "dist-electron"
     },

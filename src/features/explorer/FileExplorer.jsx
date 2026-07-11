@@ -4,8 +4,6 @@ import './FileExplorer.css';
 const CodeEditor = lazy(() => import('./CodeEditor'));
 
 const STORAGE_PREFIX = 'fileExplorerState:';
-const ROW_HEIGHT = 30;
-const OVERSCAN = 10;
 
 const FILE_META = {
   js: { label: 'JS', color: '#f7df1e' },
@@ -53,6 +51,27 @@ function getFileMeta(name, isDirectory) {
   return FILE_META[getExtension(name)] || FILE_META.default;
 }
 
+function FileTypeIcon({ meta, extension }) {
+  const ext = (extension || '').toLowerCase();
+
+  if (ext === 'html' || ext === 'htm') {
+    return (
+      <svg viewBox="0 0 16 16" className="file-glyph file-glyph--html" aria-hidden="true">
+        <path fill="currentColor" d="M3 1.75A1.75 1.75 0 0 1 4.75 0h4.19c.46 0 .9.183 1.226.509l2.325 2.325c.326.326.509.767.509 1.227v10.19A1.75 1.75 0 0 1 11.25 16h-6.5A1.75 1.75 0 0 1 3 14.25z" opacity=".22"/>
+        <path fill="currentColor" d="M6.1 6.2 4.45 7.9l1.65 1.7.7-.72L5.86 7.9l.94-.98zm3.8 0-.7.72.94.98-.94.98.7.72 1.65-1.7zM7.6 10.4h.84l.96-5.1h-.84z"/>
+      </svg>
+    );
+  }
+
+  return (
+    <svg viewBox="0 0 16 16" className="file-glyph" aria-hidden="true" style={{ color: meta.color }}>
+      <path fill="currentColor" d="M3 1.75A1.75 1.75 0 0 1 4.75 0h4.19c.46 0 .9.183 1.226.509l2.325 2.325c.326.326.509.767.509 1.227v10.19A1.75 1.75 0 0 1 11.25 16h-6.5A1.75 1.75 0 0 1 3 14.25z" opacity=".22"/>
+      <path fill="currentColor" d="M8.94 1.2v2.17c0 .72.58 1.3 1.3 1.3h2.16v-.64c0-.28-.11-.55-.31-.75L9.88 1.52a1.05 1.05 0 0 0-.74-.32z"/>
+      <path fill="currentColor" d="M5.25 6.75h5.5v.9h-5.5zm0 2.15h5.5v.9h-5.5zm0 2.15h3.35v.9H5.25z"/>
+    </svg>
+  );
+}
+
 function getParentDirectory(filePath) {
   const normalized = filePath.replace(/[\\/]+$/, '');
   const parts = normalized.split(/[\\/]/);
@@ -92,6 +111,26 @@ function updatePathPrefix(value, oldPath, nextPath) {
     return `${nextPath}${value.slice(oldPath.length)}`;
   }
   return value;
+}
+
+function toAbsoluteProjectPath(projectPath, relativePath) {
+  return `${projectPath}\${String(relativePath || '').replace(/\//g, '\\')}`;
+}
+
+function isStagedCode(code) {
+  const value = String(code || '');
+  return value[0] && value[0] !== ' ' && value[0] !== '?';
+}
+
+function dragLog(event, payload = {}) {
+  if (typeof window !== 'undefined') {
+    window.__lastExplorerDnDLogs = window.__lastExplorerDnDLogs || [];
+    window.__lastExplorerDnDLogs.push({ event, payload, at: Date.now() });
+    if (window.__lastExplorerDnDLogs.length > 50) {
+      window.__lastExplorerDnDLogs = window.__lastExplorerDnDLogs.slice(-50);
+    }
+  }
+  console.log(`[explorer:dnd] ${event}`, payload);
 }
 
 function SearchResults({ results, query, onOpen }) {
@@ -139,11 +178,13 @@ function ActionModal({ action, onClose, onConfirm }) {
 
   const isDelete = action.type === 'delete';
   const isBulkDelete = action.type === 'bulk-delete';
+  const isCommit = action.type === 'git-commit';
   const titles = {
     'new-file': 'Create File',
     'new-folder': 'Create Folder',
     delete: `Delete ${action.node?.isDirectory ? 'Folder' : 'File'}`,
     'bulk-delete': 'Delete Selected Items',
+    'git-commit': 'Create Commit',
   };
 
   return (
@@ -156,12 +197,12 @@ function ActionModal({ action, onClose, onConfirm }) {
           </p>
         ) : (
           <>
-            <p className="file-modal__text">{action.targetDir}</p>
+            <p className="file-modal__text">{isCommit ? 'Write a commit message for the staged changes.' : action.targetDir}</p>
             <input
               className="file-modal__input"
               value={value}
               onChange={(event) => setValue(event.target.value)}
-              placeholder={action.type === 'new-folder' ? 'components' : 'index.tsx'}
+              placeholder={isCommit ? 'feat: update project files' : action.type === 'new-folder' ? 'components' : 'index.tsx'}
               autoFocus
             />
           </>
@@ -169,7 +210,7 @@ function ActionModal({ action, onClose, onConfirm }) {
         <div className="file-modal__actions">
           <button className="btn btn--small" type="button" onClick={onClose}>Cancel</button>
           <button className={`btn btn--small ${(isDelete || isBulkDelete) ? 'btn--danger' : 'btn--primary'}`} type="button" onClick={() => onConfirm(value.trim())} disabled={!isDelete && !isBulkDelete && !value.trim()}>
-            {(isDelete || isBulkDelete) ? 'Delete' : 'Create'}
+            {(isDelete || isBulkDelete) ? 'Delete' : isCommit ? 'Commit' : 'Create'}
           </button>
         </div>
       </div>
@@ -203,6 +244,139 @@ function Pane({ title, active, onActivate, children }) {
   );
 }
 
+function TreeNode({
+  node,
+  depth,
+  project,
+  expandedPaths,
+  directoryCache,
+  selectedPaths,
+  dropTargetPath,
+  renamingPath,
+  renamingValue,
+  onRenamingValueChange,
+  onRenameSubmit,
+  onRenameCancel,
+  onSelectNode,
+  onToggleDirectory,
+  onOpenPreview,
+  onOpenExternal,
+  onContextMenu,
+  onDropMove,
+  onScheduleDirectoryExpand,
+  onClearDirectoryExpandSchedule,
+  onDragStartNode,
+  isDragging,
+}) {
+  const meta = getFileMeta(node.name, node.isDirectory);
+  const isSelected = selectedPaths.includes(node.path);
+  const isExpanded = expandedPaths.has(node.path);
+  const isDropTarget = dropTargetPath === node.path;
+  const children = node.isDirectory ? (directoryCache[node.path] || []) : [];
+
+  return (
+    <div className="file-tree-node">
+      <div
+        className={`file-tree-item ${isSelected ? 'file-tree-item--selected' : ''} ${isDropTarget ? 'file-tree-item--drop-target' : ''}`}
+        style={{ paddingLeft: `${12 + depth * 16}px`, '--file-accent': meta.color }}
+        role="button"
+        tabIndex={0}
+        title={node.path}
+        data-testid="file-tree-item"
+        data-node-path={node.path}
+        data-node-directory={node.isDirectory ? 'true' : 'false'}
+        onClick={(event) => {
+          onSelectNode(node, event);
+          if (node.isDirectory) onToggleDirectory(node.path);
+          else onOpenPreview(node.path);
+        }}
+        onDoubleClick={() => !node.isDirectory && onOpenExternal(node.path)}
+        onContextMenu={(event) => onContextMenu(event, node)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            onSelectNode(node, event);
+            if (node.isDirectory) onToggleDirectory(node.path);
+            else onOpenPreview(node.path);
+          }
+        }}
+      >
+        {!node.isRoot && (
+          <span
+            className="file-tree-drag-handle"
+            data-testid="file-tree-drag-handle"
+            onMouseDown={(event) => {
+              event.stopPropagation();
+              event.preventDefault();
+              dragLog('dragStart', { sourcePath: node.path, name: node.name, x: event.clientX, y: event.clientY });
+              onDragStartNode(node, event.clientX, event.clientY);
+            }}
+            title="Drag to move"
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 3.25a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m8-9.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>
+          </span>
+        )}
+        <span className="file-tree-indent" style={{ width: `${Math.max(depth, 0) * 14}px` }} />
+        <span className="file-tree-caret">{node.isDirectory ? (isExpanded ? '⌄' : '›') : ''}</span>
+        <span className={`file-tree-icon ${node.isDirectory ? 'file-tree-icon--folder' : ''}`}>
+          {node.isDirectory ? (
+            <svg viewBox="0 0 16 16" fill="currentColor" className={`folder-icon ${isExpanded ? 'folder-icon--open' : ''}`}><path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/></svg>
+          ) : (
+            <FileTypeIcon meta={meta} extension={getExtension(node.name)} />
+          )}
+        </span>
+        {renamingPath === node.path ? (
+          <input
+            className="file-tree-rename-input"
+            value={renamingValue}
+            onChange={(event) => onRenamingValueChange(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') onRenameSubmit(node);
+              if (event.key === 'Escape') onRenameCancel();
+            }}
+            onBlur={() => onRenameSubmit(node)}
+            autoFocus
+          />
+        ) : (
+          <span className="file-tree-name">{node.name}</span>
+        )}
+      </div>
+      {node.isDirectory && isExpanded && children.length > 0 && (
+        <div className="file-tree-children">
+          {children.map((child) => (
+            <TreeNode
+              key={child.path}
+              node={child}
+              depth={depth + 1}
+              project={project}
+              expandedPaths={expandedPaths}
+              directoryCache={directoryCache}
+              selectedPaths={selectedPaths}
+              dropTargetPath={dropTargetPath}
+              renamingPath={renamingPath}
+              renamingValue={renamingValue}
+              onRenamingValueChange={onRenamingValueChange}
+              onRenameSubmit={onRenameSubmit}
+              onRenameCancel={onRenameCancel}
+              onSelectNode={onSelectNode}
+              onToggleDirectory={onToggleDirectory}
+              onOpenPreview={onOpenPreview}
+              onOpenExternal={onOpenExternal}
+              onContextMenu={onContextMenu}
+              onDropMove={onDropMove}
+              onScheduleDirectoryExpand={onScheduleDirectoryExpand}
+              onClearDirectoryExpandSchedule={onClearDirectoryExpandSchedule}
+              onDragStartNode={onDragStartNode}
+              isDragging={isDragging}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function FileExplorer({ project }) {
   const [rootItems, setRootItems] = useState([]);
   const [directoryCache, setDirectoryCache] = useState({});
@@ -219,7 +393,7 @@ export default function FileExplorer({ project }) {
   const [modalAction, setModalAction] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
   const [statusMessage, setStatusMessage] = useState('');
-  const [dragSourcePath, setDragSourcePath] = useState(null);
+  const [dragState, setDragState] = useState(null);
   const [dropTargetPath, setDropTargetPath] = useState(null);
   const [clipboardEntry, setClipboardEntry] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -232,10 +406,8 @@ export default function FileExplorer({ project }) {
   const [savedHighlightedContent, setSavedHighlightedContent] = useState('');
   const [gitStatus, setGitStatus] = useState([]);
   const [gitStatusError, setGitStatusError] = useState('');
-  const [scrollTop, setScrollTop] = useState(0);
-  const [treeHeight, setTreeHeight] = useState(480);
   const hydratedProjectRef = useRef(null);
-  const treeRef = useRef(null);
+  const hoverExpandTimerRef = useRef(null);
 
   const activeTabId = paneTabs[activePane];
   const activeTab = tabs.find((tab) => tab.id === activeTabId) || null;
@@ -344,15 +516,6 @@ export default function FileExplorer({ project }) {
   }, [contextMenu]);
 
   useEffect(() => {
-    if (!treeRef.current) return undefined;
-    const update = () => setTreeHeight(treeRef.current?.clientHeight || 480);
-    update();
-    const observer = new ResizeObserver(update);
-    observer.observe(treeRef.current);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
     if (!project?.path || searchQuery.trim().length < 2) {
       setSearchResults({ files: [], contentMatches: [] });
       setIsSearching(false);
@@ -368,59 +531,6 @@ export default function FileExplorer({ project }) {
 
     return () => clearTimeout(timeoutId);
   }, [project?.path, searchQuery]);
-
-  useEffect(() => {
-    const handler = (event) => {
-      const target = event.target;
-      const isTyping = target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.cm-editor'));
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        if (activeTabDirty) document.querySelector('.file-explorer__save-btn')?.click();
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
-        event.preventDefault();
-        document.querySelector('.file-explorer__search')?.focus();
-        return;
-      }
-
-      if (isTyping) return;
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedPaths.length > 0) {
-        event.preventDefault();
-        const path = selectedPaths[0];
-        setClipboardEntry({ path, name: getName(path), mode: 'copy' });
-        setStatusMessage(`Copied ${getName(path)}.`);
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && selectedPaths.length > 0) {
-        event.preventDefault();
-        const path = selectedPaths[0];
-        setClipboardEntry({ path, name: getName(path), mode: 'cut' });
-        setStatusMessage(`Cut ${getName(path)}.`);
-        return;
-      }
-
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && clipboardEntry) {
-        event.preventDefault();
-        const targetPath = selectedEntry?.isDirectory ? selectedEntry.path : selectedEntry?.path ? getParentDirectory(selectedEntry.path) : project.path;
-        handlePasteInto({ path: targetPath, isDirectory: true, name: getName(targetPath) });
-        return;
-      }
-
-      if (event.key === 'F2' && selectedEntry && !selectedEntry.isRoot) {
-        event.preventDefault();
-        setRenamingPath(selectedEntry.path);
-        setRenamingValue(selectedEntry.name);
-      }
-    };
-
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [activeTabDirty, clipboardEntry, handlePasteInto, project?.path, selectedEntry, selectedPaths]);
 
   useEffect(() => {
     const handleBeforeUnload = (event) => {
@@ -439,7 +549,7 @@ export default function FileExplorer({ project }) {
       return;
     }
     let cancelled = false;
-    import('../utils/highlightCode').then(({ highlightCode }) => {
+    import('../../utils/highlightCode').then(({ highlightCode }) => {
       if (cancelled) return;
       setHighlightedContent(highlightCode(activeTab.draftContent ?? '', activeTab.extension));
       setSavedHighlightedContent(highlightCode(activeTab.savedContent ?? '', activeTab.extension));
@@ -453,24 +563,19 @@ export default function FileExplorer({ project }) {
     };
   }, [activeTab, showDiff]);
 
-  const visibleRows = useMemo(() => {
-    const rows = [];
-    const walk = (items, depth) => {
+  const visiblePaths = useMemo(() => {
+    const paths = [];
+    const walk = (items) => {
       items.forEach((node) => {
-        rows.push({ node, depth });
+        paths.push(node.path);
         if (node.isDirectory && expandedPaths.has(node.path)) {
-          const children = directoryCache[node.path] || [];
-          walk(children, depth + 1);
+          walk(directoryCache[node.path] || []);
         }
       });
     };
-    walk(rootItems, 0);
-    return rows;
+    walk(rootItems);
+    return paths;
   }, [directoryCache, expandedPaths, rootItems]);
-
-  const startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endIndex = Math.min(visibleRows.length, Math.ceil((scrollTop + treeHeight) / ROW_HEIGHT) + OVERSCAN);
-  const renderedRows = visibleRows.slice(startIndex, endIndex);
 
   const remapPaths = useCallback((oldPath, nextPath) => {
     setSelectedPaths((prev) => prev.map((value) => updatePathPrefix(value, oldPath, nextPath)));
@@ -496,7 +601,7 @@ export default function FileExplorer({ project }) {
     setSelectedEntry(node);
 
     if (event?.shiftKey && selectionAnchor) {
-      const allPaths = visibleRows.map((row) => row.node.path);
+      const allPaths = visiblePaths;
       const from = allPaths.indexOf(selectionAnchor);
       const to = allPaths.indexOf(path);
       if (from !== -1 && to !== -1) {
@@ -514,7 +619,7 @@ export default function FileExplorer({ project }) {
 
     setSelectedPaths([path]);
     setSelectionAnchor(path);
-  }, [selectionAnchor, visibleRows]);
+  }, [selectionAnchor, visiblePaths]);
 
   const toggleDirectory = useCallback(async (dirPath) => {
     setExpandedPaths((prev) => {
@@ -527,6 +632,28 @@ export default function FileExplorer({ project }) {
       await loadDirectory(dirPath);
     }
   }, [directoryCache, loadDirectory]);
+
+  const scheduleDirectoryExpand = useCallback((dirPath) => {
+    if (!dirPath || expandedPaths.has(dirPath)) return;
+    clearTimeout(hoverExpandTimerRef.current);
+    hoverExpandTimerRef.current = setTimeout(() => {
+      toggleDirectory(dirPath);
+    }, 550);
+  }, [expandedPaths, toggleDirectory]);
+
+  const clearDirectoryExpandSchedule = useCallback(() => {
+    clearTimeout(hoverExpandTimerRef.current);
+    hoverExpandTimerRef.current = null;
+  }, []);
+
+  const onScheduleTarget = useCallback((targetPath) => {
+    setDropTargetPath(targetPath);
+    scheduleDirectoryExpand(targetPath);
+  }, [scheduleDirectoryExpand]);
+
+  const handleDragStartNode = useCallback((node, x, y) => {
+    setDragState({ sourcePath: node.path, name: node.name, x, y });
+  }, []);
 
   const openPreview = useCallback(async (filePath) => {
     setSelectedPaths([filePath]);
@@ -612,6 +739,7 @@ export default function FileExplorer({ project }) {
     if (modalAction.type === 'new-file') result = await window.electronAPI.fs.createFile(modalAction.targetDir, value);
     if (modalAction.type === 'new-folder') result = await window.electronAPI.fs.createFolder(modalAction.targetDir, value);
     if (modalAction.type === 'delete') result = await window.electronAPI.fs.deleteEntry(modalAction.node.path);
+    if (modalAction.type === 'git-commit') result = await window.electronAPI.fs.gitCommit(project.path, value);
     if (modalAction.type === 'bulk-delete') {
       const results = await Promise.all(selectedPaths.map((path) => window.electronAPI.fs.deleteEntry(path)));
       result = { success: results.every((entry) => entry.success) };
@@ -635,11 +763,37 @@ export default function FileExplorer({ project }) {
 
     await refreshTree();
     setModalAction(null);
-    setStatusMessage(modalAction.type === 'bulk-delete' ? 'Deleted selected items.' : modalAction.type === 'delete' ? 'Deleted successfully.' : 'Created successfully.');
+    setStatusMessage(
+      modalAction.type === 'bulk-delete' ? 'Deleted selected items.' :
+      modalAction.type === 'delete' ? 'Deleted successfully.' :
+      modalAction.type === 'git-commit' ? 'Commit created successfully.' :
+      'Created successfully.'
+    );
     if (modalAction.type === 'new-file' && result.path) {
       await openPreview(result.path);
     }
-  }, [modalAction, openPreview, refreshTree, selectedPaths]);
+  }, [modalAction, openPreview, project.path, refreshTree, selectedPaths]);
+
+  const handleGitStageToggle = useCallback(async (entry) => {
+    const absolutePath = toAbsoluteProjectPath(project.path, entry.path);
+    const result = isStagedCode(entry.code)
+      ? await window.electronAPI.fs.gitUnstage(project.path, absolutePath)
+      : await window.electronAPI.fs.gitStage(project.path, absolutePath);
+
+    if (!result.success) {
+      setStatusMessage(result.error || 'Git action failed.');
+      return;
+    }
+
+    await loadGitStatus();
+    setStatusMessage(isStagedCode(entry.code) ? `Unstaged ${entry.path}.` : `Staged ${entry.path}.`);
+  }, [loadGitStatus, project.path]);
+
+  const openCommitAction = useCallback(() => {
+    setModalAction({ type: 'git-commit' });
+  }, []);
+
+  const stagedEntries = useMemo(() => gitStatus.filter((entry) => isStagedCode(entry.code)), [gitStatus]);
 
   const saveActiveTab = useCallback(async () => {
     if (!activeTab || activeTab.type !== 'text') return;
@@ -654,10 +808,19 @@ export default function FileExplorer({ project }) {
   }, [activeTab, loadGitStatus]);
 
   const handleDropMove = useCallback(async (sourcePath, targetDir) => {
+    dragLog('handleDropMove:start', { sourcePath, targetDir });
     setDropTargetPath(null);
-    setDragSourcePath(null);
-    if (!sourcePath || !targetDir || getParentDirectory(sourcePath) === targetDir) return;
+    setDragState(null);
+    if (!sourcePath || !targetDir) {
+      dragLog('handleDropMove:missing-data', { sourcePath, targetDir });
+      return;
+    }
+    if (getParentDirectory(sourcePath) === targetDir) {
+      dragLog('handleDropMove:same-parent', { sourcePath, targetDir });
+      return;
+    }
     const result = await window.electronAPI.fs.moveEntry(sourcePath, targetDir);
+    dragLog('handleDropMove:result', result);
     if (!result.success) {
       setStatusMessage(result.error || 'Move failed.');
       return;
@@ -666,6 +829,60 @@ export default function FileExplorer({ project }) {
     await refreshTree();
     setStatusMessage(`Moved ${getName(result.oldPath)} into ${getName(targetDir)}.`);
   }, [refreshTree, remapPaths]);
+
+  useEffect(() => {
+    if (!dragState) return undefined;
+
+    const handleMouseMove = (event) => {
+      setDragState((current) => (current ? { ...current, x: event.clientX, y: event.clientY } : current));
+
+      const hovered = document.elementFromPoint(event.clientX, event.clientY)?.closest?.('[data-node-path]');
+      if (!hovered) {
+        if (dropTargetPath !== null) {
+          dragLog('hoverTarget:clear');
+          setDropTargetPath(null);
+          clearDirectoryExpandSchedule();
+        }
+        return;
+      }
+
+      const targetPath = hovered.getAttribute('data-node-path');
+      const isDirectory = hovered.getAttribute('data-node-directory') === 'true';
+      if (!isDirectory || !targetPath || targetPath === dragState.sourcePath) {
+        if (dropTargetPath !== null) {
+          dragLog('hoverTarget:invalid', { targetPath, isDirectory });
+          setDropTargetPath(null);
+          clearDirectoryExpandSchedule();
+        }
+        return;
+      }
+
+      if (dropTargetPath !== targetPath) {
+        dragLog('hoverTarget:set', { targetPath });
+        setDropTargetPath(targetPath);
+        onScheduleTarget(targetPath);
+      }
+    };
+
+    const handleMouseUp = () => {
+      dragLog('dragEnd', { sourcePath: dragState.sourcePath, targetPath: dropTargetPath });
+      clearDirectoryExpandSchedule();
+      if (dropTargetPath) {
+        handleDropMove(dragState.sourcePath, dropTargetPath);
+      } else {
+        setDragState(null);
+      }
+      setDropTargetPath(null);
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [clearDirectoryExpandSchedule, dragState, dropTargetPath, handleDropMove, onScheduleTarget]);
 
   const handleCopyEntry = useCallback((node, mode = 'copy') => {
     setClipboardEntry({ path: node.path, name: node.name, mode, isDirectory: node.isDirectory });
@@ -691,6 +908,59 @@ export default function FileExplorer({ project }) {
     setStatusMessage(`${clipboardEntry.mode === 'cut' ? 'Moved' : 'Pasted'} ${clipboardEntry.name} into ${getName(targetDir)}.`);
     setContextMenu(null);
   }, [clipboardEntry, refreshTree, remapPaths]);
+
+  useEffect(() => {
+    const handler = (event) => {
+      const target = event.target;
+      const isTyping = target instanceof HTMLElement && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.closest('.cm-editor'));
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
+        event.preventDefault();
+        if (activeTabDirty) document.querySelector('.file-explorer__save-btn')?.click();
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
+        event.preventDefault();
+        document.querySelector('.file-explorer__search')?.focus();
+        return;
+      }
+
+      if (isTyping) return;
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c' && selectedPaths.length > 0) {
+        event.preventDefault();
+        const path = selectedPaths[0];
+        setClipboardEntry({ path, name: getName(path), mode: 'copy' });
+        setStatusMessage(`Copied ${getName(path)}.`);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'x' && selectedPaths.length > 0) {
+        event.preventDefault();
+        const path = selectedPaths[0];
+        setClipboardEntry({ path, name: getName(path), mode: 'cut' });
+        setStatusMessage(`Cut ${getName(path)}.`);
+        return;
+      }
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v' && clipboardEntry) {
+        event.preventDefault();
+        const targetPath = selectedEntry?.isDirectory ? selectedEntry.path : selectedEntry?.path ? getParentDirectory(selectedEntry.path) : project.path;
+        handlePasteInto({ path: targetPath, isDirectory: true, name: getName(targetPath) });
+        return;
+      }
+
+      if (event.key === 'F2' && selectedEntry && !selectedEntry.isRoot) {
+        event.preventDefault();
+        setRenamingPath(selectedEntry.path);
+        setRenamingValue(selectedEntry.name);
+      }
+    };
+
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [activeTabDirty, clipboardEntry, handlePasteInto, project?.path, selectedEntry, selectedPaths]);
 
   const handleDuplicateEntry = useCallback(async (node) => {
     const result = await window.electronAPI.fs.duplicateEntry(node.path);
@@ -783,17 +1053,28 @@ export default function FileExplorer({ project }) {
         <div className="file-explorer__search-wrap">
           <input className="file-explorer__search" type="text" placeholder="Search files and content..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
           {clipboardEntry && <div className="file-explorer__clipboard">Clipboard ({clipboardEntry.mode}): {clipboardEntry.name}</div>}
-          {dragSourcePath && <div className="file-explorer__drag-hint">Dragging: {getName(dragSourcePath)}</div>}
+          {dragState && <div className="file-explorer__drag-hint">Dragging: {dragState.name}</div>}
           {selectedPaths.length > 1 && <div className="file-explorer__multi-count">{selectedPaths.length} selected</div>}
         </div>
 
         <div className="file-explorer__root" onContextMenu={handleRootContextMenu}>
-          <button className="file-explorer__root-row" type="button" title={project.path} onClick={() => { setSelectedEntry({ name: project.name, path: project.path, isDirectory: true, isRoot: true }); setSelectedPaths([project.path]); toggleDirectory(project.path); }}>
+          <button
+            className={`file-explorer__root-row ${dropTargetPath === project.path ? 'file-explorer__root-row--drop-target' : ''}`}
+            type="button"
+            title={project.path}
+            data-node-path={project.path}
+            data-node-directory="true"
+            onClick={() => {
+              setSelectedEntry({ name: project.name, path: project.path, isDirectory: true, isRoot: true });
+              setSelectedPaths([project.path]);
+              toggleDirectory(project.path);
+            }}
+          >
             <span className="file-explorer__root-caret">{expandedPaths.has(project.path) ? '⌄' : '›'}</span>
             <span className="file-explorer__root-name">{project.name}</span>
           </button>
 
-          <div ref={treeRef} className="file-explorer__tree" onScroll={(event) => setScrollTop(event.currentTarget.scrollTop)}>
+          <div className="file-explorer__tree">
             {showSearch ? (
               isSearching ? <div className="file-tree-loading">Searching...</div> : <SearchResults results={searchResults} query={searchQuery} onOpen={openPreview} />
             ) : isLoading ? (
@@ -801,84 +1082,53 @@ export default function FileExplorer({ project }) {
             ) : rootItems.length === 0 ? (
               <div className="file-tree-empty-root">Empty project folder</div>
             ) : (
-              <div className="file-explorer__virtual" style={{ height: `${visibleRows.length * ROW_HEIGHT}px` }}>
-                {renderedRows.map(({ node, depth }, index) => {
-                  const rowIndex = startIndex + index;
-                  const meta = getFileMeta(node.name, node.isDirectory);
-                  const isSelected = selectedPaths.includes(node.path);
-                  const isExpanded = expandedPaths.has(node.path);
-                  const isDropTarget = dropTargetPath === node.path;
-                  return (
-                    <div key={node.path} className="file-explorer__row-wrap" style={{ top: `${rowIndex * ROW_HEIGHT}px` }}>
-                      <button
-                        className={`file-tree-item ${isSelected ? 'file-tree-item--selected' : ''} ${isDropTarget ? 'file-tree-item--drop-target' : ''}`}
-                        style={{ paddingLeft: `${12 + depth * 16}px`, '--file-accent': meta.color }}
-                        type="button"
-                        title={node.path}
-                        draggable={!node.isRoot}
-                        onClick={(event) => {
-                          selectNode(node, event);
-                          if (node.isDirectory) toggleDirectory(node.path);
-                          else openPreview(node.path);
-                        }}
-                        onDoubleClick={() => !node.isDirectory && openExternal(node.path)}
-                        onContextMenu={(event) => handleContextMenu(event, node)}
-                        onDragStart={(event) => {
-                          event.dataTransfer.setData('text/plain', node.path);
-                          setDragSourcePath(node.path);
-                        }}
-                        onDragEnd={() => {
-                          setDragSourcePath(null);
-                          setDropTargetPath(null);
-                        }}
-                        onDragOver={(event) => {
-                          if (!node.isDirectory) return;
-                          event.preventDefault();
-                        }}
-                        onDragEnter={() => node.isDirectory && setDropTargetPath(node.path)}
-                        onDragLeave={() => node.isDirectory && setDropTargetPath(null)}
-                        onDrop={(event) => {
-                          if (!node.isDirectory) return;
-                          event.preventDefault();
-                          handleDropMove(event.dataTransfer.getData('text/plain'), node.path);
-                        }}
-                      >
-                        <span className="file-tree-indent" style={{ width: `${Math.max(depth, 0) * 14}px` }} />
-                        <span className="file-tree-caret">{node.isDirectory ? (isExpanded ? '⌄' : '›') : ''}</span>
-                        <span className={`file-tree-icon ${node.isDirectory ? 'file-tree-icon--folder' : ''}`}>
-                          {node.isDirectory ? (
-                            <svg viewBox="0 0 16 16" fill="currentColor" className={`folder-icon ${isExpanded ? 'folder-icon--open' : ''}`}><path d="M.5 3l.04.87a1.99 1.99 0 0 0-.342 1.311l.637 7A2 2 0 0 0 2.826 14H13.17a2 2 0 0 0 1.991-1.819l.637-7A2 2 0 0 0 13.81 3H9.828a2 2 0 0 1-1.414-.586l-.828-.828A2 2 0 0 0 6.172 1H2.5a2 2 0 0 0-2 2zm5.672-1a1 1 0 0 1 .707.293L7.586 3H2.19c-.24 0-.47.042-.683.12L1.5 2.98a1 1 0 0 1 1-.98h3.672z"/></svg>
-                          ) : (
-                            <span className="file-badge">{meta.label}</span>
-                          )}
-                        </span>
-                        {renamingPath === node.path ? (
-                          <input
-                            className="file-tree-rename-input"
-                            value={renamingValue}
-                            onChange={(event) => setRenamingValue(event.target.value)}
-                            onClick={(event) => event.stopPropagation()}
-                            onKeyDown={(event) => {
-                              if (event.key === 'Enter') submitInlineRename(node);
-                              if (event.key === 'Escape') { setRenamingPath(null); setRenamingValue(''); }
-                            }}
-                            onBlur={() => submitInlineRename(node)}
-                            autoFocus
-                          />
-                        ) : (
-                          <span className="file-tree-name">{node.name}</span>
-                        )}
-                      </button>
-                    </div>
-                  );
-                })}
+              <div className="file-tree-list">
+                {rootItems.map((node) => (
+                  <TreeNode
+                    key={node.path}
+                    node={node}
+                    depth={0}
+                    project={project}
+                    expandedPaths={expandedPaths}
+                    directoryCache={directoryCache}
+                    selectedPaths={selectedPaths}
+                    dropTargetPath={dropTargetPath}
+                    renamingPath={renamingPath}
+                    renamingValue={renamingValue}
+                    onRenamingValueChange={setRenamingValue}
+                    onRenameSubmit={submitInlineRename}
+                    onRenameCancel={() => { setRenamingPath(null); setRenamingValue(''); }}
+                    onSelectNode={selectNode}
+                    onToggleDirectory={toggleDirectory}
+                    onOpenPreview={openPreview}
+                    onOpenExternal={openExternal}
+                    onContextMenu={handleContextMenu}
+                    onDropMove={handleDropMove}
+                    onScheduleDirectoryExpand={(path) => {
+                      setDropTargetPath(path);
+                      scheduleDirectoryExpand(path);
+                    }}
+                    onClearDirectoryExpandSchedule={() => {
+                      clearDirectoryExpandSchedule();
+                      setDropTargetPath(null);
+                    }}
+                    onDragStartNode={handleDragStartNode}
+                    isDragging={Boolean(dragState)}
+                  />
+                ))}
               </div>
             )}
           </div>
         </div>
 
         <div className="file-explorer__git-panel">
-          <div className="file-explorer__git-title">Changes</div>
+          <div className="file-explorer__git-header">
+            <div className="file-explorer__git-title">Changes</div>
+            <div className="file-explorer__git-actions">
+              <button className="file-explorer__git-btn" type="button" onClick={loadGitStatus}>Refresh</button>
+              <button className="file-explorer__git-btn" type="button" onClick={openCommitAction} disabled={stagedEntries.length === 0}>Commit</button>
+            </div>
+          </div>
           {gitStatusError ? (
             <div className="file-explorer__git-empty">{gitStatusError}</div>
           ) : gitStatus.length === 0 ? (
@@ -886,10 +1136,15 @@ export default function FileExplorer({ project }) {
           ) : (
             <div className="file-explorer__git-list">
               {gitStatus.slice(0, 40).map((entry) => (
-                <button key={`${entry.code}:${entry.path}`} className="file-explorer__git-item" type="button" onClick={() => openPreview(`${project.path}\${entry.path}`)}>
-                  <span className="file-explorer__git-code">{entry.code}</span>
-                  <span className="file-explorer__git-path">{entry.path}</span>
-                </button>
+                <div key={`${entry.code}:${entry.path}`} className="file-explorer__git-row">
+                  <button className="file-explorer__git-item" type="button" onClick={() => openPreview(toAbsoluteProjectPath(project.path, entry.path))}>
+                    <span className="file-explorer__git-code">{entry.code}</span>
+                    <span className="file-explorer__git-path">{entry.path}</span>
+                  </button>
+                  <button className="file-explorer__git-btn" type="button" onClick={() => handleGitStageToggle(entry)}>
+                    {isStagedCode(entry.code) ? 'Unstage' : 'Stage'}
+                  </button>
+                </div>
               ))}
             </div>
           )}
@@ -1015,6 +1270,11 @@ export default function FileExplorer({ project }) {
 
       <ActionModal action={modalAction} onClose={() => setModalAction(null)} onConfirm={handleConfirmModal} />
       <ConfirmModal state={confirmState} onCancel={() => setConfirmState(null)} onConfirm={() => confirmState?.onConfirm?.()} />
+      {dragState && (
+        <div className="file-explorer__drag-overlay" style={{ left: dragState.x + 14, top: dragState.y + 14 }}>
+          Moving {dragState.name}
+        </div>
+      )}
     </div>
   );
 }

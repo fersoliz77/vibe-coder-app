@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import GlobalServices from './GlobalServices';
+import GlobalServices from '../services/GlobalServices';
 import './ProjectList.css';
 
 export default function ProjectList({ onProjectSelect, services = [], claudeAvailable = false, onRefreshServices }) {

@@ -1,14 +1,14 @@
 import { useState, useCallback, useEffect } from 'react';
-import Sidebar from './components/Sidebar';
-import Dashboard from './components/Dashboard';
-import ProjectList from './components/ProjectList';
-import FileExplorer from './components/FileExplorer';
-import TerminalPanel from './components/TerminalPanel';
-import ClaudePanel from './components/ClaudePanel';
+import Sidebar from './layouts/sidebar/Sidebar';
+import Dashboard from './features/dashboard/Dashboard';
+import ProjectList from './features/projects/ProjectList';
+import FileExplorer from './features/explorer/FileExplorer';
+import TerminalPanel from './features/terminal/TerminalPanel';
+import ClaudePanel from './features/claude/ClaudePanel';
 import { useServices } from './hooks/useServices';
 import { useTerminal } from './hooks/useTerminal';
 import { useClaude } from './hooks/useClaude';
-import './App.css';
+import './styles/App.css';
 
 const VIEWS = {
   PROJECTS: 'projects',
@@ -128,7 +128,7 @@ export default function App() {
       <div className="titlebar">
         <div className="titlebar__brand">
           <div className="titlebar__logo">V</div>
-          <span className="titlebar__name">VibeCoder Launch</span>
+          <span className="titlebar__name">Vibe IDE Coder</span>
         </div>
         {currentProject && (
           <div className="titlebar__project">

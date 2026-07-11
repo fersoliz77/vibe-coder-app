@@ -1,5 +1,5 @@
-import ServiceCard from './ServiceCard';
-import GlobalServices from './GlobalServices';
+import ServiceCard from '../services/ServiceCard';
+import GlobalServices from '../services/GlobalServices';
 import './Dashboard.css';
 
 const QUICK_ACTIONS = [
