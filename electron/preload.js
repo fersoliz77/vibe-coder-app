@@ -16,6 +16,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onMaximizedChanged: (callback) => subscribe('window:maximized-changed', callback, (value) => [value]),
   },
 
+  // ─── Local Database (Store) ─────────────────────────
+  store: {
+    get: (key, defaultValue) => ipcRenderer.invoke('store:get', key, defaultValue),
+    set: (key, value) => ipcRenderer.invoke('store:set', key, value),
+    delete: (key) => ipcRenderer.invoke('store:delete', key),
+    getAll: () => ipcRenderer.invoke('store:getAll'),
+  },
+
   // ─── Projects ──────────────────────────────────────
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
@@ -28,23 +36,23 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ─── File System ───────────────────────────────
   fs: {
-    readDir: (dirPath) => ipcRenderer.invoke('fs:read-dir', dirPath),
-    readFile: (filePath) => ipcRenderer.invoke('fs:read-file', filePath),
-    writeFile: (filePath, content) => ipcRenderer.invoke('fs:write-file', filePath, content),
-    openFile: (filePath) => ipcRenderer.invoke('fs:open-file', filePath),
-    openFolder: (folderPath) => ipcRenderer.invoke('fs:open-folder', folderPath),
+    readDir: (projectPath, dirPath) => ipcRenderer.invoke('fs:read-dir', projectPath, dirPath),
+    readFile: (projectPath, filePath) => ipcRenderer.invoke('fs:read-file', projectPath, filePath),
+    writeFile: (projectPath, filePath, content) => ipcRenderer.invoke('fs:write-file', projectPath, filePath, content),
+    openFile: (projectPath, filePath) => ipcRenderer.invoke('fs:open-file', projectPath, filePath),
+    openFolder: (projectPath, folderPath) => ipcRenderer.invoke('fs:open-folder', projectPath, folderPath),
     search: (projectPath, query) => ipcRenderer.invoke('fs:search', projectPath, query),
     gitStatus: (projectPath) => ipcRenderer.invoke('fs:git-status', projectPath),
     gitStage: (projectPath, targetPath) => ipcRenderer.invoke('fs:git-stage', projectPath, targetPath),
     gitUnstage: (projectPath, targetPath) => ipcRenderer.invoke('fs:git-unstage', projectPath, targetPath),
     gitCommit: (projectPath, message) => ipcRenderer.invoke('fs:git-commit', projectPath, message),
-    createFile: (targetDir, fileName) => ipcRenderer.invoke('fs:create-file', targetDir, fileName),
-    createFolder: (targetDir, folderName) => ipcRenderer.invoke('fs:create-folder', targetDir, folderName),
-    renameEntry: (targetPath, nextName) => ipcRenderer.invoke('fs:rename-entry', targetPath, nextName),
-    moveEntry: (sourcePath, targetDir) => ipcRenderer.invoke('fs:move-entry', sourcePath, targetDir),
-    copyEntry: (sourcePath, targetDir) => ipcRenderer.invoke('fs:copy-entry', sourcePath, targetDir),
-    duplicateEntry: (targetPath) => ipcRenderer.invoke('fs:duplicate-entry', targetPath),
-    deleteEntry: (targetPath) => ipcRenderer.invoke('fs:delete-entry', targetPath),
+    createFile: (projectPath, targetDir, fileName) => ipcRenderer.invoke('fs:create-file', projectPath, targetDir, fileName),
+    createFolder: (projectPath, targetDir, folderName) => ipcRenderer.invoke('fs:create-folder', projectPath, targetDir, folderName),
+    renameEntry: (projectPath, targetPath, nextName) => ipcRenderer.invoke('fs:rename-entry', projectPath, targetPath, nextName),
+    moveEntry: (projectPath, sourcePath, targetDir) => ipcRenderer.invoke('fs:move-entry', projectPath, sourcePath, targetDir),
+    copyEntry: (projectPath, sourcePath, targetDir) => ipcRenderer.invoke('fs:copy-entry', projectPath, sourcePath, targetDir),
+    duplicateEntry: (projectPath, targetPath) => ipcRenderer.invoke('fs:duplicate-entry', projectPath, targetPath),
+    deleteEntry: (projectPath, targetPath) => ipcRenderer.invoke('fs:delete-entry', projectPath, targetPath),
   },
 
   // ─── Services (Vercel, Supabase, GitHub) ────────────
@@ -67,17 +75,43 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // ─── Claude Code ───────────────────────────────────
   claude: {
+    // Status: { installed, authenticated, path, version }
+    getStatus: () => ipcRenderer.invoke('claude:status'),
+    // Legacy availability check
     checkAvailability: () => ipcRenderer.invoke('claude:check'),
-    sendPrompt: (prompt, cwd) => ipcRenderer.invoke('claude:send', prompt, cwd),
-    cancel: () => ipcRenderer.send('claude:cancel'),
+    // Install CLI
+    install: () => ipcRenderer.invoke('claude:install'),
+    // Login via browser OAuth
+    login: () => ipcRenderer.invoke('claude:login'),
+    // Logout
+    logout: () => ipcRenderer.invoke('claude:logout'),
+    // Send a prompt
+    sendPrompt: (prompt, cwd, model) => ipcRenderer.invoke('claude:send', prompt, cwd, model),
+    cancel: () => ipcRenderer.invoke('claude:cancel'),
+    // Event subscriptions
     onData: (callback) => subscribe('claude:data', callback),
     onComplete: (callback) => subscribe('claude:complete', callback),
     onError: (callback) => subscribe('claude:error', callback),
+    onInstallProgress: (callback) => subscribe('claude:install-progress', callback),
+    onLoginProgress: (callback) => subscribe('claude:login-progress', callback),
   },
 
   // ─── System Info ───────────────────────────────────
   system: {
     platform: process.platform,
     homedir: require('os').homedir(),
+  },
+
+  // ─── OpenAI (ChatGPT OAuth) ────────────────────────
+  openai: {
+    getStatus: () => ipcRenderer.invoke('openai:status'),
+    login: () => ipcRenderer.invoke('openai:login'),
+    logout: () => ipcRenderer.invoke('openai:logout'),
+    sendPrompt: (prompt, history, model, cwd) => ipcRenderer.invoke('openai:send', prompt, history, model, cwd),
+    cancel: () => ipcRenderer.invoke('openai:cancel'),
+    onData: (callback) => subscribe('openai:data', callback),
+    onComplete: (callback) => subscribe('openai:complete', callback),
+    onError: (callback) => subscribe('openai:error', callback),
+    onLoginProgress: (callback) => subscribe('openai:login-progress', callback),
   },
 });

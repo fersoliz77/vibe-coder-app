@@ -23,6 +23,16 @@ function getProjects() {
   }
 }
 
+function normalizeProjectPath(projectPath) {
+  const resolved = path.resolve(String(projectPath || ''));
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function isProjectRegistered(projectPath) {
+  const normalizedTarget = normalizeProjectPath(projectPath);
+  return getProjects().some((project) => normalizeProjectPath(project.path) === normalizedTarget);
+}
+
 function saveProjects(projects) {
   try {
     fs.writeFileSync(projectsFilePath, JSON.stringify(projects, null, 2));
@@ -82,5 +92,7 @@ function setupProjectHandlers(ipcMain) {
 
 module.exports = {
   initProjectManager,
-  setupProjectHandlers
+  setupProjectHandlers,
+  getProjects,
+  isProjectRegistered,
 };

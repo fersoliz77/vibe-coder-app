@@ -2,79 +2,100 @@ const { ipcMain, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn, execFile } = require('child_process');
+const {
+  assertSafeEntryName,
+  getProjectRelativePath,
+  isSubPath,
+  resolveProjectChildPath,
+  resolveProjectEntryPath,
+  resolveProjectRoot,
+} = require('./fsGuards');
+const { isProjectRegistered } = require('../services/projectManager');
 
 let fileHandlersRegistered = false;
+
+const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg']);
+const TEXT_EXTENSIONS = new Set([
+  '.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.txt', '.css', '.scss', '.sass', '.html', '.htm',
+  '.py', '.sql', '.yml', '.yaml', '.toml', '.env', '.gitignore', '.sh', '.bat', '.ps1', '.xml',
+  '.cjs', '.mjs', '.log', '.csv', '.ini', '.lock', '.rb', '.php', '.java', '.kt', '.go', '.rs'
+]);
+const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', '.cache', '__pycache__', '.DS_Store']);
+
+function withProjectRoot(projectPath) {
+  return resolveProjectRoot(projectPath, isProjectRegistered);
+}
+
+function withProjectEntry(projectPath, targetPath) {
+  return resolveProjectEntryPath(projectPath, targetPath, isProjectRegistered);
+}
+
+function withProjectChild(projectPath, parentDir, entryName) {
+  return resolveProjectChildPath(projectPath, parentDir, entryName, isProjectRegistered);
+}
+
+function getCopyPath(targetDir, baseName) {
+  const extension = path.extname(baseName);
+  const stem = extension ? baseName.slice(0, -extension.length) : baseName;
+  let attempt = 1;
+  let candidate = path.join(targetDir, `${stem} copy${extension}`);
+
+  while (fs.existsSync(candidate)) {
+    attempt += 1;
+    candidate = path.join(targetDir, `${stem} copy ${attempt}${extension}`);
+  }
+
+  return candidate;
+}
+
+function isTextPreviewable(extension, size) {
+  return TEXT_EXTENSIONS.has(extension) || size <= 1024 * 1024;
+}
+
+function ensureExistingDirectory(targetPath, message = 'Target folder is invalid.') {
+  if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isDirectory()) {
+    throw new Error(message);
+  }
+}
+
+function readDirectoryEntries(currentPath) {
+  const entries = fs.readdirSync(currentPath, { withFileTypes: true });
+  return entries
+    .filter((entry) => !IGNORED.has(entry.name))
+    .sort((a, b) => {
+      if (a.isDirectory() && !b.isDirectory()) return -1;
+      if (!a.isDirectory() && b.isDirectory()) return 1;
+      return a.name.localeCompare(b.name);
+    })
+    .map((entry) => ({
+      name: entry.name,
+      path: path.join(currentPath, entry.name),
+      isDirectory: entry.isDirectory(),
+      children: entry.isDirectory() ? [] : undefined,
+    }));
+}
 
 function setupFileSystemHandlers() {
   if (fileHandlersRegistered) return;
 
-  const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.ico', '.svg']);
-  const TEXT_EXTENSIONS = new Set([
-    '.js', '.jsx', '.ts', '.tsx', '.json', '.md', '.txt', '.css', '.scss', '.sass', '.html', '.htm',
-    '.py', '.sql', '.yml', '.yaml', '.toml', '.env', '.gitignore', '.sh', '.bat', '.ps1', '.xml',
-    '.cjs', '.mjs', '.log', '.csv', '.ini', '.lock', '.rb', '.php', '.java', '.kt', '.go', '.rs'
-  ]);
-
-  function normalizeWithinProject(targetPath) {
-    return path.normalize(targetPath);
-  }
-
-  function getCopyPath(targetDir, baseName) {
-    const extension = path.extname(baseName);
-    const stem = extension ? baseName.slice(0, -extension.length) : baseName;
-    let attempt = 1;
-    let candidate = path.join(targetDir, `${stem} copy${extension}`);
-
-    while (fs.existsSync(candidate)) {
-      attempt += 1;
-      candidate = path.join(targetDir, `${stem} copy ${attempt}${extension}`);
+  ipcMain.handle('fs:read-dir', async (_, projectPath, dirPath) => {
+    try {
+      const { resolvedTargetPath } = withProjectEntry(projectPath, dirPath || projectPath);
+      ensureExistingDirectory(resolvedTargetPath);
+      return readDirectoryEntries(resolvedTargetPath);
+    } catch {
+      return [];
     }
-
-    return candidate;
-  }
-
-  function isTextPreviewable(extension, size) {
-    return TEXT_EXTENSIONS.has(extension) || size <= 1024 * 1024;
-  }
-
-  ipcMain.handle('fs:read-dir', async (_, dirPath) => {
-    const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', '.cache', '__pycache__', '.DS_Store']);
-
-    function readDir(currentPath, depth = 0) {
-      if (depth > 6) return [];
-
-      try {
-        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-        return entries
-          .filter((entry) => !IGNORED.has(entry.name))
-          .sort((a, b) => {
-            if (a.isDirectory() && !b.isDirectory()) return -1;
-            if (!a.isDirectory() && b.isDirectory()) return 1;
-            return a.name.localeCompare(b.name);
-          })
-          .map((entry) => ({
-            name: entry.name,
-            path: path.join(currentPath, entry.name),
-            isDirectory: entry.isDirectory(),
-            children: entry.isDirectory() ? [] : undefined,
-          }));
-      } catch {
-        return [];
-      }
-    }
-
-    return readDir(dirPath);
   });
 
   ipcMain.handle('fs:search', async (_, projectPath, query) => {
     try {
-      const normalizedProjectPath = normalizeWithinProject(projectPath);
+      const normalizedProjectPath = withProjectRoot(projectPath);
       const searchQuery = String(query || '').trim().toLowerCase();
       if (!searchQuery) {
         return { success: true, files: [], contentMatches: [] };
       }
 
-      const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', '.cache', '__pycache__', '.DS_Store']);
       const files = [];
       const contentMatches = [];
       const MAX_RESULTS = 100;
@@ -132,8 +153,8 @@ function setupFileSystemHandlers() {
 
   ipcMain.handle('fs:git-status', async (_, projectPath) => {
     try {
-      const normalizedProjectPath = normalizeWithinProject(projectPath);
-      const result = await new Promise((resolve) => {
+      const normalizedProjectPath = withProjectRoot(projectPath);
+      return await new Promise((resolve) => {
         execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message, entries: [] });
@@ -151,8 +172,6 @@ function setupFileSystemHandlers() {
           resolve({ success: true, entries });
         });
       });
-
-      return result;
     } catch (error) {
       return { success: false, error: error.message, entries: [] };
     }
@@ -160,11 +179,11 @@ function setupFileSystemHandlers() {
 
   ipcMain.handle('fs:git-stage', async (_, projectPath, targetPath) => {
     try {
-      const normalizedProjectPath = normalizeWithinProject(projectPath);
-      const normalizedTargetPath = normalizeWithinProject(targetPath);
-      const relativePath = path.relative(normalizedProjectPath, normalizedTargetPath);
+      const normalizedProjectPath = withProjectRoot(projectPath);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
-      const result = await new Promise((resolve) => {
+      return await new Promise((resolve) => {
         execFile('git', ['add', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
@@ -173,8 +192,6 @@ function setupFileSystemHandlers() {
           resolve({ success: true, output: stdout });
         });
       });
-
-      return result;
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -182,11 +199,11 @@ function setupFileSystemHandlers() {
 
   ipcMain.handle('fs:git-unstage', async (_, projectPath, targetPath) => {
     try {
-      const normalizedProjectPath = normalizeWithinProject(projectPath);
-      const normalizedTargetPath = normalizeWithinProject(targetPath);
-      const relativePath = path.relative(normalizedProjectPath, normalizedTargetPath);
+      const normalizedProjectPath = withProjectRoot(projectPath);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
-      const result = await new Promise((resolve) => {
+      return await new Promise((resolve) => {
         execFile('git', ['reset', 'HEAD', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
@@ -195,8 +212,6 @@ function setupFileSystemHandlers() {
           resolve({ success: true, output: stdout });
         });
       });
-
-      return result;
     } catch (error) {
       return { success: false, error: error.message };
     }
@@ -204,13 +219,13 @@ function setupFileSystemHandlers() {
 
   ipcMain.handle('fs:git-commit', async (_, projectPath, message) => {
     try {
-      const normalizedProjectPath = normalizeWithinProject(projectPath);
+      const normalizedProjectPath = withProjectRoot(projectPath);
       const trimmedMessage = String(message || '').trim();
       if (!trimmedMessage) {
         return { success: false, error: 'Commit message is required.' };
       }
 
-      const result = await new Promise((resolve) => {
+      return await new Promise((resolve) => {
         execFile('git', ['commit', '-m', trimmedMessage], { cwd: normalizedProjectPath, timeout: 120000 }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || stdout || error.message });
@@ -219,27 +234,25 @@ function setupFileSystemHandlers() {
           resolve({ success: true, output: stdout });
         });
       });
-
-      return result;
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:read-file', async (_, filePath) => {
+  ipcMain.handle('fs:read-file', async (_, projectPath, filePath) => {
     try {
-      const normalizedPath = normalizeWithinProject(filePath);
-      const stats = fs.statSync(normalizedPath);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
+      const stats = fs.statSync(resolvedTargetPath);
 
       if (!stats.isFile()) {
         return { success: false, error: 'Target is not a file.' };
       }
 
-      const extension = path.extname(normalizedPath).toLowerCase();
+      const extension = path.extname(resolvedTargetPath).toLowerCase();
       const size = stats.size;
 
       if (IMAGE_EXTENSIONS.has(extension)) {
-        const buffer = fs.readFileSync(normalizedPath);
+        const buffer = fs.readFileSync(resolvedTargetPath);
         const mime = extension === '.svg'
           ? 'image/svg+xml'
           : extension === '.jpg'
@@ -249,8 +262,8 @@ function setupFileSystemHandlers() {
         return {
           success: true,
           type: 'image',
-          name: path.basename(normalizedPath),
-          path: normalizedPath,
+          name: path.basename(resolvedTargetPath),
+          path: resolvedTargetPath,
           extension,
           size,
           content: `data:${mime};base64,${buffer.toString('base64')}`,
@@ -261,19 +274,19 @@ function setupFileSystemHandlers() {
         return {
           success: false,
           error: 'This file is too large or binary to preview safely.',
-          name: path.basename(normalizedPath),
-          path: normalizedPath,
+          name: path.basename(resolvedTargetPath),
+          path: resolvedTargetPath,
           extension,
           size,
         };
       }
 
-      const content = fs.readFileSync(normalizedPath, 'utf8');
+      const content = fs.readFileSync(resolvedTargetPath, 'utf8');
       return {
         success: true,
         type: 'text',
-        name: path.basename(normalizedPath),
-        path: normalizedPath,
+        name: path.basename(resolvedTargetPath),
+        path: resolvedTargetPath,
         extension,
         size,
         content,
@@ -283,145 +296,149 @@ function setupFileSystemHandlers() {
     }
   });
 
-  ipcMain.handle('fs:write-file', async (_, filePath, content) => {
+  ipcMain.handle('fs:write-file', async (_, projectPath, filePath, content) => {
     try {
-      const normalizedPath = normalizeWithinProject(filePath);
-      fs.writeFileSync(normalizedPath, content, 'utf8');
-      return { success: true, path: normalizedPath };
+      const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
+      fs.writeFileSync(resolvedTargetPath, content, 'utf8');
+      return { success: true, path: resolvedTargetPath };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:open-file', async (_, filePath) => {
-    await shell.openPath(filePath);
-    return { success: true };
+  ipcMain.handle('fs:open-file', async (_, projectPath, filePath) => {
+    try {
+      const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
+      await shell.openPath(resolvedTargetPath);
+      return { success: true, path: resolvedTargetPath };
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
   });
 
-  ipcMain.handle('fs:open-folder', async (_, folderPath) => {
+  ipcMain.handle('fs:open-folder', async (_, projectPath, folderPath) => {
     try {
-      const normalizedPath = path.normalize(folderPath);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, folderPath || projectPath);
+      ensureExistingDirectory(resolvedTargetPath);
 
       if (process.platform === 'win32') {
-        const child = spawn('explorer.exe', [normalizedPath], {
+        const child = spawn('explorer.exe', [resolvedTargetPath], {
           detached: true,
           stdio: 'ignore',
         });
         child.unref();
-        return { success: true, path: normalizedPath };
+        return { success: true, path: resolvedTargetPath };
       }
 
-      const result = await shell.openPath(normalizedPath);
-      return { success: result === '', path: normalizedPath, error: result || null };
+      const result = await shell.openPath(resolvedTargetPath);
+      return { success: result === '', path: resolvedTargetPath, error: result || null };
     } catch (error) {
       return { success: false, path: folderPath, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:create-file', async (_, targetDir, fileName) => {
+  ipcMain.handle('fs:create-file', async (_, projectPath, targetDir, fileName) => {
     try {
-      const normalizedDir = normalizeWithinProject(targetDir);
-      const targetPath = path.join(normalizedDir, fileName);
+      const safeFileName = assertSafeEntryName(fileName);
+      const { resolvedParentDir, resolvedChildPath } = withProjectChild(projectPath, targetDir, safeFileName);
+      ensureExistingDirectory(resolvedParentDir);
 
-      if (fs.existsSync(targetPath)) {
+      if (fs.existsSync(resolvedChildPath)) {
         return { success: false, error: 'A file or folder with that name already exists.' };
       }
 
-      fs.writeFileSync(targetPath, '', 'utf8');
-      return { success: true, path: targetPath };
+      fs.writeFileSync(resolvedChildPath, '', 'utf8');
+      return { success: true, path: resolvedChildPath };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:create-folder', async (_, targetDir, folderName) => {
+  ipcMain.handle('fs:create-folder', async (_, projectPath, targetDir, folderName) => {
     try {
-      const normalizedDir = normalizeWithinProject(targetDir);
-      const targetPath = path.join(normalizedDir, folderName);
+      const safeFolderName = assertSafeEntryName(folderName);
+      const { resolvedParentDir, resolvedChildPath } = withProjectChild(projectPath, targetDir, safeFolderName);
+      ensureExistingDirectory(resolvedParentDir);
 
-      if (fs.existsSync(targetPath)) {
+      if (fs.existsSync(resolvedChildPath)) {
         return { success: false, error: 'A file or folder with that name already exists.' };
       }
 
-      fs.mkdirSync(targetPath, { recursive: true });
-      return { success: true, path: targetPath };
+      fs.mkdirSync(resolvedChildPath, { recursive: true });
+      return { success: true, path: resolvedChildPath };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:rename-entry', async (_, targetPath, nextName) => {
+  ipcMain.handle('fs:rename-entry', async (_, projectPath, targetPath, nextName) => {
     try {
-      const normalizedPath = normalizeWithinProject(targetPath);
-      const parentDir = path.dirname(normalizedPath);
-      const nextPath = path.join(parentDir, nextName);
+      const safeName = assertSafeEntryName(nextName);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      const parentDir = path.dirname(resolvedTargetPath);
+      const nextPath = path.join(parentDir, safeName);
 
-      if (!fs.existsSync(normalizedPath)) {
+      if (!fs.existsSync(resolvedTargetPath)) {
         return { success: false, error: 'The selected file or folder no longer exists.' };
+      }
+
+      if (!isSubPath(withProjectRoot(projectPath), nextPath)) {
+        return { success: false, error: 'Rename target is outside the active project.' };
       }
 
       if (fs.existsSync(nextPath)) {
         return { success: false, error: 'A file or folder with that name already exists.' };
       }
 
-      fs.renameSync(normalizedPath, nextPath);
-      return { success: true, path: nextPath, oldPath: normalizedPath };
+      fs.renameSync(resolvedTargetPath, nextPath);
+      return { success: true, path: nextPath, oldPath: resolvedTargetPath };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:move-entry', async (_, sourcePath, targetDir) => {
+  ipcMain.handle('fs:move-entry', async (_, projectPath, sourcePath, targetDir) => {
     try {
-      console.log('[fs:move-entry] request', { sourcePath, targetDir });
-      const normalizedSource = normalizeWithinProject(sourcePath);
-      const normalizedTargetDir = normalizeWithinProject(targetDir);
+      const { resolvedTargetPath: normalizedSource } = withProjectEntry(projectPath, sourcePath);
+      const { resolvedTargetPath: normalizedTargetDir } = withProjectEntry(projectPath, targetDir);
       const destinationPath = path.join(normalizedTargetDir, path.basename(normalizedSource));
 
-      console.log('[fs:move-entry] normalized', {
-        normalizedSource,
-        normalizedTargetDir,
-        destinationPath,
-      });
-
       if (!fs.existsSync(normalizedSource)) {
-        console.log('[fs:move-entry] source missing');
         return { success: false, error: 'The selected file or folder no longer exists.' };
       }
 
-      if (!fs.existsSync(normalizedTargetDir) || !fs.statSync(normalizedTargetDir).isDirectory()) {
-        console.log('[fs:move-entry] invalid target directory');
-        return { success: false, error: 'Target folder is invalid.' };
-      }
+      ensureExistingDirectory(normalizedTargetDir);
 
       if (destinationPath === normalizedSource) {
-        console.log('[fs:move-entry] source equals destination');
         return { success: true, path: normalizedSource, oldPath: normalizedSource };
       }
 
+      if (isSubPath(normalizedSource, normalizedTargetDir)) {
+        return { success: false, error: 'Cannot move a folder into itself.' };
+      }
+
       if (fs.existsSync(destinationPath)) {
-        console.log('[fs:move-entry] destination already exists');
         return { success: false, error: 'An item with the same name already exists in that folder.' };
       }
 
       fs.renameSync(normalizedSource, destinationPath);
-      console.log('[fs:move-entry] success', { oldPath: normalizedSource, path: destinationPath });
       return { success: true, path: destinationPath, oldPath: normalizedSource };
     } catch (error) {
-      console.error('[fs:move-entry] exception', error);
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:copy-entry', async (_, sourcePath, targetDir) => {
+  ipcMain.handle('fs:copy-entry', async (_, projectPath, sourcePath, targetDir) => {
     try {
-      const normalizedSource = normalizeWithinProject(sourcePath);
-      const normalizedTargetDir = normalizeWithinProject(targetDir);
+      const { resolvedTargetPath: normalizedSource } = withProjectEntry(projectPath, sourcePath);
+      const { resolvedTargetPath: normalizedTargetDir } = withProjectEntry(projectPath, targetDir);
       const destinationPath = path.join(normalizedTargetDir, path.basename(normalizedSource));
 
       if (!fs.existsSync(normalizedSource)) {
         return { success: false, error: 'The selected file or folder no longer exists.' };
       }
+
+      ensureExistingDirectory(normalizedTargetDir);
 
       if (fs.existsSync(destinationPath)) {
         return { success: false, error: 'An item with the same name already exists in that folder.' };
@@ -434,33 +451,33 @@ function setupFileSystemHandlers() {
     }
   });
 
-  ipcMain.handle('fs:duplicate-entry', async (_, targetPath) => {
+  ipcMain.handle('fs:duplicate-entry', async (_, projectPath, targetPath) => {
     try {
-      const normalizedPath = normalizeWithinProject(targetPath);
-      const parentDir = path.dirname(normalizedPath);
-      const destinationPath = getCopyPath(parentDir, path.basename(normalizedPath));
+      const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      const parentDir = path.dirname(resolvedTargetPath);
+      const destinationPath = getCopyPath(parentDir, path.basename(resolvedTargetPath));
 
-      if (!fs.existsSync(normalizedPath)) {
+      if (!fs.existsSync(resolvedTargetPath)) {
         return { success: false, error: 'The selected file or folder no longer exists.' };
       }
 
-      fs.cpSync(normalizedPath, destinationPath, { recursive: true });
-      return { success: true, path: destinationPath, oldPath: normalizedPath };
+      fs.cpSync(resolvedTargetPath, destinationPath, { recursive: true });
+      return { success: true, path: destinationPath, oldPath: resolvedTargetPath };
     } catch (error) {
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('fs:delete-entry', async (_, targetPath) => {
+  ipcMain.handle('fs:delete-entry', async (_, projectPath, targetPath) => {
     try {
-      const normalizedPath = normalizeWithinProject(targetPath);
+      const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
 
-      if (!fs.existsSync(normalizedPath)) {
+      if (!fs.existsSync(resolvedTargetPath)) {
         return { success: false, error: 'The selected file or folder no longer exists.' };
       }
 
-      fs.rmSync(normalizedPath, { recursive: true, force: true });
-      return { success: true, path: normalizedPath };
+      fs.rmSync(resolvedTargetPath, { recursive: true, force: true });
+      return { success: true, path: resolvedTargetPath };
     } catch (error) {
       return { success: false, error: error.message };
     }

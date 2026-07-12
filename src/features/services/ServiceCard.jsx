@@ -79,6 +79,11 @@ export default function ServiceCard({ service, onRefresh }) {
         {connected && user && (
           <p className="service-card__user text-mono">{user}</p>
         )}
+        {!checking && (
+          <p className={`service-card__hint ${!service.project ? 'service-card__hint--warn' : ''}`}>
+            {service.project ? `Linked: ${service.project}` : 'Sin proyecto'}
+          </p>
+        )}
         {!connected && !checking && (
           <p className="service-card__hint">Not authenticated</p>
         )}

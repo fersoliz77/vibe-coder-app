@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:electron": "concurrently \"vite\" \"wait-on http://localhost:5173 && electron .\"",
+    "test": "node --test tests/**/*.test.js",
+    "check": "npm run test && npm run build",
     "build": "vite build",
     "package": "vite build && electron-builder",
     "rebuild": "electron-rebuild"
@@ -28,7 +30,8 @@
     "node-pty": "^1.0.0",
     "prismjs": "^1.30.0",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.4.0",

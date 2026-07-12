@@ -5,9 +5,11 @@ import ProjectList from './features/projects/ProjectList';
 import FileExplorer from './features/explorer/FileExplorer';
 import TerminalPanel from './features/terminal/TerminalPanel';
 import ClaudePanel from './features/claude/ClaudePanel';
+import OpenAIPanel from './features/openai/OpenAIPanel';
 import { useServices } from './hooks/useServices';
 import { useTerminal } from './hooks/useTerminal';
 import { useClaude } from './hooks/useClaude';
+import { useAppStore } from './store/useAppStore';
 import './styles/App.css';
 
 const VIEWS = {
@@ -16,13 +18,22 @@ const VIEWS = {
   FILES: 'files',
   TERMINAL: 'terminal',
   CLAUDE: 'claude',
+  OPENAI: 'openai',
 };
 
 export default function App() {
   const [activeView, setActiveView] = useState(VIEWS.PROJECTS);
   const [isMaximized, setIsMaximized] = useState(false);
-  const [isDarkMode, setIsDarkMode] = useState(true);
-  const [currentProject, setCurrentProject] = useState(null);
+  const {
+    currentProject,
+    theme,
+    initialized,
+    init,
+    setCurrentProject,
+    clearCurrentProject,
+    setTheme,
+  } = useAppStore();
+  const isDarkMode = theme !== 'light';
   
   const serviceHook = useServices(currentProject?.path);
   const terminalHook = useTerminal(currentProject?.path);
@@ -36,11 +47,15 @@ export default function App() {
     event?.preventDefault?.();
     event?.stopPropagation?.();
     if (!currentProject?.path || !window.electronAPI?.fs?.openFolder) return;
-    const result = await window.electronAPI.fs.openFolder(currentProject.path);
+    const result = await window.electronAPI.fs.openFolder(currentProject.path, currentProject.path);
     if (result && !result.success) {
       console.error('Failed to open project folder:', result.error);
     }
   }, [currentProject]);
+
+  useEffect(() => {
+    init();
+  }, [init]);
 
   useEffect(() => {
     if (!window.electronAPI?.window?.onMaximizedChanged) return undefined;
@@ -64,20 +79,25 @@ export default function App() {
     setActiveView(VIEWS.CLAUDE);
   }, [currentProject]);
 
+  const handleOpenOpenAI = useCallback(() => {
+    if (!currentProject) return;
+    setActiveView(VIEWS.OPENAI);
+  }, [currentProject]);
+
   const handleProjectSelect = useCallback((project) => {
     setCurrentProject(project);
     setActiveView(VIEWS.DASHBOARD);
   }, []);
 
   const handleBackToProjects = useCallback(() => {
-    setCurrentProject(null);
+    clearCurrentProject();
     setActiveView(VIEWS.PROJECTS);
-  }, []);
+  }, [clearCurrentProject]);
 
   // Theme toggle
   const toggleTheme = useCallback(() => {
-    setIsDarkMode((prev) => !prev);
-  }, []);
+    setTheme(isDarkMode ? 'light' : 'dark');
+  }, [isDarkMode, setTheme]);
 
   // Apply theme class to body
   useEffect(() => {
@@ -89,6 +109,10 @@ export default function App() {
   }, [isDarkMode]);
 
   const renderView = () => {
+    if (!initialized) {
+      return <div className="main-content__loading">Loading workspace...</div>;
+    }
+
     if (!currentProject || activeView === VIEWS.PROJECTS) {
       return (
         <ProjectList 
@@ -105,6 +129,8 @@ export default function App() {
         return <TerminalPanel {...terminalHook} />;
       case VIEWS.CLAUDE:
         return <ClaudePanel {...claudeHook} />;
+      case VIEWS.OPENAI:
+        return <OpenAIPanel cwd={currentProject?.path} />;
       case VIEWS.FILES:
         return <FileExplorer project={currentProject} />;
       case VIEWS.DASHBOARD:

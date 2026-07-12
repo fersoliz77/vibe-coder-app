@@ -6,7 +6,9 @@ const { setupFileSystemHandlers } = require('./ipc/fileSystemManager');
 const { setupServiceHandlers } = require('./services/serviceManager');
 const { setupTerminalHandlers } = require('./services/terminalManager');
 const { setupClaudeHandlers } = require('./services/claudeManager');
+const { setupOpenAIHandlers } = require('./services/openaiManager');
 const { initProjectManager, setupProjectHandlers } = require('./services/projectManager');
+const { setupStoreHandlers } = require('./ipc/storeManager');
 
 let mainWindow;
 
@@ -24,6 +26,8 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // Required for node-pty IPC
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     },
     icon: path.join(__dirname, '..', 'public', 'icon.png'),
   });
@@ -49,6 +53,7 @@ app.whenReady().then(() => {
   createWindow();
 
   // Initialize Managers
+  setupStoreHandlers();
   initProjectManager();
   setupWindowHandlers(() => mainWindow);
   setupDialogHandlers(() => mainWindow);
@@ -59,6 +64,7 @@ app.whenReady().then(() => {
   setupServiceHandlers(ipcMain);
   setupTerminalHandlers(ipcMain, () => mainWindow);
   setupClaudeHandlers(ipcMain, () => mainWindow);
+  setupOpenAIHandlers(ipcMain, () => mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

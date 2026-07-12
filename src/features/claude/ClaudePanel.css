@@ -252,3 +252,232 @@
   margin-top: var(--space-xs);
   padding-left: var(--space-xs);
 }
+
+/* ─── Body wrapper ─────────────────────────────────────────── */
+.claude-panel__body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─── Loading state ────────────────────────────────────────── */
+.claude-panel__loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-lg);
+  color: var(--text-tertiary);
+}
+
+/* ─── Status loading ───────────────────────────────────────── */
+.claude-panel__status--loading {
+  color: var(--text-tertiary);
+}
+
+/* ─── Ghost button variant ─────────────────────────────────── */
+.btn--ghost {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-tertiary);
+  padding: var(--space-xs) var(--space-sm);
+}
+.btn--ghost:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--glass-border);
+}
+
+/* ─── Large button ─────────────────────────────────────────── */
+.btn--large {
+  padding: var(--space-md) var(--space-xl);
+  font-size: 15px;
+  font-weight: 600;
+  gap: var(--space-sm);
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-md);
+}
+
+/* ─── Setup screens ────────────────────────────────────────── */
+.claude-setup-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2xl) var(--space-xl);
+  gap: var(--space-lg);
+  text-align: center;
+  animation: fade-in 0.4s ease-out;
+  overflow-y: auto;
+}
+
+.claude-setup-screen__icon {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(217, 119, 87, 0.15), rgba(196, 97, 62, 0.1));
+  border: 1px solid rgba(217, 119, 87, 0.25);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #D97757;
+}
+
+.claude-setup-screen__icon--auth::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(217, 119, 87, 0.5), rgba(196, 97, 62, 0.2));
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  padding: 1px;
+}
+
+.claude-setup-screen__icon-badge {
+  position: absolute;
+  bottom: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  border: 1px solid rgba(217, 119, 87, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #D97757;
+}
+
+.claude-setup-screen__title {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.claude-setup-screen__desc {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.65;
+  max-width: 420px;
+}
+
+.claude-setup-screen__version {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+.claude-setup-screen__info-box {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  background: hsla(210, 100%, 56%, 0.07);
+  border: 1px solid hsla(210, 100%, 56%, 0.18);
+  border-radius: var(--radius-md);
+  padding: var(--space-md) var(--space-lg);
+  font-size: 13px;
+  color: var(--text-secondary);
+  max-width: 420px;
+  text-align: left;
+}
+
+.claude-setup-screen__info-box code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  background: var(--bg-deepest);
+  padding: 1px 5px;
+  border-radius: 4px;
+  color: var(--accent-primary);
+}
+
+/* Steps */
+.claude-setup-screen__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  max-width: 380px;
+  width: 100%;
+  text-align: left;
+}
+
+.claude-setup-screen__step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--bg-base);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--glass-border);
+}
+
+.claude-setup-screen__step-num {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(217, 119, 87, 0.15);
+  border: 1px solid rgba(217, 119, 87, 0.3);
+  color: #D97757;
+  font-size: 12px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.claude-setup-screen__installing {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+/* ─── Spinner ──────────────────────────────────────────────── */
+.claude-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--glass-border);
+  border-top-color: #D97757;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Progress log ─────────────────────────────────────────── */
+.claude-progress-log {
+  width: 100%;
+  max-width: 480px;
+  max-height: 160px;
+  overflow-y: auto;
+  background: var(--bg-deepest);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm) var(--space-md);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.claude-progress-log__line {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.claude-progress-log__line--stdout { color: var(--text-secondary); }
+.claude-progress-log__line--stderr { color: var(--status-warning, #f0a500); }
