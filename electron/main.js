@@ -13,6 +13,22 @@ const { setupStoreHandlers } = require('./ipc/storeManager');
 const { AuthService, setupAuthHandlers } = require('./auth/authService');
 const { installIpcAuthorization } = require('./auth/ipcGuard');
 
+if (!app.isPackaged) {
+  try {
+    const envPath = path.join(__dirname, '..', '.env');
+    const envFile = require('fs').readFileSync(envPath, 'utf8');
+    for (const line of envFile.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) continue;
+      const separator = trimmed.indexOf('=');
+      if (separator < 1) continue;
+      const key = trimmed.slice(0, separator).trim();
+      const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+      if (!process.env[key]) process.env[key] = value;
+    }
+  } catch {}
+}
+
 let mainWindow;
 
 function createWindow() {
