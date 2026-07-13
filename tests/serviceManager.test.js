@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { runCommand } = require('../electron/services/serviceManager');
+const { runCommand, checkVercel, checkSupabase } = require('../electron/services/serviceManager');
 
 test('runCommand passes metacharacters as literal arguments without invoking a shell', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-command-'));
@@ -16,6 +16,34 @@ test('runCommand passes metacharacters as literal arguments without invoking a s
     assert.equal(result.success, true);
     assert.equal(result.stdout, payload);
     assert.equal(fs.existsSync(marker), false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Vercel authentication stays connected when the project is not linked', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-vercel-'));
+  try {
+    const service = await checkVercel(tempDir, async () => ({ success: true, stdout: 'fersoliz77', stderr: '' }));
+    assert.equal(service.connected, true);
+    assert.equal(service.user, 'fersoliz77');
+    assert.equal(service.projectLinked, false);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
+test('Supabase authentication stays connected when the project is not initialized', async () => {
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-supabase-'));
+  try {
+    const service = await checkSupabase(tempDir, async () => ({
+      success: true,
+      stdout: '[{"id":"org-id","name":"mktsolutions"}]',
+      stderr: '',
+    }));
+    assert.equal(service.connected, true);
+    assert.equal(service.user, 'mktsolutions');
+    assert.equal(service.projectLinked, false);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }

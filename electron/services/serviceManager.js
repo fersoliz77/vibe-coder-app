@@ -28,18 +28,18 @@ const CLI = {
 };
 
 const NPM_CLI_ENTRY = {
-  supabase: path.join(npmGlobalBin, 'node_modules', 'supabase', 'bin', 'supabase'),
+  supabase: path.join(npmGlobalBin, 'node_modules', 'supabase', 'dist', 'supabase.js'),
   vercel: path.join(npmGlobalBin, 'node_modules', 'vercel', 'dist', 'index.js'),
   firebase: path.join(npmGlobalBin, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js'),
 };
 
-async function runCommand(file, args = [], cwd) {
+async function runCommand(file, args = [], cwd, extraEnv = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(file, args, {
       timeout: 20000,
       cwd,
       windowsHide: true,
-      env: { ...process.env, PATH: extraPath, FORCE_COLOR: '0' },
+      env: { ...process.env, PATH: extraPath, FORCE_COLOR: '0', ...extraEnv },
     });
     return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
   } catch (error) {
@@ -59,14 +59,14 @@ function runCli(name, args = [], cwd) {
   }
   const npmEntry = isWin ? NPM_CLI_ENTRY[name] : null;
   if (npmEntry && fs.existsSync(npmEntry)) {
-    return runCommand(process.execPath, [npmEntry, ...args], cwd);
+    return runCommand(process.execPath, [npmEntry, ...args], cwd, { ELECTRON_RUN_AS_NODE: '1' });
   }
   return runCommand(CLI[name], args, cwd);
 }
 
-async function checkVercel(projectPath) {
+async function checkVercel(projectPath, cliRunner = runCli) {
   // Always get global state first
-  const res = await runCli('vercel', ['whoami']);
+  const res = await cliRunner('vercel', ['whoami']);
   const globalConnected = res.success && res.stdout.length > 0 && !res.stdout.toLowerCase().includes('error');
   const user = globalConnected ? res.stdout.split('\n')[0].trim() : null;
 
@@ -87,16 +87,22 @@ async function checkVercel(projectPath) {
     } catch (e) {}
   }
   return {
-    id: 'vercel', name: 'Vercel', connected: isLinked,
+    id: 'vercel', name: 'Vercel', connected: globalConnected,
     user, // Display global account name
     project: vercelProject,
-    details: isLinked ? { platform: 'Vercel', type: 'Deployment' } : { error: 'Run: vercel link' },
+    projectLinked: isLinked,
+    details: {
+      platform: 'Vercel',
+      type: 'Deployment',
+      ...(!globalConnected && { error: res.stderr || 'Run: vercel login' }),
+      ...(globalConnected && !isLinked && { projectNotice: 'Run: vercel link' }),
+    },
   };
 }
 
-async function checkSupabase(projectPath) {
+async function checkSupabase(projectPath, cliRunner = runCli) {
   // Always get global state first
-  const orgsRes = await runCli('supabase', ['orgs', 'list', '--output', 'json']);
+  const orgsRes = await cliRunner('supabase', ['orgs', 'list', '--output', 'json']);
   let globalConnected = false;
   let user = null;
 
@@ -114,7 +120,7 @@ async function checkSupabase(projectPath) {
   }
 
   if (!globalConnected) {
-    const projRes = await runCli('supabase', ['projects', 'list', '--output', 'json']);
+    const projRes = await cliRunner('supabase', ['projects', 'list', '--output', 'json']);
     if (projRes.stdout) {
       try {
         const match = projRes.stdout.match(/\[[\s\S]*\]/);
@@ -133,11 +139,15 @@ async function checkSupabase(projectPath) {
     return { id: 'supabase', name: 'Supabase', connected: globalConnected, user, checking: false };
   }
 
-  // Project-level: check for supabase/config.toml and extract project name
+  // Keep account authentication separate from project initialization/linking.
   const configPath = path.join(projectPath, 'supabase', 'config.toml');
-  const isLinked = fs.existsSync(configPath);
+  const projectRefPath = path.join(projectPath, 'supabase', '.temp', 'project-ref');
+  const isInitialized = fs.existsSync(configPath);
+  const isLinked = fs.existsSync(projectRefPath);
   let projectName = null;
   if (isLinked) {
+    try { projectName = fs.readFileSync(projectRefPath, 'utf8').trim() || null; } catch (e) {}
+  } else if (isInitialized) {
     try {
       const content = fs.readFileSync(configPath, 'utf8');
       const m = content.match(/project_id\s*=\s*"([^"]+)"/);
@@ -145,10 +155,17 @@ async function checkSupabase(projectPath) {
     } catch (e) {}
   }
   return {
-    id: 'supabase', name: 'Supabase', connected: isLinked,
+    id: 'supabase', name: 'Supabase', connected: globalConnected,
     user, // Display global account name
     project: projectName,
-    details: isLinked ? { platform: 'Supabase', type: 'Backend' } : { error: 'Run: supabase init' },
+    projectLinked: isLinked,
+    details: {
+      platform: 'Supabase',
+      type: 'Backend',
+      initialized: isInitialized,
+      ...(!globalConnected && { error: orgsRes.stderr || 'Run: supabase login' }),
+      ...(globalConnected && !isLinked && { projectNotice: isInitialized ? 'Run: supabase link' : 'Run: supabase init' }),
+    },
   };
 }
 
@@ -344,4 +361,4 @@ function setupServiceHandlers(ipcMain) {
   });
 }
 
-module.exports = { runCommand, setupServiceHandlers };
+module.exports = { runCommand, checkVercel, checkSupabase, setupServiceHandlers };
