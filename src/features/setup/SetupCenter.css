@@ -73,6 +73,15 @@
 .setup-center__footer strong { font-size: 12px; }
 .setup-center__footer span { color: var(--text-tertiary); font-size: 10px; }
 
+.setup-center__agent-card { display: grid; grid-template-columns: 1.1fr 1fr auto; gap: 18px; margin: 0 30px 26px; padding: 18px; border: 1px solid rgba(56, 189, 248, .18); border-radius: 15px; background: linear-gradient(140deg, rgba(56, 189, 248, .06), rgba(167, 139, 250, .05)); }
+.setup-center__agent-copy h3 { margin-top: 4px; font-size: 19px; }
+.setup-center__agent-copy p { margin-top: 7px; color: var(--text-secondary); font-size: 12px; line-height: 1.6; }
+.setup-center__agent-status { display: grid; align-content: center; gap: 4px; }
+.setup-center__agent-status strong { font-size: 12px; }
+.setup-center__agent-status span, .setup-center__agent-status small { color: var(--text-tertiary); font-size: 10px; line-height: 1.5; }
+.setup-center__agent-error { color: var(--status-error); }
+.setup-center__agent-actions { display: flex; align-items: center; gap: 8px; }
+
 .setup-center__dialog-backdrop { position: fixed; z-index: 10020; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(3, 6, 12, .76); backdrop-filter: blur(7px); }
 .setup-center__dialog { width: min(440px, 100%); padding: 26px; border: 1px solid var(--glass-border); border-radius: 18px; background: var(--bg-raised); box-shadow: 0 30px 90px rgba(0, 0, 0, .5); }
 .setup-center__dialog-mark { display: grid; width: 38px; height: 38px; place-items: center; margin-bottom: 17px; border-radius: 11px; color: var(--accent-primary); background: hsla(195, 100%, 55%, .1); font: 700 20px var(--font-mono); }
@@ -88,6 +97,7 @@
 .setup-center--compact .setup-center__header p { display: none; }
 .setup-center--compact .setup-center__controls, .setup-center--compact .setup-center__groups { padding-right: 20px; padding-left: 20px; }
 .setup-center--compact .setup-center__footer { padding: 15px 20px; }
+.setup-center--compact .setup-center__agent-card { margin-right: 20px; margin-left: 20px; }
 
 @keyframes setup-spin { to { transform: rotate(360deg); } }
 @media (max-width: 760px) {
@@ -95,6 +105,9 @@
   .setup-center__score { display: none; }
   .setup-center__controls { grid-template-columns: 1fr; padding: 16px 18px; }
   .setup-center__groups { grid-template-columns: 1fr; padding: 21px 18px; }
+  .setup-center__agent-card { grid-template-columns: 1fr; margin-right: 18px; margin-left: 18px; }
+  .setup-center__agent-actions { justify-content: stretch; flex-direction: column; }
+  .setup-center__agent-actions .setup-center__button { width: 100%; }
   .setup-center__group:only-child { grid-column: auto; }
   .setup-center__progress { margin-right: 18px; margin-left: 18px; }
   .setup-center__progress-copy { display: grid; gap: 2px; }

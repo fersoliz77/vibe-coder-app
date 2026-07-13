@@ -26,6 +26,8 @@ const VIEWS = {
   SETTINGS: 'settings',
 };
 
+const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
+
 function Workspace() {
   const { state: authState } = useAuth();
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
@@ -80,6 +82,43 @@ function Workspace() {
     window.electronAPI.window.isMaximized?.().then(setIsMaximized).catch(() => {});
     return window.electronAPI.window.onMaximizedChanged(setIsMaximized);
   }, []);
+
+  useEffect(() => {
+    if (!initialized || !window.electronAPI?.opencode?.getStatus || !window.electronAPI?.store) return undefined;
+    let cancelled = false;
+    const runBootstrap = async () => {
+      try {
+        const [status, alreadyBootstrapped] = await Promise.all([
+          window.electronAPI.opencode.getStatus(),
+          window.electronAPI.store.get(OPENCODE_BOOTSTRAP_KEY, false),
+        ]);
+        if (cancelled) return;
+        setOpenCodeStatus(status);
+        if (!alreadyBootstrapped) {
+          if (status.usable) {
+            await window.electronAPI.store.set(OPENCODE_BOOTSTRAP_KEY, true);
+          } else {
+            setOpenCodeSetup({ open: true, phase: 'checking', progress: '', error: '' });
+            const result = await window.electronAPI.opencode.install();
+            if (cancelled) return;
+            if (result?.success && result.status?.usable) {
+              setOpenCodeStatus(result.status);
+              setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
+              await window.electronAPI.store.set(OPENCODE_BOOTSTRAP_KEY, true);
+            } else if (result?.cancelled) {
+              setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
+            } else if (!result?.busy) {
+              setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: result?.error || 'No se pudo dejar OpenCode operativo en el primer inicio.' });
+            }
+          }
+        }
+      } catch {
+        if (!cancelled) setOpenCodeSetup((current) => current.open ? current : { open: true, phase: 'error', progress: '', error: 'No se pudo preparar OpenCode durante el primer inicio.' });
+      }
+    };
+    runBootstrap();
+    return () => { cancelled = true; };
+  }, [initialized]);
 
   // Quick action: open terminal from dashboard
   const handleOpenTerminal = useCallback(() => {
@@ -162,6 +201,12 @@ function Workspace() {
         : current);
     });
   }, []);
+
+  useEffect(() => {
+    if (!currentProject || activeView !== VIEWS.TERMINAL || terminalHook.terminals.length !== 0) return;
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('open') === 'opencode') handleOpenCode();
+  }, [activeView, currentProject, terminalHook.terminals.length, handleOpenCode]);
 
   const handleNavigate = useCallback((view) => {
     if (view === 'opencode') handleOpenCode();

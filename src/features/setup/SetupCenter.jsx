@@ -44,6 +44,7 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(null);
   const [log, setLog] = useState([]);
+  const [openCode, setOpenCode] = useState({ loading: true, installing: false, status: null, error: '', progress: '' });
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.setup : null;
   const options = { includeMobile, backend };
@@ -74,6 +75,33 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
     check();
   }, [includeMobile, backend]);
 
+  const checkOpenCode = async () => {
+    if (!window.electronAPI?.opencode?.getStatus) {
+      setOpenCode({ loading: false, installing: false, status: null, error: 'OpenCode no está disponible en esta ejecución.', progress: '' });
+      return;
+    }
+    setOpenCode((current) => ({ ...current, loading: true, error: '', progress: '' }));
+    try {
+      const status = await window.electronAPI.opencode.getStatus();
+      setOpenCode({ loading: false, installing: false, status, error: '', progress: '' });
+    } catch (error) {
+      setOpenCode({ loading: false, installing: false, status: null, error: error?.message || 'No se pudo comprobar OpenCode.', progress: '' });
+    }
+  };
+
+  useEffect(() => {
+    checkOpenCode();
+  }, []);
+
+  useEffect(() => {
+    if (!window.electronAPI?.opencode?.onInstallProgress) return undefined;
+    return window.electronAPI.opencode.onInstallProgress((event) => {
+      setOpenCode((current) => current.installing
+        ? { ...current, progress: event?.message || current.progress }
+        : current);
+    });
+  }, []);
+
   useEffect(() => {
     if (!api?.onProgress) return undefined;
     return api.onProgress((event) => {
@@ -101,6 +129,22 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
 
   const cancel = async () => {
     try { await api?.cancel?.(); } catch {}
+  };
+
+  const installOpenCode = async () => {
+    if (!window.electronAPI?.opencode?.install) return;
+    setOpenCode((current) => ({ ...current, installing: true, error: '', progress: 'Comprobando instalación de OpenCode…' }));
+    try {
+      const result = await window.electronAPI.opencode.install();
+      if (!result?.success && !result?.cancelled) throw new Error(result?.error || 'No se pudo instalar OpenCode.');
+      if (result?.status) {
+        setOpenCode({ loading: false, installing: false, status: result.status, error: '', progress: '' });
+      } else {
+        await checkOpenCode();
+      }
+    } catch (error) {
+      setOpenCode((current) => ({ ...current, installing: false, error: error?.message || 'No se pudo instalar OpenCode.', progress: '' }));
+    }
   };
 
   const items = environment?.items || [];
@@ -155,6 +199,24 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
           </div>
         )}
       </div>
+
+      <section className="setup-center__agent-card" aria-labelledby="setup-opencode-title">
+        <div className="setup-center__agent-copy">
+          <span className="setup-center__eyebrow">Agente priorizado</span>
+          <h3 id="setup-opencode-title">OpenCode</h3>
+          <p>Debe quedar operativo desde el primer inicio. Se descarga solo si falta y no instala Claude Code ni Codex.</p>
+        </div>
+        <div className="setup-center__agent-status">
+          <strong>{openCode.loading ? 'Comprobando…' : openCode.status?.usable ? `Listo · ${openCode.status.version || 'instalado'}` : openCode.status?.installed ? 'Instalación detectada · requiere reparación' : 'No instalado'}</strong>
+          <span>{openCode.loading ? 'Verificando el ejecutable oficial.' : openCode.status?.authenticated ? `Proveedores: ${openCode.status.providers.join(', ')}` : 'Conecta proveedores dentro de OpenCode con /connect.'}</span>
+          {openCode.progress && <small>{openCode.progress}</small>}
+          {openCode.error && <small className="setup-center__agent-error">{openCode.error}</small>}
+        </div>
+        <div className="setup-center__agent-actions">
+          <button className="setup-center__button is-secondary" type="button" disabled={openCode.loading || openCode.installing} onClick={checkOpenCode}>Revisar</button>
+          <button className="setup-center__button is-primary" type="button" disabled={openCode.loading || openCode.installing} onClick={installOpenCode}>{openCode.installing ? 'Instalando…' : openCode.status?.usable ? 'Reinstalar' : 'Instalar OpenCode'}</button>
+        </div>
+      </section>
 
       {installing && (
         <div className="setup-center__progress" role="status" aria-live="polite">
