@@ -33,11 +33,18 @@ The RPC must derive the user from `auth.uid()` and must not trust a user ID supp
   "status": "pending | active | restricted | suspended | archived",
   "school_id": "uuid or null",
   "school_name": "display name or null",
+  "plan_id": "uuid or null",
+  "plan_name": "display name or null",
+  "completed_lessons": 0,
+  "total_lessons": 0,
+  "progress_percentage": 0,
   "offline_lease_expires_at": "optional ISO-8601 timestamp"
 }
 ```
 
 `status` is required. The client accepts camelCase aliases for integration tolerance. A server-provided lease may shorten offline access but cannot extend it beyond seven days from the last successful online membership validation.
+
+The first desktop dashboard and Settings consume plan and progress from this contract. They never query educational tables directly and never receive the Supabase refresh token.
 
 ## Effective policy
 
