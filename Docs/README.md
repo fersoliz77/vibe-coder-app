@@ -1,6 +1,6 @@
-# Vibe IDE Coder Documentation
+# Vibe IDE Code Documentation
 
-This folder is the single source of truth for product, architecture, feature behavior, operational notes, and dated implementation history.
+This folder is the implementation reference for the Windows desktop application. Cross-product decisions are canonical in `../ecosystem/` at the workspace root.
 
 ## Goals
 
@@ -62,4 +62,4 @@ This folder is the single source of truth for product, architecture, feature beh
 
 ## Current Baseline
 
-This documentation set reflects the current Electron + React application structure, including the hardened project-aware filesystem bridge, modular Explorer, terminal integration, Claude integration, services dashboard, and store-backed project persistence.
+This documentation set reflects the current Electron + React application structure, including school authentication, seven-day offline access, restricted mode, the hardened project-aware filesystem bridge, modular Explorer, terminal integration, user-connected AI providers, services dashboard, and store-backed project persistence.

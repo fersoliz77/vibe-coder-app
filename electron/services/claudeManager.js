@@ -1,6 +1,9 @@
 const { spawn, exec } = require('child_process');
 const util = require('util');
 const execAsync = util.promisify(exec);
+const { validateProjectCwd } = require('../ipc/fsGuards');
+const { isProjectRegistered } = require('./projectManager');
+const { killProcessTree } = require('./processUtils');
 
 // Strip ANSI escape codes from terminal output
 function stripAnsi(str) {
@@ -15,7 +18,23 @@ function stripAnsi(str) {
  *   3. Authenticated  → ready to use
  */
 
-let activeProcess = null;
+let activeRun = null;
+let nextRunId = 1;
+let currentRunId = 0;
+const backgroundProcesses = new Set();
+
+function trackBackgroundProcess(processHandle) {
+  backgroundProcesses.add(processHandle);
+  processHandle.once('close', () => backgroundProcesses.delete(processHandle));
+  processHandle.once('error', () => backgroundProcesses.delete(processHandle));
+  return processHandle;
+}
+
+function assertSafeModel(model) {
+  const value = model || 'claude-sonnet-4-6';
+  if (!/^[a-zA-Z0-9._:/-]+$/.test(value)) throw new Error('Invalid model name.');
+  return value;
+}
 
 // ─── Detection ──────────────────────────────────────────────────────────────
 
@@ -158,11 +177,11 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
 
     return new Promise((resolve) => {
       // shell:true is required on Windows to run .cmd wrappers
-      const proc = spawn('npm', ['install', '-g', '@anthropic-ai/claude-code'], {
+      const proc = trackBackgroundProcess(spawn('npm', ['install', '-g', '@anthropic-ai/claude-code'], {
         env: cleanEnv,
         shell: true,
         stdio: 'pipe',
-      });
+      }));
 
       const send = (type, text) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -196,11 +215,11 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
 
     return new Promise((resolve) => {
       // shell:true is required on Windows to execute .cmd files
-      const proc = spawn(claudePath, ['login'], {
+      const proc = trackBackgroundProcess(spawn(claudePath, ['login'], {
         env: cleanEnv,
         shell: true,
         stdio: 'pipe',
-      });
+      }));
 
       const send = (type, text) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
@@ -241,13 +260,27 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
 
   // Send prompt — pipe prompt via stdin, strip ANSI from output
   ipcMain.handle('claude:send', async (_, prompt, cwd, model) => {
-    if (activeProcess) {
-      try { activeProcess.kill(); } catch {}
-      activeProcess = null;
+    let validatedCwd;
+    let validatedModel;
+    try {
+      validatedCwd = validateProjectCwd(cwd, isProjectRegistered);
+      validatedModel = assertSafeModel(model);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+
+    const runId = nextRunId++;
+    currentRunId = runId;
+    const previousRun = activeRun;
+    activeRun = null;
+    if (previousRun) {
+      killProcessTree(previousRun.process);
     }
 
     const status = await getClaudeStatus();
     const mainWindow = getMainWindow();
+
+    if (currentRunId !== runId) return { success: false, cancelled: true };
 
     if (!status.installed) {
       if (mainWindow && !mainWindow.isDestroyed()) {
@@ -276,20 +309,22 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
       // Use --print flag; on Windows with shell:true we must build the full command string
       // to avoid argument mangling with .cmd wrappers.
       // Pipe the prompt via stdin using the '-p -' pattern so special chars don't break.
-      activeProcess = spawn(status.path, ['--print', '-', '--model', model || 'claude-sonnet-4-6'], {
-        cwd: cwd || process.cwd(),
+      const proc = spawn(status.path, ['--print', '-', '--model', validatedModel], {
+        cwd: validatedCwd,
         env: cleanEnv,
         stdio: 'pipe',
         shell: true,
       });
+      activeRun = { id: runId, process: proc };
 
       // Write the prompt to stdin and close it so claude doesn't wait
-      activeProcess.stdin.write(prompt, 'utf8');
-      activeProcess.stdin.end();
+      proc.stdin.write(String(prompt || ''), 'utf8');
+      proc.stdin.end();
 
       let fullOutput = '';
 
-      activeProcess.stdout.on('data', (data) => {
+      proc.stdout.on('data', (data) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
         fullOutput += text;
         const win = getMainWindow();
@@ -297,7 +332,8 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
       });
 
       // Suppress stderr warnings (stdin warning, etc) but log to console for debugging
-      activeProcess.stderr.on('data', (data) => {
+      proc.stderr.on('data', (data) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
         console.log('[claude:stderr]', text);
         // Only send errors that are real errors, not warnings
@@ -307,14 +343,16 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
         }
       });
 
-      activeProcess.on('close', (code) => {
-        activeProcess = null;
+      proc.on('close', (code) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
+        activeRun = null;
         const win = getMainWindow();
-        if (win && !win.isDestroyed()) win.webContents.send('claude:complete', { code, output: fullOutput });
+        if (win && !win.isDestroyed()) win.webContents.send('claude:complete', { code, success: code === 0, output: fullOutput });
       });
 
-      activeProcess.on('error', (error) => {
-        activeProcess = null;
+      proc.on('error', (error) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
+        activeRun = null;
         const win = getMainWindow();
         if (win && !win.isDestroyed()) win.webContents.send('claude:error', error.message);
       });
@@ -325,12 +363,23 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     }
   });
 
-  ipcMain.on('claude:cancel', () => {
-    if (activeProcess) {
-      try { activeProcess.kill(); } catch {}
-      activeProcess = null;
+  ipcMain.handle('claude:cancel', () => {
+    currentRunId = nextRunId++;
+    if (activeRun) {
+      const run = activeRun;
+      activeRun = null;
+      killProcessTree(run.process);
     }
+    return { success: true };
   });
 }
 
-module.exports = { setupClaudeHandlers };
+function terminateAllClaudeProcesses() {
+  currentRunId = nextRunId++;
+  if (activeRun) killProcessTree(activeRun.process);
+  activeRun = null;
+  for (const processHandle of backgroundProcesses) killProcessTree(processHandle);
+  backgroundProcesses.clear();
+}
+
+module.exports = { setupClaudeHandlers, terminateAllClaudeProcesses };

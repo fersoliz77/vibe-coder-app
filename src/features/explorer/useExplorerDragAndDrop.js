@@ -47,10 +47,9 @@ export function useExplorerDragAndDrop({
     const handleMouseUp = () => {
       dragLog('dragEnd', { sourcePath: dragState.sourcePath, targetPath: dropTargetPath });
       clearDirectoryExpandSchedule();
+      setDragState(null);
       if (dropTargetPath) {
         handleDropMove(dragState.sourcePath, dropTargetPath);
-      } else {
-        setDragState(null);
       }
       setDropTargetPath(null);
     };

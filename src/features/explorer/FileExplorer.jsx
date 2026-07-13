@@ -25,6 +25,7 @@ export default function FileExplorer({ project }) {
   const [savedHighlightedContent, setSavedHighlightedContent] = useState('');
   const [gitStatus, setGitStatus] = useState([]);
   const [gitStatusError, setGitStatusError] = useState('');
+  const [tabStatusMessage, setTabStatusMessage] = useState('');
 
   const loadFile = useCallback((filePath) => {
     return window.electronAPI.fs.readFile(project.path, filePath);
@@ -54,7 +55,7 @@ export default function FileExplorer({ project }) {
     projectPath: project.path,
     loadFile,
     loadGitStatus,
-    setStatusMessage: () => {},
+    setStatusMessage: setTabStatusMessage,
   });
 
   const remapPaths = useCallback((oldPath, nextPath) => {
@@ -111,6 +112,7 @@ export default function FileExplorer({ project }) {
     actions.setContextMenu(null);
     actions.setModalAction(null);
     actions.setStatusMessage('');
+    setTabStatusMessage('');
     setDragState(null);
     setDropTargetPath(null);
     actions.setClipboardEntry(null);
@@ -315,7 +317,7 @@ export default function FileExplorer({ project }) {
         setSplitView={tabsState.setSplitView}
         activeTab={tabsState.activeTab}
         projectPath={project.path}
-        statusMessage={actions.statusMessage}
+        statusMessage={actions.statusMessage || tabStatusMessage}
         paneTabs={tabsState.paneTabs}
         setActivePane={tabsState.setActivePane}
         showDiff={tabsState.showDiff}

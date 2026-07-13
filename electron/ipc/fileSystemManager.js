@@ -4,6 +4,7 @@ const fs = require('fs');
 const { spawn, execFile } = require('child_process');
 const {
   assertSafeEntryName,
+  assertNotProjectRoot,
   getProjectRelativePath,
   isSubPath,
   resolveProjectChildPath,
@@ -375,6 +376,7 @@ function setupFileSystemHandlers() {
     try {
       const safeName = assertSafeEntryName(nextName);
       const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      assertNotProjectRoot(projectPath, resolvedTargetPath);
       const parentDir = path.dirname(resolvedTargetPath);
       const nextPath = path.join(parentDir, safeName);
 
@@ -400,6 +402,7 @@ function setupFileSystemHandlers() {
   ipcMain.handle('fs:move-entry', async (_, projectPath, sourcePath, targetDir) => {
     try {
       const { resolvedTargetPath: normalizedSource } = withProjectEntry(projectPath, sourcePath);
+      assertNotProjectRoot(projectPath, normalizedSource);
       const { resolvedTargetPath: normalizedTargetDir } = withProjectEntry(projectPath, targetDir);
       const destinationPath = path.join(normalizedTargetDir, path.basename(normalizedSource));
 
@@ -471,6 +474,7 @@ function setupFileSystemHandlers() {
   ipcMain.handle('fs:delete-entry', async (_, projectPath, targetPath) => {
     try {
       const { resolvedTargetPath } = withProjectEntry(projectPath, targetPath);
+      assertNotProjectRoot(projectPath, resolvedTargetPath);
 
       if (!fs.existsSync(resolvedTargetPath)) {
         return { success: false, error: 'The selected file or folder no longer exists.' };

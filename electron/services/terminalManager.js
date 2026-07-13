@@ -1,4 +1,5 @@
-const os = require('os');
+const { validateProjectCwd } = require('../ipc/fsGuards');
+const { isProjectRegistered } = require('./projectManager');
 
 /**
  * Terminal Manager — Creates and manages PTY sessions via node-pty.
@@ -27,7 +28,12 @@ function setupTerminalHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('terminal:create', (_, options = {}) => {
     const id = `term-${nextTerminalId++}`;
     const shell = options.shell || getDefaultShell();
-    const cwd = options.cwd || os.homedir();
+    let cwd;
+    try {
+      cwd = validateProjectCwd(options.cwd, isProjectRegistered);
+    } catch (error) {
+      return { id, error: error.message };
+    }
     const cols = options.cols || 80;
     const rows = options.rows || 24;
 
@@ -92,4 +98,11 @@ function setupTerminalHandlers(ipcMain, getMainWindow) {
   });
 }
 
-module.exports = { setupTerminalHandlers };
+function terminateAllTerminals() {
+  for (const terminal of terminals.values()) {
+    try { terminal.kill(); } catch {}
+  }
+  terminals.clear();
+}
+
+module.exports = { setupTerminalHandlers, terminateAllTerminals };

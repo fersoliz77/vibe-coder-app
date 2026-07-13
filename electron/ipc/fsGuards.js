@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 
 function normalizeForComparison(targetPath) {
   const resolved = path.resolve(String(targetPath || ''));
@@ -22,10 +23,49 @@ function resolveProjectRoot(projectPath, isProjectRegistered) {
   }
 
   if (typeof isProjectRegistered === 'function' && !isProjectRegistered(resolvedProjectPath)) {
-    throw new Error('Project path is not registered in Vibe Coder.');
+    throw new Error('Project path is not registered in Vibe IDE Code.');
+  }
+
+  if (normalizeForComparison(resolvedProjectPath) === normalizeForComparison(path.parse(resolvedProjectPath).root)) {
+    throw new Error('A filesystem root cannot be used as a project.');
+  }
+
+  if (fs.existsSync(resolvedProjectPath)) {
+    const realProjectPath = fs.realpathSync(resolvedProjectPath);
+    if (normalizeForComparison(realProjectPath) !== normalizeForComparison(resolvedProjectPath)) {
+      throw new Error('A symbolic link or junction cannot be used as the project root.');
+    }
   }
 
   return resolvedProjectPath;
+}
+
+function validateProjectCwd(projectPath, isProjectRegistered) {
+  const projectRoot = resolveProjectRoot(projectPath, isProjectRegistered);
+  if (!fs.existsSync(projectRoot) || !fs.statSync(projectRoot).isDirectory()) {
+    throw new Error('Project path is not an existing directory.');
+  }
+  return projectRoot;
+}
+
+function assertNoLinkedPath(projectRoot, targetPath) {
+  const relative = path.relative(projectRoot, targetPath);
+  if (!relative) return;
+
+  let currentPath = projectRoot;
+  for (const segment of relative.split(path.sep)) {
+    currentPath = path.join(currentPath, segment);
+    let stats;
+    try {
+      stats = fs.lstatSync(currentPath);
+    } catch (error) {
+      if (error.code === 'ENOENT') break;
+      throw error;
+    }
+    if (stats.isSymbolicLink()) {
+      throw new Error('Symbolic links and junctions are not allowed in project paths.');
+    }
+  }
 }
 
 function resolveProjectEntryPath(projectPath, targetPath, isProjectRegistered) {
@@ -35,6 +75,8 @@ function resolveProjectEntryPath(projectPath, targetPath, isProjectRegistered) {
   if (!isSubPath(projectRoot, resolvedTargetPath)) {
     throw new Error('Path is outside the active project.');
   }
+
+  assertNoLinkedPath(projectRoot, resolvedTargetPath);
 
   return { projectRoot, resolvedTargetPath };
 }
@@ -79,11 +121,20 @@ function getProjectRelativePath(projectPath, targetPath) {
   return relativePath;
 }
 
+function assertNotProjectRoot(projectPath, targetPath) {
+  if (normalizeForComparison(projectPath) === normalizeForComparison(targetPath)) {
+    throw new Error('The project root cannot be modified or deleted.');
+  }
+}
+
 module.exports = {
   assertSafeEntryName,
+  assertNotProjectRoot,
+  assertNoLinkedPath,
   getProjectRelativePath,
   isSubPath,
   resolveProjectChildPath,
   resolveProjectEntryPath,
   resolveProjectRoot,
+  validateProjectCwd,
 };

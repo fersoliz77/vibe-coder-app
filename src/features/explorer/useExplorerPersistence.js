@@ -16,6 +16,9 @@ export function useExplorerPersistence({
   loadFile,
 }) {
   const hydratedProjectRef = useRef(null);
+  const hydratedPathRef = useRef(null);
+  const resetWorkspaceRef = useRef(resetWorkspace);
+  resetWorkspaceRef.current = resetWorkspace;
 
   useEffect(() => {
     if (!projectPath) return;
@@ -25,7 +28,8 @@ export function useExplorerPersistence({
       const persisted = await window.electronAPI.store.get(getStorageKey(projectPath), null);
       if (!cancelled) {
         hydratedProjectRef.current = persisted;
-        resetWorkspace(persisted);
+        resetWorkspaceRef.current(persisted);
+        hydratedPathRef.current = projectPath;
       }
     };
 
@@ -33,10 +37,10 @@ export function useExplorerPersistence({
     return () => {
       cancelled = true;
     };
-  }, [projectPath, resetWorkspace]);
+  }, [projectPath]);
 
   useEffect(() => {
-    if (!projectPath) return;
+    if (!projectPath || hydratedPathRef.current !== projectPath) return;
     window.electronAPI.store.set(getStorageKey(projectPath), {
       expandedPaths: Array.from(expandedPaths),
       selectedPaths,

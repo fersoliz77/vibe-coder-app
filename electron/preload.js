@@ -7,6 +7,16 @@ function subscribe(channel, callback, mapArgs = (...args) => args) {
 }
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  // Authentication tokens never cross into the renderer.
+  auth: {
+    getState: () => ipcRenderer.invoke('auth:get-state'),
+    login: (email, password) => ipcRenderer.invoke('auth:login', { email, password }),
+    revalidate: () => ipcRenderer.invoke('auth:revalidate'),
+    logout: () => ipcRenderer.invoke('auth:logout'),
+    openHelp: () => ipcRenderer.invoke('auth:open-help'),
+    onStateChanged: (callback) => subscribe('auth:state-changed', callback, (state) => [state]),
+  },
+
   // ─── Window Controls ────────────────────────────────
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),
@@ -81,7 +91,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     checkAvailability: () => ipcRenderer.invoke('claude:check'),
     // Install CLI
     install: () => ipcRenderer.invoke('claude:install'),
-    // Login via browser OAuth
+    // Login is owned by the user's locally installed provider CLI.
     login: () => ipcRenderer.invoke('claude:login'),
     // Logout
     logout: () => ipcRenderer.invoke('claude:logout'),
@@ -102,7 +112,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     homedir: require('os').homedir(),
   },
 
-  // ─── OpenAI (ChatGPT OAuth) ────────────────────────
+  // ─── OpenAI through the user's OpenCode installation ─────────
   openai: {
     getStatus: () => ipcRenderer.invoke('openai:status'),
     login: () => ipcRenderer.invoke('openai:login'),

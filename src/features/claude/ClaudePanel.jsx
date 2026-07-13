@@ -40,7 +40,7 @@ function NotInstalledScreen({ onInstall, isInstalling, installLog }) {
       </div>
       <h2 className="claude-setup-screen__title">Claude Code no está instalado</h2>
       <p className="claude-setup-screen__desc">
-        Para usar Claude en Vibe IDE Coder necesitás instalar el <strong>Claude Code CLI</strong>,
+        Para usar Claude en Vibe IDE Code necesitás instalar el <strong>Claude Code CLI</strong>,
         la misma herramienta que usa la extensión oficial de VS Code.
       </p>
 

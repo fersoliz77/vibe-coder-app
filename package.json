@@ -1,7 +1,7 @@
 {
   "name": "vibe-ide-coder",
   "version": "1.0.0",
-  "description": "Vibe IDE Coder — IDE para Vibecoding con IA",
+  "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "main": "electron/main.js",
   "scripts": {
     "dev": "vite",
@@ -9,7 +9,8 @@
     "test": "node --test tests/**/*.test.js",
     "check": "npm run test && npm run build",
     "build": "vite build",
-    "package": "vite build && electron-builder",
+    "package": "node scripts/generate-auth-config.js && vite build && electron-builder",
+    "package:dir": "node scripts/generate-auth-config.js && vite build && electron-builder --dir",
     "rebuild": "electron-rebuild"
   },
   "dependencies": {
@@ -45,7 +46,7 @@
   },
   "build": {
     "appId": "com.vibeidecoder.app",
-    "productName": "Vibe IDE Coder",
+    "productName": "Vibe IDE Code",
     "directories": {
       "output": "dist-electron"
     },

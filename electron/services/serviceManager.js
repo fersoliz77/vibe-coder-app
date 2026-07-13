@@ -1,9 +1,10 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const util = require('util');
 const fs = require('fs');
 const path = require('path');
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
 const os = require('os');
+const { validateProjectCwd } = require('../ipc/fsGuards');
 
 /**
  * Service Manager — Checks connection status for Vercel, Supabase, GitHub, Git, Firebase
@@ -26,11 +27,18 @@ const CLI = {
   git:      'git',
 };
 
-async function runCommand(command) {
+const NPM_CLI_ENTRY = {
+  supabase: path.join(npmGlobalBin, 'node_modules', 'supabase', 'bin', 'supabase'),
+  vercel: path.join(npmGlobalBin, 'node_modules', 'vercel', 'dist', 'index.js'),
+  firebase: path.join(npmGlobalBin, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js'),
+};
+
+async function runCommand(file, args = [], cwd) {
   try {
-    const { stdout, stderr } = await execAsync(command, {
+    const { stdout, stderr } = await execFileAsync(file, args, {
       timeout: 20000,
-      shell: true,
+      cwd,
+      windowsHide: true,
       env: { ...process.env, PATH: extraPath, FORCE_COLOR: '0' },
     });
     return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
@@ -45,9 +53,20 @@ async function runCommand(command) {
   }
 }
 
+function runCli(name, args = [], cwd) {
+  if (!Object.hasOwn(CLI, name)) {
+    return Promise.resolve({ success: false, stdout: '', stderr: 'Unknown CLI' });
+  }
+  const npmEntry = isWin ? NPM_CLI_ENTRY[name] : null;
+  if (npmEntry && fs.existsSync(npmEntry)) {
+    return runCommand(process.execPath, [npmEntry, ...args], cwd);
+  }
+  return runCommand(CLI[name], args, cwd);
+}
+
 async function checkVercel(projectPath) {
   // Always get global state first
-  const res = await runCommand(`${CLI.vercel} whoami`);
+  const res = await runCli('vercel', ['whoami']);
   const globalConnected = res.success && res.stdout.length > 0 && !res.stdout.toLowerCase().includes('error');
   const user = globalConnected ? res.stdout.split('\n')[0].trim() : null;
 
@@ -77,7 +96,7 @@ async function checkVercel(projectPath) {
 
 async function checkSupabase(projectPath) {
   // Always get global state first
-  const orgsRes = await runCommand(`${CLI.supabase} orgs list --output json`);
+  const orgsRes = await runCli('supabase', ['orgs', 'list', '--output', 'json']);
   let globalConnected = false;
   let user = null;
 
@@ -95,7 +114,7 @@ async function checkSupabase(projectPath) {
   }
 
   if (!globalConnected) {
-    const projRes = await runCommand(`${CLI.supabase} projects list --output json`);
+    const projRes = await runCli('supabase', ['projects', 'list', '--output', 'json']);
     if (projRes.stdout) {
       try {
         const match = projRes.stdout.match(/\[[\s\S]*\]/);
@@ -135,7 +154,7 @@ async function checkSupabase(projectPath) {
 
 async function checkGitHub(projectPath) {
   // Always get global state first
-  const res = await runCommand(`${CLI.gh} auth status`);
+  const res = await runCli('gh', ['auth', 'status']);
   const output = res.stdout + ' ' + res.stderr;
   const match = output.match(/account\s+(\S+)/i);
   const globalConnected = res.success || output.includes('Logged in');
@@ -148,7 +167,7 @@ async function checkGitHub(projectPath) {
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
   if (!isGit) return { id: 'github', name: 'GitHub', connected: false, user, details: { error: 'Not a git repository' }};
   
-  const result = await runCommand(`cd "${projectPath}" && git remote -v`);
+  const result = await runCli('git', ['remote', '-v'], projectPath);
   const isLinked = result.success && result.stdout.includes('github.com');
   
   let repoName = null;
@@ -167,11 +186,11 @@ async function checkGitHub(projectPath) {
 
 async function checkGit(projectPath) {
   // Always get global state first
-  const versionRes = await runCommand(`${CLI.git} --version`);
+  const versionRes = await runCli('git', ['--version']);
   const globalConnected = versionRes.success && versionRes.stdout.includes('git version');
   let user = null;
   if (globalConnected) {
-    const emailRes = await runCommand(`${CLI.git} config --global user.email`);
+    const emailRes = await runCli('git', ['config', '--global', 'user.email']);
     user = emailRes.success && emailRes.stdout.length > 0 ? emailRes.stdout.trim() : 'Installed';
   }
 
@@ -182,7 +201,7 @@ async function checkGit(projectPath) {
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
   let branch = null;
   if (isGit) {
-    const branchRes = await runCommand(`cd "${projectPath}" && git branch --show-current`);
+    const branchRes = await runCli('git', ['branch', '--show-current'], projectPath);
     if (branchRes.success && branchRes.stdout) branch = branchRes.stdout.trim();
   }
   return {
@@ -195,7 +214,7 @@ async function checkGit(projectPath) {
 
 async function checkFirebase(projectPath) {
   // Always get global state first
-  const res = await runCommand(`${CLI.firebase} login:list`);
+  const res = await runCli('firebase', ['login:list']);
   let globalConnected = false;
   let user = null;
   if (res.success) {
@@ -209,7 +228,7 @@ async function checkFirebase(projectPath) {
     }
   }
   if (!globalConnected) {
-    const fallback = await runCommand(`${CLI.firebase} projects:list`);
+    const fallback = await runCli('firebase', ['projects:list']);
     if (fallback.success && fallback.stdout.includes('project(s) total')) {
       globalConnected = true;
       user = 'Logged in';
@@ -260,8 +279,16 @@ const checkers = {
 };
 
 function setupServiceHandlers(ipcMain) {
+  const { isProjectRegistered } = require('./projectManager');
   ipcMain.handle('services:check-all', async (_, projectPath) => {
     const EXPECTED_IDS = ['vercel', 'supabase', 'github', 'git', 'firebase'];
+    if (projectPath) {
+      try {
+        projectPath = validateProjectCwd(projectPath, isProjectRegistered);
+      } catch (error) {
+        return EXPECTED_IDS.map((id) => ({ id, name: id, connected: false, details: { error: error.message } }));
+      }
+    }
     const results = await Promise.allSettled([
       checkVercel(projectPath),
       checkSupabase(projectPath),
@@ -284,6 +311,11 @@ function setupServiceHandlers(ipcMain) {
 
   ipcMain.handle('services:check', async (_, serviceName, projectPath) => {
     if (!projectPath) return { error: 'No project path' };
+    try {
+      projectPath = validateProjectCwd(projectPath, isProjectRegistered);
+    } catch (error) {
+      return { error: error.message };
+    }
     const checker = checkers[serviceName];
     if (!checker) return { error: `Unknown service: ${serviceName}` };
     return await checker(projectPath);
@@ -301,13 +333,15 @@ function setupServiceHandlers(ipcMain) {
 
   ipcMain.handle('services:disconnect', async (_, serviceName) => {
     const commands = {
-      vercel: 'vercel logout',
-      supabase: 'supabase logout',
-      github: 'gh auth logout',
+      vercel: ['vercel', ['logout']],
+      supabase: ['supabase', ['logout']],
+      github: ['gh', ['auth', 'logout']],
     };
-    const result = await runCommand(commands[serviceName]);
+    const command = commands[serviceName];
+    if (!command) return { success: false, error: 'Unknown service' };
+    const result = await runCli(command[0], command[1]);
     return { success: result.success };
   });
 }
 
-module.exports = { setupServiceHandlers };
+module.exports = { runCommand, setupServiceHandlers };

@@ -2,6 +2,11 @@ node_modules/
 dist/
 dist-electron/
 playwright-report/
+.playwright-cli/
 test-results/
 .vite/
 npm-debug.log*
+electron/auth/runtime-config.json
+.env
+.env.*
+!.env.example

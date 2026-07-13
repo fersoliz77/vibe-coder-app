@@ -45,7 +45,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onRe
           <header className="dashboard__header animate-fade-in">
             <div className="dashboard__greeting">
               <h1 className="dashboard__title">
-                {currentProject ? 'Workspace Overview' : 'VibeCoder Launch'}
+                {currentProject ? 'Workspace Overview' : 'Vibe IDE Code'}
               </h1>
               <p className="dashboard__date text-tertiary">{greeting} — {dateStr}</p>
               <p className="dashboard__subtitle text-secondary">

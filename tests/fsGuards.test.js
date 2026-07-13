@@ -1,12 +1,17 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 const {
   assertSafeEntryName,
+  assertNotProjectRoot,
   getProjectRelativePath,
   isSubPath,
   resolveProjectChildPath,
   resolveProjectEntryPath,
+  validateProjectCwd,
 } = require('../electron/ipc/fsGuards');
 
 test('isSubPath accepts direct children and nested files', () => {
@@ -37,4 +42,40 @@ test('assertSafeEntryName accepts simple file names', () => {
 
 test('getProjectRelativePath returns git-safe relative path', () => {
   assert.equal(getProjectRelativePath('C:/repo', 'C:/repo/src/index.js'), 'src\\index.js');
+});
+
+test('destructive operations reject the project root', () => {
+  assert.throws(() => assertNotProjectRoot('C:/repo', 'C:/repo'), /project root/);
+  assert.doesNotThrow(() => assertNotProjectRoot('C:/repo', 'C:/repo/src'));
+});
+
+test('validateProjectCwd requires a registered existing directory', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-cwd-'));
+  try {
+    assert.equal(validateProjectCwd(project, (candidate) => candidate === project), project);
+    assert.throws(() => validateProjectCwd(project, () => false), /not registered/);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('resolveProjectEntryPath rejects directory junction traversal', (t) => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-project-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-outside-'));
+  const linked = path.join(project, 'linked');
+  try {
+    try {
+      fs.symlinkSync(outside, linked, process.platform === 'win32' ? 'junction' : 'dir');
+    } catch (error) {
+      t.skip(`Symlinks unavailable: ${error.message}`);
+      return;
+    }
+    assert.throws(
+      () => resolveProjectEntryPath(project, path.join(linked, 'secret.txt'), () => true),
+      /Symbolic links and junctions/
+    );
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
 });

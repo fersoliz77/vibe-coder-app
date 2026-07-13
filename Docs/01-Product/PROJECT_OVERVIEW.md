@@ -2,7 +2,7 @@
 
 ## Summary
 
-Vibe IDE Coder is a desktop IDE-style application built with Electron and React. It is designed to manage local projects, inspect file trees, interact with terminals, connect external developer services, and use Claude inside a focused workspace.
+Vibe IDE Code is a desktop IDE-style application built with Electron and React. It is designed to manage local projects, inspect file trees, interact with terminals, connect external developer services, and use user-connected AI providers inside a focused workspace.
 
 ## Primary Use Cases
 

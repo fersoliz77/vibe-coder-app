@@ -25,28 +25,19 @@ function ProgressLog({ entries }) {
   );
 }
 
-const OPENAI_MODELS = [
-  { id: 'gpt-5.6-sol', label: 'GPT-5.6 Sol (Flagship)' },
-  { id: 'gpt-5.6-terra', label: 'GPT-5.6 Terra' },
-  { id: 'gpt-5.6-luna', label: 'GPT-5.6 Luna' },
-  { id: 'gpt-5.5', label: 'GPT-5.5' },
-  { id: 'gpt-5.4', label: 'GPT-5.4' },
-];
-
 function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
   return (
     <div className="openai-setup-screen">
       <div className="openai-setup-screen__icon">
         <OpenAIAvatar size={48} />
       </div>
-      <h2 className="openai-setup-screen__title">Conectate con ChatGPT</h2>
+      <h2 className="openai-setup-screen__title">Conectá tu proveedor con OpenCode</h2>
       <p className="openai-setup-screen__desc">
-        Usá tu suscripción de <strong>ChatGPT Plus / Pro</strong> directamente. 
-        Se abrirá el navegador para autenticarte con tu cuenta de OpenAI.
+        La cuenta, credenciales, costos y límites pertenecen al usuario y al proveedor. Vibe IDE Code no almacena tokens ni incluye créditos de IA.
       </p>
 
       <div className="openai-setup-screen__steps">
-        {['Clic en "Conectar con ChatGPT"', 'Se abre el navegador — iniciá sesión', 'Autorizá la app', 'Volvé — listo para chatear'].map((step, i) => (
+        {['Abrí la autenticación de OpenCode', 'Elegí OpenAI como proveedor', 'Autorizá con tu cuenta', 'Volvé y actualizá el estado'].map((step, i) => (
           <div key={i} className="openai-setup-screen__step">
             <span className="openai-setup-screen__step-num">{i + 1}</span>
             <span>{step}</span>
@@ -62,7 +53,7 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
       ) : (
         <button className="btn btn--primary btn--large openai-btn" onClick={onLogin}>
           <OpenAIAvatar size={18} />
-          Conectar con ChatGPT
+          Abrir OpenCode
         </button>
       )}
 
@@ -92,10 +83,11 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
               Conectado como <strong>{email}</strong>. ¡Preguntá lo que quieras!
             </p>
             <div className="openai-panel__model-selector" style={{ marginTop: '16px', marginBottom: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Modelo:</label>
-              <select 
+              <label style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Modelo opcional:</label>
+              <input
                 value={model} 
                 onChange={(e) => setModel(e.target.value)} 
+                placeholder="Usar configuración de OpenCode"
                 style={{
                   background: 'var(--glass-bg)',
                   border: '1px solid var(--glass-border)',
@@ -107,9 +99,7 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
                   cursor: 'pointer',
                   borderColor: 'rgba(16, 185, 129, 0.3)'
                 }}
-              >
-                {OPENAI_MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-              </select>
+              />
             </div>
             <div className="openai-panel__suggestions">
               {['Creá un componente React', 'Revisá este código', 'Explicá este error', 'Escribí tests'].map(s => (
@@ -187,7 +177,7 @@ export default function OpenAIPanel({ cwd }) {
   const [currentResponse, setCurrentResponse] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [input, setInput] = useState('');
-  const [model, setModel] = useState('gpt-5.4');
+  const [model, setModel] = useState('');
   const streamRef = useRef('');
   const inputRef = useRef(null);
 
@@ -233,7 +223,11 @@ export default function OpenAIPanel({ cwd }) {
     setLoginLog([]);
     const result = await window.electronAPI.openai.login();
     setIsLoggingIn(false);
-    if (result.success) await refreshStatus();
+    if (result.success) {
+      setLoginLog([{ type: 'info', text: 'Completá la autenticación en la ventana de OpenCode y luego actualizá el estado.' }]);
+    } else {
+      setLoginLog([{ type: 'error', text: result.error }]);
+    }
   };
 
   const handleLogout = async () => {

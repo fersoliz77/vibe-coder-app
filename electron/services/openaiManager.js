@@ -1,112 +1,12 @@
-const { shell } = require('electron');
-const crypto = require('crypto');
-const http = require('http');
-const url = require('url');
 const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
+const { validateProjectCwd } = require('../ipc/fsGuards');
+const { isProjectRegistered } = require('./projectManager');
+const { killProcessTree } = require('./processUtils');
 
-/**
- * OpenAI ChatGPT OAuth Manager
- * Uses the same OAuth 2.0 + PKCE flow as OpenAI's official Codex CLI.
- * Allows using your ChatGPT Plus/Pro subscription without API keys.
- *
- * Endpoints discovered from: openai/codex & opencode-openai-codex-auth
- */
-
-// ─── OAuth Constants (from OpenAI official Codex CLI) ──────────────────────
-const CLIENT_ID = 'app_EMoamEEZ73f0CkXaXp7hrann';
-const AUTHORIZE_URL = 'https://auth.openai.com/oauth/authorize';
-const TOKEN_URL = 'https://auth.openai.com/oauth/token';
-const REDIRECT_URI = 'http://localhost:1455/auth/callback';
-const SCOPE = 'openid profile email offline_access';
-const CODEX_BASE_URL = 'https://chatgpt.com/backend-api';
-
-// Token storage path
-const TOKENS_PATH = path.join(os.homedir(), '.vibe-ide-coder', 'openai-tokens.json');
-
-// ─── PKCE Helpers ──────────────────────────────────────────────────────────
-
-function generateCodeVerifier() {
-  return crypto.randomBytes(32).toString('base64url');
-}
-
-function generateCodeChallenge(verifier) {
-  return crypto.createHash('sha256').update(verifier).digest('base64url');
-}
-
-function generateState() {
-  return crypto.randomBytes(16).toString('hex');
-}
-
-// ─── Token Storage ─────────────────────────────────────────────────────────
-
-function saveTokens(tokens) {
-  const dir = path.dirname(TOKENS_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(TOKENS_PATH, JSON.stringify(tokens, null, 2), 'utf8');
-}
-
-function loadTokens() {
-  try {
-    const content = fs.readFileSync(TOKENS_PATH, 'utf8');
-    return JSON.parse(content);
-  } catch {
-    return null;
-  }
-}
-
-function clearTokens() {
-  try { fs.unlinkSync(TOKENS_PATH); } catch {}
-}
-
-// ─── Token Refresh ─────────────────────────────────────────────────────────
-
-async function refreshAccessToken(refreshToken) {
-  const res = await fetch(TOKEN_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: CLIENT_ID,
-      refresh_token: refreshToken,
-    }),
-  });
-  if (!res.ok) throw new Error(`Token refresh failed: ${res.status}`);
-  return res.json();
-}
-
-async function getValidToken() {
-  const tokens = loadTokens();
-  if (!tokens) return null;
-
-  const expiry = tokens.expires_at || 0;
-  const now = Math.floor(Date.now() / 1000);
-
-  if (now < expiry - 60) {
-    return tokens.access_token;
-  }
-
-  if (tokens.refresh_token) {
-    try {
-      const fresh = await refreshAccessToken(tokens.refresh_token);
-      const updated = {
-        ...tokens,
-        access_token: fresh.access_token,
-        expires_at: now + (fresh.expires_in || 3600),
-      };
-      saveTokens(updated);
-      return updated.access_token;
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
-// ─── Status ────────────────────────────────────────────────────────────────
+// Vibe IDE Code never stores provider credentials. OpenCode owns its local auth.
 
 async function getOpenAIStatus() {
   try {
@@ -131,10 +31,6 @@ async function getOpenAIStatus() {
   return { authenticated: false, email: null };
 }
 
-// ─── OAuth Flow ────────────────────────────────────────────────────────────
-
-// ─── Chat with ChatGPT backend ─────────────────────────────────────────────
-
 // ─── ANSI Stripper ──────────────────────────────────────────────────────────
 
 function stripAnsi(str) {
@@ -143,20 +39,57 @@ function stripAnsi(str) {
 
 // ─── Chat with ChatGPT via opencode CLI ──────────────────────────────────────
 
-let activeProcess = null;
+let activeRun = null;
+let nextRunId = 1;
+let currentRunId = 0;
 
-async function sendChatMessage(prompt, conversationHistory = [], model = 'gpt-5.4', cwd, mainWindow) {
+function resolveOpenCodePath(projectPath) {
+  const output = execFileSync('where.exe', ['opencode.cmd'], {
+    cwd: os.homedir(),
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 5000,
+  });
+  const resolved = output.trim().split(/\r?\n/).find(Boolean);
+  if (!resolved || !path.isAbsolute(resolved)) throw new Error('OpenCode CLI is not installed or not available in PATH.');
+  const relative = projectPath ? path.relative(projectPath, resolved) : '..';
+  if (projectPath && relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+    throw new Error('OpenCode must be installed outside the project directory.');
+  }
+  return resolved;
+}
+
+function assertSafeModel(model) {
+  if (!model) return null;
+  const value = model;
+  if (!/^[a-zA-Z0-9._:/-]+$/.test(value)) throw new Error('Invalid model name.');
+  return value;
+}
+
+async function sendChatMessage(prompt, conversationHistory = [], model, cwd, mainWindow) {
   return new Promise((resolve) => {
-    if (activeProcess) {
-      try { activeProcess.kill(); } catch {}
-      activeProcess = null;
+    let validatedCwd;
+    let validatedModel;
+    let opencodePath;
+    try {
+      validatedCwd = validateProjectCwd(cwd, isProjectRegistered);
+      validatedModel = assertSafeModel(model);
+      opencodePath = resolveOpenCodePath(validatedCwd);
+    } catch (error) {
+      resolve({ success: false, error: error.message });
+      return;
     }
 
-    const isWin = process.platform === 'win32';
-    const opencodeCmd = isWin ? 'opencode.cmd' : 'opencode';
-    
+    const runId = nextRunId++;
+    currentRunId = runId;
+    const previousRun = activeRun;
+    activeRun = null;
+    if (previousRun) {
+      killProcessTree(previousRun.process);
+    }
+
     // Prefix the model with openai/ for the opencode CLI
-    const prefixedModel = model.startsWith('openai/') ? model : `openai/${model}`;
+    const prefixedModel = validatedModel && (validatedModel.startsWith('openai/') ? validatedModel : `openai/${validatedModel}`);
 
     const cleanEnv = {
       ...process.env,
@@ -168,12 +101,16 @@ async function sendChatMessage(prompt, conversationHistory = [], model = 'gpt-5.
 
     try {
       // Spawn opencode run and pipe the prompt to stdin
-      activeProcess = spawn(opencodeCmd, ['run', '-', '--model', prefixedModel], {
-        cwd: cwd || process.cwd(),
+      const commandLine = prefixedModel
+        ? `"${opencodePath}" run - --model ${prefixedModel}`
+        : `"${opencodePath}" run -`;
+      const proc = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', commandLine], {
+        cwd: validatedCwd,
         env: cleanEnv,
         stdio: 'pipe',
-        shell: true,
+        shell: false,
       });
+      activeRun = { id: runId, process: proc };
 
       // Pass conversation history along with the new prompt
       // opencode handles previous session continuation via flags, but for stateless we just inject history
@@ -184,19 +121,21 @@ async function sendChatMessage(prompt, conversationHistory = [], model = 'gpt-5.
       }
       fullPrompt += `User: ${prompt}\n`;
 
-      activeProcess.stdin.write(fullPrompt, 'utf8');
-      activeProcess.stdin.end();
+      proc.stdin.write(fullPrompt, 'utf8');
+      proc.stdin.end();
 
       let fullOutput = '';
 
-      activeProcess.stdout.on('data', (data) => {
+      proc.stdout.on('data', (data) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
         fullOutput += text;
         const win = mainWindow || null;
         if (win && !win.isDestroyed()) win.webContents.send('openai:data', text);
       });
 
-      activeProcess.stderr.on('data', (data) => {
+      proc.stderr.on('data', (data) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
         console.log('[openai:stderr]', text);
         if (!text.includes('Warning:') && !text.includes('no stdin')) {
@@ -205,15 +144,23 @@ async function sendChatMessage(prompt, conversationHistory = [], model = 'gpt-5.
         }
       });
 
-      activeProcess.on('close', (code) => {
-        activeProcess = null;
+      proc.on('close', (code) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) {
+          resolve({ success: false, cancelled: true });
+          return;
+        }
+        activeRun = null;
         const win = mainWindow || null;
-        if (win && !win.isDestroyed()) win.webContents.send('openai:complete', { code, output: fullOutput });
-        resolve({ success: true });
+        if (win && !win.isDestroyed()) win.webContents.send('openai:complete', { code, success: code === 0, output: fullOutput });
+        resolve({ success: code === 0, code, error: code === 0 ? undefined : `opencode exited with code ${code}` });
       });
 
-      activeProcess.on('error', (error) => {
-        activeProcess = null;
+      proc.on('error', (error) => {
+        if (currentRunId !== runId || activeRun?.id !== runId) {
+          resolve({ success: false, cancelled: true });
+          return;
+        }
+        activeRun = null;
         const win = mainWindow || null;
         if (win && !win.isDestroyed()) win.webContents.send('openai:error', error.message);
         resolve({ success: false, error: error.message });
@@ -233,11 +180,37 @@ function setupOpenAIHandlers(ipcMain, getMainWindow) {
   });
 
   ipcMain.handle('openai:login', async () => {
-    return { success: false, error: 'Login handled via opencode CLI' };
+    try {
+      const command = process.env.ComSpec || 'cmd.exe';
+      const opencodePath = resolveOpenCodePath();
+      const child = spawn(command, ['/d', '/s', '/c', `start "OpenCode authentication" "${opencodePath}" auth login`], {
+        detached: true,
+        windowsHide: false,
+        stdio: 'ignore',
+        shell: false,
+      });
+      child.unref();
+      return { success: true, pending: true };
+    } catch (error) {
+      return { success: false, error: `Could not launch OpenCode authentication: ${error.message}` };
+    }
   });
 
   ipcMain.handle('openai:logout', () => {
-    return { success: true };
+    try {
+      const command = process.env.ComSpec || 'cmd.exe';
+      const opencodePath = resolveOpenCodePath();
+      const child = spawn(command, ['/d', '/s', '/c', `start "OpenCode logout" "${opencodePath}" auth logout`], {
+        detached: true,
+        windowsHide: false,
+        stdio: 'ignore',
+        shell: false,
+      });
+      child.unref();
+      return { success: true, pending: true };
+    } catch (error) {
+      return { success: false, error: `Could not launch OpenCode logout: ${error.message}` };
+    }
   });
 
   ipcMain.handle('openai:send', async (_, prompt, conversationHistory, model, cwd) => {
@@ -251,12 +224,21 @@ function setupOpenAIHandlers(ipcMain, getMainWindow) {
     }
   });
 
-  ipcMain.on('openai:cancel', () => {
-    if (activeProcess) {
-      try { activeProcess.kill(); } catch {}
-      activeProcess = null;
+  ipcMain.handle('openai:cancel', () => {
+    currentRunId = nextRunId++;
+    if (activeRun) {
+      const run = activeRun;
+      activeRun = null;
+      killProcessTree(run.process);
     }
+    return { success: true };
   });
 }
 
-module.exports = { setupOpenAIHandlers };
+function terminateAllOpenAIProcesses() {
+  currentRunId = nextRunId++;
+  if (activeRun) killProcessTree(activeRun.process);
+  activeRun = null;
+}
+
+module.exports = { setupOpenAIHandlers, terminateAllOpenAIProcesses };

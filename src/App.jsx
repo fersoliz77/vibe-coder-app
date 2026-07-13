@@ -10,6 +10,7 @@ import { useServices } from './hooks/useServices';
 import { useTerminal } from './hooks/useTerminal';
 import { useClaude } from './hooks/useClaude';
 import { useAppStore } from './store/useAppStore';
+import AuthGate from './features/auth/AuthGate';
 import './styles/App.css';
 
 const VIEWS = {
@@ -21,7 +22,7 @@ const VIEWS = {
   OPENAI: 'openai',
 };
 
-export default function App() {
+function Workspace() {
   const [activeView, setActiveView] = useState(VIEWS.PROJECTS);
   const [isMaximized, setIsMaximized] = useState(false);
   const {
@@ -154,7 +155,7 @@ export default function App() {
       <div className="titlebar">
         <div className="titlebar__brand">
           <div className="titlebar__logo">V</div>
-          <span className="titlebar__name">Vibe IDE Coder</span>
+          <span className="titlebar__name">Vibe IDE Code</span>
         </div>
         {currentProject && (
           <div className="titlebar__project">
@@ -206,4 +207,8 @@ export default function App() {
       </div>
     </>
   );
+}
+
+export default function App() {
+  return <AuthGate><Workspace /></AuthGate>;
 }
