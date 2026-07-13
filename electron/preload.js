@@ -112,12 +112,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     homedir: require('os').homedir(),
   },
 
-  // ─── OpenAI through the user's OpenCode installation ─────────
+  // ─── OpenAI through the official Codex CLI ───────────────────
   openai: {
     getStatus: () => ipcRenderer.invoke('openai:status'),
+    getModels: () => ipcRenderer.invoke('openai:models'),
     login: () => ipcRenderer.invoke('openai:login'),
     logout: () => ipcRenderer.invoke('openai:logout'),
-    sendPrompt: (prompt, history, model, cwd) => ipcRenderer.invoke('openai:send', prompt, history, model, cwd),
+    sendPrompt: (prompt, history, model, reasoning, cwd) => ipcRenderer.invoke('openai:send', prompt, history, model, reasoning, cwd),
     cancel: () => ipcRenderer.invoke('openai:cancel'),
     onData: (callback) => subscribe('openai:data', callback),
     onComplete: (callback) => subscribe('openai:complete', callback),

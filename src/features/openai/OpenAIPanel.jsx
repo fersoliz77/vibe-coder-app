@@ -1,6 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import './OpenAIPanel.css';
 
+const REASONING_LABELS = {
+  low: 'Low · rápido',
+  medium: 'Medium · equilibrado',
+  high: 'High · profundo',
+  xhigh: 'XHigh · muy profundo',
+  max: 'Max · máximo',
+  ultra: 'Ultra · delegación automática',
+};
+
 function OpenAIAvatar({ size = 20 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
@@ -31,13 +40,13 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
       <div className="openai-setup-screen__icon">
         <OpenAIAvatar size={48} />
       </div>
-      <h2 className="openai-setup-screen__title">Conectá tu proveedor con OpenCode</h2>
+      <h2 className="openai-setup-screen__title">Conectá tu cuenta de OpenAI</h2>
       <p className="openai-setup-screen__desc">
-        La cuenta, credenciales, costos y límites pertenecen al usuario y al proveedor. Vibe IDE Code no almacena tokens ni incluye créditos de IA.
+        Iniciá sesión mediante el flujo oficial de OpenAI. Codex administra la sesión localmente; Vibe IDE Code no almacena tokens ni incluye créditos de IA.
       </p>
 
       <div className="openai-setup-screen__steps">
-        {['Abrí la autenticación de OpenCode', 'Elegí OpenAI como proveedor', 'Autorizá con tu cuenta', 'Volvé y actualizá el estado'].map((step, i) => (
+        {['Abrí la autenticación oficial de OpenAI', 'Iniciá sesión con tu cuenta', 'Autorizá Codex', 'Volvé a Vibe IDE Code'].map((step, i) => (
           <div key={i} className="openai-setup-screen__step">
             <span className="openai-setup-screen__step-num">{i + 1}</span>
             <span>{step}</span>
@@ -53,7 +62,7 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
       ) : (
         <button className="btn btn--primary btn--large openai-btn" onClick={onLogin}>
           <OpenAIAvatar size={18} />
-          Abrir OpenCode
+          Conectar con OpenAI
         </button>
       )}
 
@@ -62,7 +71,7 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
   );
 }
 
-function ChatScreen({ email, messages, currentResponse, isRunning, input, setInput, onSend, onCancel, onLogout, inputRef, model, setModel }) {
+function ChatScreen({ email, messages, currentResponse, isRunning, input, setInput, onSend, onCancel, onLogout, inputRef, model, setModel, models, reasoning, setReasoning }) {
   const messagesEndRef = useRef(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -82,24 +91,22 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
             <p className="openai-panel__welcome-desc text-secondary">
               Conectado como <strong>{email}</strong>. ¡Preguntá lo que quieras!
             </p>
-            <div className="openai-panel__model-selector" style={{ marginTop: '16px', marginBottom: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>Modelo opcional:</label>
-              <input
-                value={model} 
-                onChange={(e) => setModel(e.target.value)} 
-                placeholder="Usar configuración de OpenCode"
-                style={{
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '13px',
-                  outline: 'none',
-                  cursor: 'pointer',
-                  borderColor: 'rgba(16, 185, 129, 0.3)'
-                }}
-              />
+            <div className="openai-panel__model-selector">
+              <label>Modelo
+                <select value={model} onChange={(event) => {
+                  const nextModel = models.find((item) => item.id === event.target.value);
+                  setModel(event.target.value);
+                  setReasoning(nextModel?.defaultReasoning || 'medium');
+                }}>
+                  {models.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                </select>
+              </label>
+              <label>Razonamiento
+                <select value={reasoning} onChange={(event) => setReasoning(event.target.value)}>
+                  {(models.find((item) => item.id === model)?.reasoningLevels || ['medium']).map((level) => <option key={level} value={level}>{REASONING_LABELS[level] || level}</option>)}
+                </select>
+              </label>
+              <small>{models.find((item) => item.id === model)?.description}</small>
             </div>
             <div className="openai-panel__suggestions">
               {['Creá un componente React', 'Revisá este código', 'Explicá este error', 'Escribí tests'].map(s => (
@@ -177,7 +184,9 @@ export default function OpenAIPanel({ cwd }) {
   const [currentResponse, setCurrentResponse] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [input, setInput] = useState('');
-  const [model, setModel] = useState('');
+  const [models, setModels] = useState([]);
+  const [model, setModel] = useState('gpt-5.4');
+  const [reasoning, setReasoning] = useState('medium');
   const streamRef = useRef('');
   const inputRef = useRef(null);
 
@@ -188,6 +197,16 @@ export default function OpenAIPanel({ cwd }) {
   }, []);
 
   useEffect(() => { refreshStatus(); }, [refreshStatus]);
+
+  useEffect(() => {
+    window.electronAPI?.openai?.getModels().then(({ models: availableModels, defaultModel }) => {
+      if (!availableModels?.length) return;
+      setModels(availableModels);
+      const selected = availableModels.find((item) => item.id === defaultModel) || availableModels[0];
+      setModel(selected.id);
+      setReasoning(selected.defaultReasoning || 'medium');
+    });
+  }, []);
 
   useEffect(() => {
     if (!window.electronAPI?.openai) return;
@@ -224,7 +243,8 @@ export default function OpenAIPanel({ cwd }) {
     const result = await window.electronAPI.openai.login();
     setIsLoggingIn(false);
     if (result.success) {
-      setLoginLog([{ type: 'info', text: 'Completá la autenticación en la ventana de OpenCode y luego actualizá el estado.' }]);
+      setLoginLog([{ type: 'info', text: 'Cuenta OpenAI conectada correctamente.' }]);
+      await refreshStatus();
     } else {
       setLoginLog([{ type: 'error', text: result.error }]);
     }
@@ -245,7 +265,7 @@ export default function OpenAIPanel({ cwd }) {
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
-    await window.electronAPI.openai.sendPrompt(trimmed, history, model, cwd);
+    await window.electronAPI.openai.sendPrompt(trimmed, history, model, reasoning, cwd);
   };
 
   const handleCancel = () => {
@@ -303,6 +323,9 @@ export default function OpenAIPanel({ cwd }) {
             inputRef={inputRef}
             model={model}
             setModel={setModel}
+            models={models}
+            reasoning={reasoning}
+            setReasoning={setReasoning}
           />
         )}
       </div>

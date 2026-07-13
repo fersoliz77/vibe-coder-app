@@ -112,10 +112,10 @@ export default function SettingsPanel({ theme, onSetTheme }) {
 
         <section className="settings-card settings-card--wide">
           <div className="settings-card__heading"><div><span>BYOAI</span><h2>Tus modelos, tus cuentas</h2></div><button className="btn btn--small" type="button" disabled={providers.loading} onClick={refreshProviders}>Actualizar estados</button></div>
-          <p className="settings-copy">Vibe IDE Code se conecta a las instalaciones locales de Claude Code y OpenCode. La autenticación, el modelo elegido, los costos y los límites pertenecen a tu cuenta con cada proveedor. Vibe IDE Code no solicita ni almacena tokens.</p>
+          <p className="settings-copy">Vibe IDE Code se conecta a las instalaciones locales de Claude Code y OpenAI Codex. La autenticación, el modelo elegido, los costos y los límites pertenecen a tu cuenta con cada proveedor. Vibe IDE Code no solicita ni almacena tokens.</p>
           <div className="settings-providers">
             <ProviderStatus name="Claude Code" loading={providers.loading} connected={providers.claude?.authenticated} detail={!providers.claude?.installed ? 'CLI no instalada' : providers.claude?.authenticated ? `Conectado${providers.claude.version ? ` · ${providers.claude.version}` : ''}` : 'Instalado, sin autenticar'} />
-            <ProviderStatus name="OpenAI vía OpenCode" loading={providers.loading} connected={providers.openai?.authenticated} detail={providers.openai?.authenticated ? `Conectado · ${providers.openai.email || 'cuenta local'}` : 'No conectado'} />
+            <ProviderStatus name="OpenAI · Codex" loading={providers.loading} connected={providers.openai?.authenticated} detail={providers.openai?.authenticated ? `Conectado · ${providers.openai.email || 'cuenta OpenAI'}` : 'No conectado'} />
           </div>
           {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
         </section>

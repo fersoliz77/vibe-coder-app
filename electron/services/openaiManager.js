@@ -1,86 +1,207 @@
-const os = require('os');
 const fs = require('fs');
 const path = require('path');
-const { spawn, execFileSync } = require('child_process');
+const { spawn, execFile } = require('child_process');
+const util = require('util');
 const { validateProjectCwd } = require('../ipc/fsGuards');
 const { isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
 
-// Vibe IDE Code never stores provider credentials. OpenCode owns its local auth.
+const execFileAsync = util.promisify(execFile);
 
-async function getOpenAIStatus() {
-  try {
-    const authPath = path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json');
-    if (fs.existsSync(authPath)) {
-      const auth = JSON.parse(fs.readFileSync(authPath, 'utf8'));
-      if (auth.openai && auth.openai.accessToken) {
-        // Try to decode JWT if present to show email
-        try {
-          const parts = auth.openai.accessToken.split('.');
-          if (parts.length === 3) {
-            const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-            return { authenticated: true, email: payload.email || payload.sub || 'OpenAI API' };
-          }
-        } catch {}
-        return { authenticated: true, email: 'OpenAI API' };
-      }
-    }
-  } catch (err) {
-    console.error('[OpenAI Status Error]', err);
-  }
-  return { authenticated: false, email: null };
-}
+const CODEX_TARGETS = {
+  x64: { packageName: '@openai/codex-win32-x64', triple: 'x86_64-pc-windows-msvc' },
+  arm64: { packageName: '@openai/codex-win32-arm64', triple: 'aarch64-pc-windows-msvc' },
+};
 
-// ─── ANSI Stripper ──────────────────────────────────────────────────────────
-
-function stripAnsi(str) {
-  return str.replace(/[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g, '');
-}
-
-// ─── Chat with ChatGPT via opencode CLI ──────────────────────────────────────
+const FALLBACK_MODELS = [
+  { id: 'gpt-5.4', name: 'GPT-5.4', description: 'Strong model for everyday coding.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.4-mini', name: 'GPT-5.4 Mini', description: 'Fast and efficient for simpler tasks.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.5', name: 'GPT-5.5', description: 'Frontier model for complex work.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh'] },
+  { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', description: 'Most capable model for ambitious work.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] },
+  { id: 'gpt-5.6-terra', name: 'GPT-5.6 Terra', description: 'Balanced model for everyday work.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'] },
+  { id: 'gpt-5.6-luna', name: 'GPT-5.6 Luna', description: 'Fast and affordable model.', defaultReasoning: 'medium', reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max'] },
+];
 
 let activeRun = null;
+let activeLogin = null;
 let nextRunId = 1;
 let currentRunId = 0;
 
-function resolveOpenCodePath(projectPath) {
-  const output = execFileSync('where.exe', ['opencode.cmd'], {
-    cwd: os.homedir(),
-    encoding: 'utf8',
-    windowsHide: true,
-    timeout: 5000,
-  });
-  const resolved = output.trim().split(/\r?\n/).find(Boolean);
-  if (!resolved || !path.isAbsolute(resolved)) throw new Error('OpenCode CLI is not installed or not available in PATH.');
-  const relative = projectPath ? path.relative(projectPath, resolved) : '..';
-  if (projectPath && relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
-    throw new Error('OpenCode must be installed outside the project directory.');
-  }
-  return resolved;
+function cleanProviderEnv() {
+  const env = { ...process.env, NO_COLOR: '1', TERM: 'dumb' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  delete env.ELECTRON_NO_ASAR;
+  return env;
+}
+
+function resolveCodexPath() {
+  const target = CODEX_TARGETS[process.arch];
+  if (process.platform !== 'win32' || !target) throw new Error(`Unsupported Codex platform: ${process.platform}-${process.arch}.`);
+  const packageRoot = path.dirname(require.resolve(`${target.packageName}/package.json`));
+  let executable = path.join(packageRoot, 'vendor', target.triple, 'bin', 'codex.exe');
+  executable = executable.replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
+  if (!fs.existsSync(executable)) throw new Error('The official OpenAI Codex executable is unavailable. Reinstall Vibe IDE Code.');
+  return executable;
 }
 
 function assertSafeModel(model) {
   if (!model) return null;
-  const value = model;
-  if (!/^[a-zA-Z0-9._:/-]+$/.test(value)) throw new Error('Invalid model name.');
+  if (!/^[a-zA-Z0-9._:/-]+$/.test(model)) throw new Error('Invalid model name.');
+  return model;
+}
+
+function assertSafeReasoning(reasoning) {
+  const value = reasoning || 'medium';
+  if (!['low', 'medium', 'high', 'xhigh', 'max', 'ultra'].includes(value)) throw new Error('Invalid reasoning level.');
   return value;
 }
 
-function buildOpenCodeAuthCommand(opencodePath, action) {
-  if (!path.isAbsolute(opencodePath)) throw new Error('OpenCode path must be absolute.');
-  if (action !== 'login' && action !== 'logout') throw new Error('Unsupported OpenCode authentication action.');
-  return `call "${opencodePath.replaceAll('"', '""')}" auth ${action} & exit`;
+function isSupportedModelVersion(slug) {
+  const match = String(slug || '').match(/^gpt-(\d+)\.(\d+)(?:-|$)/);
+  if (!match) return false;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  return major > 5 || (major === 5 && minor >= 4);
 }
 
-async function sendChatMessage(prompt, conversationHistory = [], model, cwd, mainWindow) {
+function normalizeModelCatalog(payload) {
+  const source = Array.isArray(payload) ? payload : payload?.models;
+  if (!Array.isArray(source)) return FALLBACK_MODELS;
+  const models = source
+    .filter((model) => model.visibility === 'list' && isSupportedModelVersion(model.slug))
+    .map((model) => ({
+      id: model.slug,
+      name: model.display_name || model.slug,
+      description: model.description || '',
+      defaultReasoning: model.default_reasoning_level || 'medium',
+      reasoningLevels: (model.supported_reasoning_levels || []).map((level) => level.effort).filter(Boolean),
+    }));
+  if (!models.some((model) => model.id === 'gpt-5.4')) return FALLBACK_MODELS;
+  return models.sort((left, right) => {
+    if (left.id === 'gpt-5.4') return -1;
+    if (right.id === 'gpt-5.4') return 1;
+    return left.name.localeCompare(right.name, undefined, { numeric: true });
+  });
+}
+
+async function getOpenAIModels() {
+  try {
+    const { stdout } = await execFileAsync(resolveCodexPath(), ['debug', 'models'], {
+      env: cleanProviderEnv(),
+      timeout: 20000,
+      windowsHide: true,
+      maxBuffer: 32 * 1024 * 1024,
+    });
+    return { models: normalizeModelCatalog(JSON.parse(stdout)), defaultModel: 'gpt-5.4' };
+  } catch {
+    return { models: FALLBACK_MODELS, defaultModel: 'gpt-5.4' };
+  }
+}
+
+function buildCodexExecArgs(model, reasoning) {
+  const validatedModel = assertSafeModel(model);
+  const validatedReasoning = assertSafeReasoning(reasoning);
+  return [
+    'exec',
+    '--skip-git-repo-check',
+    '--ephemeral',
+    '--color', 'never',
+    '--sandbox', 'workspace-write',
+    ...(validatedModel ? ['--model', validatedModel] : []),
+    '--config', `model_reasoning_effort="${validatedReasoning}"`,
+    '-',
+  ];
+}
+
+async function getOpenAIStatus() {
+  let executable;
+  try {
+    executable = resolveCodexPath();
+  } catch (error) {
+    return { installed: false, authenticated: false, email: null, provider: 'OpenAI', error: error.message };
+  }
+  try {
+    const { stdout, stderr } = await execFileAsync(executable, ['login', 'status'], {
+      env: cleanProviderEnv(),
+      timeout: 8000,
+      windowsHide: true,
+    });
+    const output = `${stdout}\n${stderr}`.trim();
+    const authenticated = /logged in/i.test(output);
+    return {
+      installed: true,
+      authenticated,
+      email: authenticated ? (/chatgpt/i.test(output) ? 'ChatGPT account' : 'OpenAI account') : null,
+      provider: 'OpenAI',
+    };
+  } catch (error) {
+    return { installed: true, authenticated: false, email: null, provider: 'OpenAI', error: error.stderr?.trim() || null };
+  }
+}
+
+function sendLoginProgress(mainWindow, type, text) {
+  if (text && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('openai:login-progress', { type, text });
+  }
+}
+
+function loginWithOpenAI(mainWindow) {
+  if (activeLogin) return Promise.resolve({ success: false, error: 'OpenAI authentication is already in progress.' });
+  return new Promise((resolve) => {
+    let executable;
+    try {
+      executable = resolveCodexPath();
+    } catch (error) {
+      resolve({ success: false, error: error.message });
+      return;
+    }
+
+    const child = spawn(executable, ['login'], {
+      env: cleanProviderEnv(),
+      windowsHide: true,
+      stdio: 'pipe',
+    });
+    activeLogin = child;
+    sendLoginProgress(mainWindow, 'info', 'Se abrió la autenticación oficial de OpenAI en tu navegador.');
+
+    child.stdout.on('data', (data) => sendLoginProgress(mainWindow, 'info', data.toString().trim()));
+    child.stderr.on('data', (data) => sendLoginProgress(mainWindow, 'info', data.toString().trim()));
+    child.on('error', (error) => {
+      activeLogin = null;
+      resolve({ success: false, error: error.message });
+    });
+    child.on('close', async (code) => {
+      activeLogin = null;
+      const status = await getOpenAIStatus();
+      resolve(status.authenticated
+        ? { success: true, state: status }
+        : { success: false, error: code === 0 ? 'OpenAI authentication did not complete.' : `Codex login exited with code ${code}.` });
+    });
+  });
+}
+
+async function logoutFromOpenAI() {
+  try {
+    await execFileAsync(resolveCodexPath(), ['logout'], {
+      env: cleanProviderEnv(),
+      timeout: 10000,
+      windowsHide: true,
+    });
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+function sendChatMessage(prompt, conversationHistory = [], model, reasoning, cwd, mainWindow) {
   return new Promise((resolve) => {
     let validatedCwd;
-    let validatedModel;
-    let opencodePath;
+    let executable;
+    let args;
     try {
       validatedCwd = validateProjectCwd(cwd, isProjectRegistered);
-      validatedModel = assertSafeModel(model);
-      opencodePath = resolveOpenCodePath(validatedCwd);
+      executable = resolveCodexPath();
+      args = buildCodexExecArgs(model, reasoning);
     } catch (error) {
       resolve({ success: false, error: error.message });
       return;
@@ -90,153 +211,64 @@ async function sendChatMessage(prompt, conversationHistory = [], model, cwd, mai
     currentRunId = runId;
     const previousRun = activeRun;
     activeRun = null;
-    if (previousRun) {
-      killProcessTree(previousRun.process);
+    if (previousRun) killProcessTree(previousRun.process);
+
+    const child = spawn(executable, args, {
+      cwd: validatedCwd,
+      env: cleanProviderEnv(),
+      windowsHide: true,
+      stdio: 'pipe',
+    });
+    activeRun = { id: runId, process: child };
+
+    let fullPrompt = '';
+    for (const message of conversationHistory) {
+      if (message.role === 'user') fullPrompt += `User: ${message.content}\n\n`;
+      if (message.role === 'assistant') fullPrompt += `Assistant: ${message.content}\n\n`;
     }
+    fullPrompt += `User: ${String(prompt || '')}\n`;
+    child.stdin.end(fullPrompt, 'utf8');
 
-    // Prefix the model with openai/ for the opencode CLI
-    const prefixedModel = validatedModel && (validatedModel.startsWith('openai/') ? validatedModel : `openai/${validatedModel}`);
-
-    const cleanEnv = {
-      ...process.env,
-      NO_COLOR: '1',
-      TERM: 'dumb',
-    };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
-
-    try {
-      // Spawn opencode run and pipe the prompt to stdin
-      const commandLine = prefixedModel
-        ? `"${opencodePath}" run - --model ${prefixedModel}`
-        : `"${opencodePath}" run -`;
-      const proc = spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', commandLine], {
-        cwd: validatedCwd,
-        env: cleanEnv,
-        stdio: 'pipe',
-        shell: false,
-      });
-      activeRun = { id: runId, process: proc };
-
-      // Pass conversation history along with the new prompt
-      // opencode handles previous session continuation via flags, but for stateless we just inject history
-      let fullPrompt = '';
-      for (const msg of conversationHistory) {
-        if (msg.role === 'user') fullPrompt += `User: ${msg.content}\n\n`;
-        if (msg.role === 'assistant') fullPrompt += `Assistant: ${msg.content}\n\n`;
+    let fullOutput = '';
+    let errorOutput = '';
+    child.stdout.on('data', (data) => {
+      if (currentRunId !== runId || activeRun?.id !== runId) return;
+      const text = data.toString();
+      fullOutput += text;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:data', text);
+    });
+    child.stderr.on('data', (data) => { errorOutput += data.toString(); });
+    child.on('error', (error) => {
+      if (currentRunId !== runId || activeRun?.id !== runId) return resolve({ success: false, cancelled: true });
+      activeRun = null;
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', error.message);
+      resolve({ success: false, error: error.message });
+    });
+    child.on('close', (code) => {
+      if (currentRunId !== runId || activeRun?.id !== runId) return resolve({ success: false, cancelled: true });
+      activeRun = null;
+      if (code !== 0) {
+        const error = errorOutput.trim() || `Codex exited with code ${code}.`;
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', error);
+        resolve({ success: false, code, error });
+        return;
       }
-      fullPrompt += `User: ${prompt}\n`;
-
-      proc.stdin.write(fullPrompt, 'utf8');
-      proc.stdin.end();
-
-      let fullOutput = '';
-
-      proc.stdout.on('data', (data) => {
-        if (currentRunId !== runId || activeRun?.id !== runId) return;
-        const text = stripAnsi(data.toString());
-        fullOutput += text;
-        const win = mainWindow || null;
-        if (win && !win.isDestroyed()) win.webContents.send('openai:data', text);
-      });
-
-      proc.stderr.on('data', (data) => {
-        if (currentRunId !== runId || activeRun?.id !== runId) return;
-        const text = stripAnsi(data.toString());
-        console.log('[openai:stderr]', text);
-        if (!text.includes('Warning:') && !text.includes('no stdin')) {
-          const win = mainWindow || null;
-          if (win && !win.isDestroyed()) win.webContents.send('openai:data', text);
-        }
-      });
-
-      proc.on('close', (code) => {
-        if (currentRunId !== runId || activeRun?.id !== runId) {
-          resolve({ success: false, cancelled: true });
-          return;
-        }
-        activeRun = null;
-        const win = mainWindow || null;
-        if (win && !win.isDestroyed()) win.webContents.send('openai:complete', { code, success: code === 0, output: fullOutput });
-        resolve({ success: code === 0, code, error: code === 0 ? undefined : `opencode exited with code ${code}` });
-      });
-
-      proc.on('error', (error) => {
-        if (currentRunId !== runId || activeRun?.id !== runId) {
-          resolve({ success: false, cancelled: true });
-          return;
-        }
-        activeRun = null;
-        const win = mainWindow || null;
-        if (win && !win.isDestroyed()) win.webContents.send('openai:error', error.message);
-        resolve({ success: false, error: error.message });
-      });
-
-    } catch (err) {
-      resolve({ success: false, error: err.message });
-    }
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:complete', { code, success: true, output: fullOutput });
+      resolve({ success: true, code, output: fullOutput });
+    });
   });
 }
 
-// ─── IPC Setup ─────────────────────────────────────────────────────────────
-
 function setupOpenAIHandlers(ipcMain, getMainWindow) {
-  ipcMain.handle('openai:status', async () => {
-    return await getOpenAIStatus();
-  });
-
-  ipcMain.handle('openai:login', async () => {
-    try {
-      const command = process.env.ComSpec || 'cmd.exe';
-      const opencodePath = resolveOpenCodePath();
-      const child = spawn(command, ['/d', '/k', buildOpenCodeAuthCommand(opencodePath, 'login')], {
-        detached: true,
-        windowsHide: false,
-        stdio: 'ignore',
-        shell: false,
-      });
-      child.unref();
-      return { success: true, pending: true };
-    } catch (error) {
-      return { success: false, error: `Could not launch OpenCode authentication: ${error.message}` };
-    }
-  });
-
-  ipcMain.handle('openai:logout', () => {
-    try {
-      const command = process.env.ComSpec || 'cmd.exe';
-      const opencodePath = resolveOpenCodePath();
-      const child = spawn(command, ['/d', '/k', buildOpenCodeAuthCommand(opencodePath, 'logout')], {
-        detached: true,
-        windowsHide: false,
-        stdio: 'ignore',
-        shell: false,
-      });
-      child.unref();
-      return { success: true, pending: true };
-    } catch (error) {
-      return { success: false, error: `Could not launch OpenCode logout: ${error.message}` };
-    }
-  });
-
-  ipcMain.handle('openai:send', async (_, prompt, conversationHistory, model, cwd) => {
-    const mainWindow = getMainWindow();
-    try {
-      return await sendChatMessage(prompt, conversationHistory || [], model, cwd, mainWindow);
-    } catch (err) {
-      const win = getMainWindow();
-      if (win && !win.isDestroyed()) win.webContents.send('openai:error', err.message);
-      return { success: false, error: err.message };
-    }
-  });
-
+  ipcMain.handle('openai:status', () => getOpenAIStatus());
+  ipcMain.handle('openai:models', () => getOpenAIModels());
+  ipcMain.handle('openai:login', () => loginWithOpenAI(getMainWindow()));
+  ipcMain.handle('openai:logout', () => logoutFromOpenAI());
+  ipcMain.handle('openai:send', (_, prompt, history, model, reasoning, cwd) => sendChatMessage(prompt, history || [], model, reasoning, cwd, getMainWindow()));
   ipcMain.handle('openai:cancel', () => {
     currentRunId = nextRunId++;
-    if (activeRun) {
-      const run = activeRun;
-      activeRun = null;
-      killProcessTree(run.process);
-    }
+    if (activeRun) killProcessTree(activeRun.process);
+    activeRun = null;
     return { success: true };
   });
 }
@@ -244,7 +276,9 @@ function setupOpenAIHandlers(ipcMain, getMainWindow) {
 function terminateAllOpenAIProcesses() {
   currentRunId = nextRunId++;
   if (activeRun) killProcessTree(activeRun.process);
+  if (activeLogin) killProcessTree(activeLogin);
   activeRun = null;
+  activeLogin = null;
 }
 
-module.exports = { buildOpenCodeAuthCommand, setupOpenAIHandlers, terminateAllOpenAIProcesses };
+module.exports = { buildCodexExecArgs, getOpenAIModels, getOpenAIStatus, normalizeModelCatalog, resolveCodexPath, setupOpenAIHandlers, terminateAllOpenAIProcesses };
