@@ -1,5 +1,6 @@
 import ServiceCard from '../services/ServiceCard';
 import GlobalServices from '../services/GlobalServices';
+import { useAuth } from '../auth/AuthContext';
 import './Dashboard.css';
 
 const QUICK_ACTIONS = [
@@ -29,8 +30,14 @@ const QUICK_ACTIONS = [
   },
 ];
 
-export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onRefreshAll, onRefreshService, currentProject }) {
+export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOpenProjects, onRefreshAll, onRefreshService, currentProject }) {
   const { services: serviceList, connectedCount } = services;
+  const { state: authState } = useAuth();
+  const membership = authState.membership || {};
+  const completedLessons = Number(membership.completedLessons) || 0;
+  const totalLessons = Number(membership.totalLessons) || 0;
+  const calculatedProgress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
+  const progress = Math.min(100, Math.max(0, Number(membership.progressPercentage) || calculatedProgress));
 
   const now = new Date();
   const greeting = now.getHours() < 12 ? 'Good morning' : now.getHours() < 18 ? 'Good afternoon' : 'Good evening';
@@ -62,13 +69,35 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onRe
             </div>
           </header>
 
+          <section className="identity-card glass-card" aria-label="Cuenta y progreso educativo">
+            <div className="identity-card__profile">
+              <div className="identity-card__avatar">{authState.user?.email?.[0]?.toUpperCase() || 'V'}</div>
+              <div><span className="identity-card__eyebrow">Cuenta escolar</span><h2>{authState.user?.email || 'Cuenta activa'}</h2><p>{membership.schoolName || membership.schoolId || 'Escuela no asignada'} · Plan {membership.planName || 'sin asignar'}</p></div>
+            </div>
+            <div className="identity-card__access">
+              <span className={`identity-card__status identity-card__status--${authState.policy}`}>{membership.status || authState.policy}</span>
+              <span>Lease offline: {authState.leaseExpiresAt ? new Date(authState.leaseExpiresAt).toLocaleString() : 'no disponible'}</span>
+            </div>
+            <div className="identity-card__progress">
+              <div><span>Progreso educativo</span><strong>{Math.round(progress)}%</strong></div>
+              <div className="identity-card__track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(progress)}><span style={{ width: `${progress}%` }} /></div>
+              <small>{completedLessons} de {totalLessons} lecciones completadas</small>
+            </div>
+          </section>
+
           {/* Quick Actions */}
           <section className="dashboard__section">
             <div className="dashboard__section-header">
               <h2 className="dashboard__section-title">Quick Actions</h2>
             </div>
             <div className="dashboard__actions-grid">
-              {QUICK_ACTIONS.map((action) => {
+              {!currentProject && (
+                <button className="action-card glass-card" onClick={onOpenProjects} type="button">
+                  <div className="action-card__icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg></div>
+                  <div className="action-card__text"><span className="action-card__title">Abrir proyectos</span><span className="action-card__desc text-secondary">Elegí o agregá un proyecto local para comenzar.</span></div>
+                </button>
+              )}
+              {currentProject && QUICK_ACTIONS.map((action) => {
                 const handleClick = action.id === 'terminal' ? onOpenTerminal : onOpenClaude;
                 return (
                   <button

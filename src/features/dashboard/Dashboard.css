@@ -113,6 +113,24 @@
   gap: var(--space-sm);
 }
 
+.identity-card { display: grid; grid-template-columns: minmax(220px, 1.1fr) minmax(180px, .8fr) minmax(230px, 1fr); align-items: center; gap: var(--space-lg); padding: var(--space-lg); }
+.identity-card:hover { transform: none; }
+.identity-card__profile { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.identity-card__avatar { width: 44px; height: 44px; display: grid; flex: 0 0 auto; place-items: center; border-radius: 13px; color: white; background: var(--accent-gradient); font-size: 18px; font-weight: 800; }
+.identity-card__profile > div:last-child { min-width: 0; }
+.identity-card__eyebrow { color: var(--accent-primary); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.identity-card__profile h2 { overflow: hidden; margin-top: 2px; font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+.identity-card__profile p, .identity-card__access, .identity-card__progress small { color: var(--text-tertiary); font-size: 11px; }
+.identity-card__access { display: grid; gap: 7px; padding-left: var(--space-lg); border-left: 1px solid var(--glass-border); }
+.identity-card__status { width: max-content; padding: 3px 8px; border-radius: var(--radius-full); color: var(--status-success); background: var(--status-success-bg); font-weight: 800; text-transform: capitalize; }
+.identity-card__status--restricted { color: var(--status-warning); background: var(--status-warning-bg); }
+.identity-card__progress { display: grid; gap: 8px; }
+.identity-card__progress > div:first-child { display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 11px; }
+.identity-card__progress strong { color: var(--text-primary); }
+.identity-card__track { height: 6px; overflow: hidden; border-radius: var(--radius-full); background: var(--bg-deepest); }
+.identity-card__track span { display: block; height: 100%; border-radius: inherit; background: var(--accent-gradient); }
+@media (max-width: 980px) { .identity-card { grid-template-columns: 1fr 1fr; } .identity-card__progress { grid-column: 1 / -1; } }
+
 /* Services Grid */
 .dashboard__services-grid {
   display: grid;

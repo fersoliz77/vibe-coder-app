@@ -11,6 +11,8 @@ import { useTerminal } from './hooks/useTerminal';
 import { useClaude } from './hooks/useClaude';
 import { useAppStore } from './store/useAppStore';
 import AuthGate from './features/auth/AuthGate';
+import { useAuth } from './features/auth/AuthContext';
+import SettingsPanel from './features/settings/SettingsPanel';
 import './styles/App.css';
 
 const VIEWS = {
@@ -20,10 +22,12 @@ const VIEWS = {
   TERMINAL: 'terminal',
   CLAUDE: 'claude',
   OPENAI: 'openai',
+  SETTINGS: 'settings',
 };
 
 function Workspace() {
-  const [activeView, setActiveView] = useState(VIEWS.PROJECTS);
+  const { state: authState } = useAuth();
+  const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
   const [isMaximized, setIsMaximized] = useState(false);
   const {
     currentProject,
@@ -57,6 +61,14 @@ function Workspace() {
   useEffect(() => {
     init();
   }, [init]);
+
+  useEffect(() => {
+    try {
+      const accessibility = JSON.parse(localStorage.getItem('vibe-accessibility') || '{}');
+      document.body.classList.toggle('high-contrast', Boolean(accessibility.highContrast));
+      document.body.classList.toggle('reduced-motion', Boolean(accessibility.reducedMotion));
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!window.electronAPI?.window?.onMaximizedChanged) return undefined;
@@ -114,7 +126,11 @@ function Workspace() {
       return <div className="main-content__loading">Loading workspace...</div>;
     }
 
-    if (!currentProject || activeView === VIEWS.PROJECTS) {
+    if (activeView === VIEWS.SETTINGS) {
+      return <SettingsPanel theme={theme} onSetTheme={setTheme} />;
+    }
+
+    if (activeView === VIEWS.PROJECTS) {
       return (
         <ProjectList 
           onProjectSelect={handleProjectSelect}
@@ -144,6 +160,7 @@ function Workspace() {
             onRefreshService={serviceHook.checkOne}
             onOpenTerminal={handleOpenTerminal}
             onOpenClaude={handleOpenClaude}
+            onOpenProjects={() => setActiveView(VIEWS.PROJECTS)}
           />
         );
     }
@@ -200,6 +217,7 @@ function Workspace() {
           onToggleTheme={toggleTheme}
           currentProject={currentProject}
           onBackToProjects={handleBackToProjects}
+          authState={authState}
         />
         <main className="main-content">
           {renderView()}

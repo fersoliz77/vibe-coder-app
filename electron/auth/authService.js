@@ -99,6 +99,11 @@ class AuthService {
         status: this.record.membership.status,
         schoolId: this.record.membership.schoolId || null,
         schoolName: this.record.membership.schoolName || null,
+        planId: this.record.membership.planId || null,
+        planName: this.record.membership.planName || null,
+        completedLessons: this.record.membership.completedLessons || 0,
+        totalLessons: this.record.membership.totalLessons || 0,
+        progressPercentage: this.record.membership.progressPercentage || 0,
       } : null,
       user: this.record?.session?.user ? {
         id: this.record.session.user.id,
@@ -142,6 +147,11 @@ class AuthService {
       status,
       schoolId: value.school_id || value.schoolId || null,
       schoolName: value.school_name || value.schoolName || null,
+      planId: value.plan_id || value.planId || null,
+      planName: value.plan_name || value.planName || null,
+      completedLessons: Number(value.completed_lessons ?? value.completedLessons ?? 0),
+      totalLessons: Number(value.total_lessons ?? value.totalLessons ?? 0),
+      progressPercentage: Number(value.progress_percentage ?? value.progressPercentage ?? 0),
       requestedLeaseExpiry: value.offline_lease_expires_at || value.offlineLeaseExpiresAt || null,
     };
   }

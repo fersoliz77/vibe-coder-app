@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AuthProvider } from './AuthContext';
 import './AuthGate.css';
 
 function AuthTitlebar() {
@@ -135,6 +136,13 @@ function RestrictedOverlay({ state, onState }) {
 export default function AuthGate({ children }) {
   const [state, setState] = useState(null);
 
+  const runAuthAction = async (action) => {
+    const result = await window.electronAPI.auth[action]();
+    const nextState = result.state || result;
+    setState(nextState);
+    return nextState;
+  };
+
   useEffect(() => {
     window.electronAPI.auth.getState().then(setState);
     const unsubscribe = window.electronAPI.auth.onStateChanged(setState);
@@ -146,9 +154,18 @@ export default function AuthGate({ children }) {
   }, []);
 
   if (!state) return <div className="auth-loading">Checking school access...</div>;
-  if (!state.authenticated) return <Login state={state} onState={setState} />;
-  if (state.policy === 'active') return children;
-  if (state.policy === 'restricted') return <>{children}<RestrictedOverlay state={state} onState={setState} /></>;
 
-  return <Denied state={state} onState={setState} />;
+  const content = !state.authenticated
+    ? <Login state={state} onState={setState} />
+    : state.policy === 'active'
+      ? children
+      : state.policy === 'restricted'
+        ? <>{children}<RestrictedOverlay state={state} onState={setState} /></>
+        : <Denied state={state} onState={setState} />;
+
+  return (
+    <AuthProvider value={{ state, setState, revalidate: () => runAuthAction('revalidate'), logout: () => runAuthAction('logout') }}>
+      {content}
+    </AuthProvider>
+  );
 }

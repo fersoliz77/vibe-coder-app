@@ -57,11 +57,21 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects }) {
+export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
   return (
     <aside className="sidebar">
       {/* Navigation */}
       <nav className="sidebar__nav">
+        {!currentProject && (
+          <>
+            <button className={`sidebar__item ${activeView === 'dashboard' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('dashboard')} type="button">
+              <span className="sidebar__icon">{NAV_ITEMS[0].icon}</span><span className="sidebar__label">Dashboard</span>
+            </button>
+            <button className={`sidebar__item ${activeView === 'projects' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('projects')} type="button">
+              <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg></span><span className="sidebar__label">Projects</span>
+            </button>
+          </>
+        )}
         {currentProject && (
           <>
             <button 
@@ -101,6 +111,10 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
 
       {/* Bottom section */}
       <div className="sidebar__footer">
+        <button className={`sidebar__item ${activeView === 'settings' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('settings')} title="Settings" type="button">
+          <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1.03H3v-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.55V3h4v.09A1.7 1.7 0 0 0 15 4.64a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.17.62.75 1.04 1.4 1.03H21v4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg></span>
+          <span className="sidebar__label">Settings · {authState.user?.email || 'Account'}</span>
+        </button>
         <button
           className="sidebar__item"
           onClick={onToggleTheme}
