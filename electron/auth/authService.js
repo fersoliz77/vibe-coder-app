@@ -51,6 +51,8 @@ class AuthService {
     this.sessionPath = path.join(app.getPath('userData'), 'auth-session.bin');
     this.record = null;
     this.lastError = null;
+    this.sessionGeneration = 0;
+    this.revalidationPromise = null;
   }
 
   initialize() {
@@ -121,6 +123,16 @@ class AuthService {
     }
   }
 
+  getRealtimeSession() {
+    if (!this.record?.session?.access_token || !this.record?.session?.user?.id) return null;
+    return {
+      supabaseUrl: this.config.supabaseUrl,
+      anonKey: this.config.anonKey,
+      accessToken: this.record.session.access_token,
+      userId: this.record.session.user.id,
+    };
+  }
+
   async request(pathname, options = {}) {
     const response = await fetch(`${this.config.supabaseUrl}${pathname}`, {
       ...options,
@@ -173,6 +185,7 @@ class AuthService {
   }
 
   async login({ email, password } = {}) {
+    const generation = ++this.sessionGeneration;
     try {
       this.requireConfig();
       if (!email || !password) throw new AuthError('AUTH_CREDENTIALS_REQUIRED', 'Email and password are required.');
@@ -181,6 +194,7 @@ class AuthService {
         body: JSON.stringify({ email, password }),
       });
       const membership = await this.validateMembership(session);
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
       const lastValidatedAt = new Date().toISOString();
       const record = {
         session,
@@ -199,6 +213,14 @@ class AuthService {
   }
 
   async revalidate() {
+    if (this.revalidationPromise) return this.revalidationPromise;
+    const generation = this.sessionGeneration;
+    this.revalidationPromise = this.performRevalidation(generation)
+      .finally(() => { this.revalidationPromise = null; });
+    return this.revalidationPromise;
+  }
+
+  async performRevalidation(generation) {
     try {
       this.requireConfig();
       if (!this.record?.session?.refresh_token) throw new AuthError('AUTH_SESSION_REQUIRED', 'Sign in to validate access.');
@@ -206,9 +228,8 @@ class AuthService {
         method: 'POST',
         body: JSON.stringify({ refresh_token: this.record.session.refresh_token }),
       });
-      this.record = { ...this.record, session };
-      this.persist();
       const membership = await this.validateMembership(session);
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
       const lastValidatedAt = new Date().toISOString();
       const record = {
         session,
@@ -227,6 +248,7 @@ class AuthService {
   }
 
   logout() {
+    this.sessionGeneration += 1;
     this.record = null;
     this.lastError = this.config.missing.length ? this.lastError : null;
     try { fs.unlinkSync(this.sessionPath); } catch (error) {

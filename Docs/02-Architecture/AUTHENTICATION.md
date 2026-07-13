@@ -54,3 +54,9 @@ The first desktop dashboard and Settings consume plan and progress from this con
 - An expired seven-day offline lease produces `restricted`, not `denied`.
 
 Restricted mode permits logout, revalidation, help, accessibility, and read-only IPC needed to render the existing shell. Authorization is enforced again in main, not only with a renderer overlay.
+
+## Realtime enforcement
+
+Electron main subscribes to `school_memberships` changes through Supabase Realtime, filtered to the authenticated `profile_id`. Tokens remain in main and are never exposed through preload or renderer state.
+
+Realtime payloads are only invalidation signals. On each signal, the client calls `get_desktop_access` again and applies that authoritative response. A transition away from `active` immediately terminates terminal and AI processes before notifying the renderer. The five-minute validation timer remains as a fallback when the Realtime connection is interrupted.

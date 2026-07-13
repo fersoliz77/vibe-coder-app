@@ -11,6 +11,7 @@ const { setupOpenAIHandlers, terminateAllOpenAIProcesses } = require('./services
 const { initProjectManager, setupProjectHandlers } = require('./services/projectManager');
 const { setupStoreHandlers } = require('./ipc/storeManager');
 const { AuthService, setupAuthHandlers } = require('./auth/authService');
+const { AuthRealtime } = require('./auth/authRealtime');
 const { installIpcAuthorization } = require('./auth/ipcGuard');
 
 if (!app.isPackaged) {
@@ -98,6 +99,12 @@ app.whenReady().then(() => {
   let previousPolicy = authService.getPolicy();
   let leaseTimer = null;
   let notifyAuthState;
+  let authRealtime;
+  const revalidateAndNotify = async () => {
+    if (!authService.getState().authenticated) return;
+    await authService.revalidate();
+    notifyAuthState?.();
+  };
   const handleAuthState = (state) => {
     if (previousPolicy === 'active' && state.policy !== 'active') {
       terminateAllTerminals();
@@ -112,16 +119,22 @@ app.whenReady().then(() => {
       leaseTimer = setTimeout(() => notifyAuthState?.(), Math.min(delay, 2_147_483_647));
       leaseTimer.unref();
     }
+    authRealtime?.sync().catch(() => {});
   };
   notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState);
+  authRealtime = new AuthRealtime(authService, revalidateAndNotify);
   handleAuthState(authService.getState());
   installIpcAuthorization(ipcMain, () => authService.getPolicy());
   const authRefreshTimer = setInterval(async () => {
     if (!authService.getState().authenticated) return;
-    await authService.revalidate();
-    notifyAuthState();
+    await revalidateAndNotify();
   }, 5 * 60 * 1000);
   authRefreshTimer.unref();
+  app.once('before-quit', () => {
+    clearInterval(authRefreshTimer);
+    if (leaseTimer) clearTimeout(leaseTimer);
+    authRealtime.stop().catch(() => {});
+  });
 
   // Initialize Managers
   setupStoreHandlers();
