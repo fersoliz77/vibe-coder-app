@@ -4,7 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 
-const { runCommand, checkVercel, checkSupabase } = require('../electron/services/serviceManager');
+const { runCommand, resolveCliInvocation, checkVercel, checkSupabase } = require('../electron/services/serviceManager');
 
 test('runCommand passes metacharacters as literal arguments without invoking a shell', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-command-'));
@@ -47,4 +47,11 @@ test('Supabase authentication stays connected when the project is not initialize
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
+});
+
+test('Supabase uses its native executable on Windows to prevent console flashes', () => {
+  if (process.platform !== 'win32') return;
+  const invocation = resolveCliInvocation('supabase', (candidate) => candidate.endsWith('supabase.exe'));
+  assert.match(invocation.file, /supabase\.exe$/i);
+  assert.deepEqual(invocation.argsPrefix, []);
 });

@@ -1,6 +1,8 @@
-const { spawn, exec } = require('child_process');
+const { spawn, execFile } = require('child_process');
 const util = require('util');
-const execAsync = util.promisify(exec);
+const execFileAsync = util.promisify(execFile);
+const fs = require('fs');
+const path = require('path');
 const { validateProjectCwd } = require('../ipc/fsGuards');
 const { isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
@@ -40,16 +42,18 @@ function assertSafeModel(model) {
 
 async function findClaudePath() {
   const isWin = process.platform === 'win32';
-  // On Windows, npm installs a `claude.cmd` wrapper — `where claude` finds the .ps1 but
-  // Electron can't run it directly; we need the .cmd version.
+  if (isWin) {
+    const nativePath = path.join(process.env.APPDATA || '', 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe');
+    if (fs.existsSync(nativePath)) return nativePath;
+  }
+
   const candidates = isWin
     ? ['claude.cmd', 'claude']
     : ['claude'];
 
   for (const name of candidates) {
-    const command = isWin ? `where ${name}` : `which ${name}`;
     try {
-      const { stdout } = await execAsync(command, { timeout: 5000, shell: true });
+      const { stdout } = await execFileAsync(isWin ? 'where.exe' : 'which', [name], { timeout: 5000, windowsHide: true });
       const found = stdout.trim().split(/\r?\n/)[0];
       if (found) return found;
     } catch {
@@ -64,7 +68,7 @@ async function findClaudePath() {
       : null;
     if (npmBin) {
       try {
-        const { stdout } = await execAsync(`"${npmBin}" --version`, { timeout: 5000, shell: false });
+        const { stdout } = await execFileAsync(npmBin, ['--version'], { timeout: 5000, windowsHide: true });
         if (stdout.trim()) return npmBin;
       } catch {}
     }
@@ -90,8 +94,6 @@ async function checkClaudeAuth(claudePath) {
     // If not authenticated, the process exits with a message about login.
     // A safer approach: check if there's an existing credential file on disk.
     const os = require('os');
-    const fs = require('fs');
-    const path = require('path');
 
     const credentialPaths = [
       path.join(os.homedir(), '.claude', '.credentials.json'),
@@ -112,10 +114,11 @@ async function checkClaudeAuth(claudePath) {
 
     // Fallback: run `claude --version` with a marker; if it exits cleanly, assume authenticated.
     // Some versions output auth warnings to stderr.
-    const { stdout, stderr } = await execAsync(
-      `"${claudePath}" --version`,
-      { env: cleanEnv, timeout: 8000, shell: false }
-    );
+    const { stdout, stderr } = await execFileAsync(claudePath, ['--version'], {
+      env: cleanEnv,
+      timeout: 8000,
+      windowsHide: true,
+    });
     const combined = (stdout + stderr).toLowerCase();
     if (combined.includes('not logged in') || combined.includes('unauthenticated') || combined.includes('please log in') || combined.includes('login')) {
       return { authenticated: false };
@@ -146,7 +149,7 @@ async function getClaudeStatus() {
     const cleanEnv = { ...process.env };
     delete cleanEnv.ELECTRON_RUN_AS_NODE;
     delete cleanEnv.ELECTRON_NO_ASAR;
-    const { stdout } = await execAsync(`"${path}" --version`, { env: cleanEnv, timeout: 5000 });
+    const { stdout } = await execFileAsync(path, ['--version'], { env: cleanEnv, timeout: 5000, windowsHide: true });
     version = stdout.trim();
   } catch {}
 
@@ -181,6 +184,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
         env: cleanEnv,
         shell: true,
         stdio: 'pipe',
+        windowsHide: true,
       }));
 
       const send = (type, text) => {
@@ -217,8 +221,9 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
       // shell:true is required on Windows to execute .cmd files
       const proc = trackBackgroundProcess(spawn(claudePath, ['login'], {
         env: cleanEnv,
-        shell: true,
+        shell: /\.cmd$/i.test(claudePath),
         stdio: 'pipe',
+        windowsHide: true,
       }));
 
       const send = (type, text) => {
@@ -251,7 +256,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     delete cleanEnv.ELECTRON_RUN_AS_NODE;
     delete cleanEnv.ELECTRON_NO_ASAR;
     try {
-      await execAsync(`"${claudePath}" logout`, { env: cleanEnv, timeout: 8000 });
+      await execFileAsync(claudePath, ['logout'], { env: cleanEnv, timeout: 8000, windowsHide: true });
       return { success: true };
     } catch (e) {
       return { success: false, error: e.message };
@@ -313,7 +318,8 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
         cwd: validatedCwd,
         env: cleanEnv,
         stdio: 'pipe',
-        shell: true,
+        shell: /\.cmd$/i.test(status.path),
+        windowsHide: true,
       });
       activeRun = { id: runId, process: proc };
 

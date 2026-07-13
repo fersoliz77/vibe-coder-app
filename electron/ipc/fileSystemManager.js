@@ -156,7 +156,7 @@ function setupFileSystemHandlers() {
     try {
       const normalizedProjectPath = withProjectRoot(projectPath);
       return await new Promise((resolve) => {
-        execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
+        execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message, entries: [] });
             return;
@@ -185,7 +185,7 @@ function setupFileSystemHandlers() {
       const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
       return await new Promise((resolve) => {
-        execFile('git', ['add', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
+        execFile('git', ['add', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
             return;
@@ -205,7 +205,7 @@ function setupFileSystemHandlers() {
       const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
       return await new Promise((resolve) => {
-        execFile('git', ['reset', 'HEAD', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000 }, (error, stdout, stderr) => {
+        execFile('git', ['reset', 'HEAD', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
             return;
@@ -227,7 +227,7 @@ function setupFileSystemHandlers() {
       }
 
       return await new Promise((resolve) => {
-        execFile('git', ['commit', '-m', trimmedMessage], { cwd: normalizedProjectPath, timeout: 120000 }, (error, stdout, stderr) => {
+        execFile('git', ['commit', '-m', trimmedMessage], { cwd: normalizedProjectPath, timeout: 120000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || stdout || error.message });
             return;

@@ -33,6 +33,16 @@ const NPM_CLI_ENTRY = {
   firebase: path.join(npmGlobalBin, 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js'),
 };
 
+const SUPABASE_NATIVE_ENTRY = path.join(
+  npmGlobalBin,
+  'node_modules',
+  'supabase',
+  'node_modules',
+  `@supabase/cli-windows-${process.arch}`,
+  'bin',
+  'supabase.exe',
+);
+
 async function runCommand(file, args = [], cwd, extraEnv = {}) {
   try {
     const { stdout, stderr } = await execFileAsync(file, args, {
@@ -53,15 +63,24 @@ async function runCommand(file, args = [], cwd, extraEnv = {}) {
   }
 }
 
-function runCli(name, args = [], cwd) {
+function resolveCliInvocation(name, pathExists = fs.existsSync) {
   if (!Object.hasOwn(CLI, name)) {
-    return Promise.resolve({ success: false, stdout: '', stderr: 'Unknown CLI' });
+    return null;
+  }
+  if (isWin && name === 'supabase' && pathExists(SUPABASE_NATIVE_ENTRY)) {
+    return { file: SUPABASE_NATIVE_ENTRY, argsPrefix: [], extraEnv: {} };
   }
   const npmEntry = isWin ? NPM_CLI_ENTRY[name] : null;
-  if (npmEntry && fs.existsSync(npmEntry)) {
-    return runCommand(process.execPath, [npmEntry, ...args], cwd, { ELECTRON_RUN_AS_NODE: '1' });
+  if (npmEntry && pathExists(npmEntry)) {
+    return { file: process.execPath, argsPrefix: [npmEntry], extraEnv: { ELECTRON_RUN_AS_NODE: '1' } };
   }
-  return runCommand(CLI[name], args, cwd);
+  return { file: CLI[name], argsPrefix: [], extraEnv: {} };
+}
+
+function runCli(name, args = [], cwd) {
+  const invocation = resolveCliInvocation(name);
+  if (!invocation) return Promise.resolve({ success: false, stdout: '', stderr: 'Unknown CLI' });
+  return runCommand(invocation.file, [...invocation.argsPrefix, ...args], cwd, invocation.extraEnv);
 }
 
 async function checkVercel(projectPath, cliRunner = runCli) {
@@ -361,4 +380,4 @@ function setupServiceHandlers(ipcMain) {
   });
 }
 
-module.exports = { runCommand, checkVercel, checkSupabase, setupServiceHandlers };
+module.exports = { runCommand, resolveCliInvocation, checkVercel, checkSupabase, setupServiceHandlers };
