@@ -142,7 +142,7 @@ function Workspace() {
 
   const launchOpenCodeTerminal = useCallback(async (requestId) => {
     if (!currentProject) return;
-    const terminal = await terminalHook.createTerminal({ name: 'OpenCode', mode: 'opencode' });
+    const terminal = await terminalHook.createTerminal({ name: 'OpenCode' });
     if (requestId !== openCodeRequest.current) {
       if (terminal?.id) terminalHook.closeTerminal(terminal.id);
       return;
@@ -151,9 +151,10 @@ function Workspace() {
       setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: terminal.error });
       return;
     }
+    terminalHook.writeToTerminal(terminal.id, 'opencode\r');
     setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
     setActiveView(VIEWS.TERMINAL);
-  }, [currentProject, terminalHook.createTerminal, terminalHook.closeTerminal]);
+  }, [currentProject, terminalHook.createTerminal, terminalHook.closeTerminal, terminalHook.writeToTerminal]);
 
   const handleOpenCode = useCallback(async () => {
     if (!currentProject || !window.electronAPI?.opencode) return;
