@@ -90,7 +90,7 @@ async function checkVercel(projectPath, cliRunner = runCli) {
   const user = globalConnected ? res.stdout.split('\n')[0].trim() : null;
 
   if (!projectPath) {
-    return { id: 'vercel', name: 'Vercel', connected: globalConnected, user, checking: false };
+    return { id: 'vercel', name: 'Vercel', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
   
   const vercelDir = path.join(projectPath, '.vercel');
@@ -106,7 +106,8 @@ async function checkVercel(projectPath, cliRunner = runCli) {
     } catch (e) {}
   }
   return {
-    id: 'vercel', name: 'Vercel', connected: globalConnected,
+    id: 'vercel', name: 'Vercel', connected: globalConnected && isLinked,
+    authenticated: globalConnected,
     user, // Display global account name
     project: vercelProject,
     projectLinked: isLinked,
@@ -155,7 +156,7 @@ async function checkSupabase(projectPath, cliRunner = runCli) {
   }
 
   if (!projectPath) {
-    return { id: 'supabase', name: 'Supabase', connected: globalConnected, user, checking: false };
+    return { id: 'supabase', name: 'Supabase', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
 
   // Keep account authentication separate from project initialization/linking.
@@ -174,7 +175,8 @@ async function checkSupabase(projectPath, cliRunner = runCli) {
     } catch (e) {}
   }
   return {
-    id: 'supabase', name: 'Supabase', connected: globalConnected,
+    id: 'supabase', name: 'Supabase', connected: globalConnected && isLinked,
+    authenticated: globalConnected,
     user, // Display global account name
     project: projectName,
     projectLinked: isLinked,
@@ -197,11 +199,11 @@ async function checkGitHub(projectPath) {
   const user = match ? match[1] : (globalConnected ? 'Logged in' : null);
 
   if (!projectPath) {
-    return { id: 'github', name: 'GitHub', connected: globalConnected, user, checking: false };
+    return { id: 'github', name: 'GitHub', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
 
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
-  if (!isGit) return { id: 'github', name: 'GitHub', connected: false, user, details: { error: 'Not a git repository' }};
+  if (!isGit) return { id: 'github', name: 'GitHub', connected: false, authenticated: globalConnected, projectLinked: false, user, details: { error: 'Not a git repository' }};
   
   const result = await runCli('git', ['remote', '-v'], projectPath);
   const isLinked = result.success && result.stdout.includes('github.com');
@@ -213,9 +215,11 @@ async function checkGitHub(projectPath) {
   }
   
   return {
-    id: 'github', name: 'GitHub', connected: isLinked,
+    id: 'github', name: 'GitHub', connected: globalConnected && isLinked,
+    authenticated: globalConnected,
     user, // Display global account name
     project: repoName,
+    projectLinked: isLinked,
     details: isLinked ? { platform: 'GitHub', type: 'Repository' } : { error: 'Run: git remote add origin' },
   };
 }
@@ -231,7 +235,7 @@ async function checkGit(projectPath) {
   }
 
   if (!projectPath) {
-    return { id: 'git', name: 'Git', connected: globalConnected, user, checking: false };
+    return { id: 'git', name: 'Git', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
 
   const isGit = fs.existsSync(path.join(projectPath, '.git'));
@@ -241,9 +245,11 @@ async function checkGit(projectPath) {
     if (branchRes.success && branchRes.stdout) branch = branchRes.stdout.trim();
   }
   return {
-    id: 'git', name: 'Git', connected: isGit,
+    id: 'git', name: 'Git', connected: globalConnected && isGit,
+    authenticated: globalConnected,
     user, // Display global account name
     project: branch ? `branch: ${branch}` : null,
+    projectLinked: isGit,
     details: isGit ? { platform: 'Git', type: 'Local Tool' } : { error: 'Run: git init' },
   };
 }
@@ -272,7 +278,7 @@ async function checkFirebase(projectPath) {
   }
 
   if (!projectPath) {
-    return { id: 'firebase', name: 'Firebase', connected: globalConnected, user, checking: false };
+    return { id: 'firebase', name: 'Firebase', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
 
   const firebasercPath = path.join(projectPath, '.firebaserc');
@@ -287,9 +293,11 @@ async function checkFirebase(projectPath) {
   }
   
   return {
-    id: 'firebase', name: 'Firebase', connected: isLinked,
+    id: 'firebase', name: 'Firebase', connected: globalConnected && isLinked,
+    authenticated: globalConnected,
     user, // Display global account name
     project: projectName,
+    projectLinked: isLinked,
     details: isLinked ? { platform: 'Firebase', type: 'Backend' } : { error: 'Run: firebase init' },
   };
 }

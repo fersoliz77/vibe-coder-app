@@ -81,7 +81,7 @@ export default function ServiceCard({ service, onRefresh }) {
         )}
         {!checking && (
           <p className={`service-card__hint ${!service.project ? 'service-card__hint--warn' : ''}`}>
-            {service.projectLinked === false ? 'Proyecto no vinculado' : service.project ? `Linked: ${service.project}` : 'Proyecto local'}
+            {!service.authenticated && service.projectLinked ? 'Cuenta no autenticada' : service.projectLinked === false ? 'Proyecto no vinculado' : service.project ? `Linked: ${service.project}` : 'Conectado al proyecto'}
           </p>
         )}
         {!connected && !checking && (

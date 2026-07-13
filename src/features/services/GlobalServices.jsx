@@ -108,12 +108,12 @@ export default function GlobalServices({ services, inProject = false, onRefresh 
               <div className="global-service-item__info">
                 <span className="global-service-item__name">{service.name}</span>
                 {!service.checking && service.user && (
-                  <span className="global-service-item__account">{service.user}</span>
+                  <span className="global-service-item__account">{inProject ? `Cuenta: ${service.user}` : service.user}</span>
                 )}
                 {/* Account authentication and local project linking are separate states. */}
                 {!service.checking && inProject && (
                   <span className={`global-service-item__project ${service.projectLinked === false ? 'global-service-item__project--unlinked' : ''}`}>
-                    ↳ {service.projectLinked === false ? 'Proyecto no vinculado' : service.project || 'Proyecto local'}
+                    ↳ {!service.authenticated && service.projectLinked ? 'Cuenta no autenticada' : service.projectLinked === false ? 'Proyecto no vinculado' : service.project || 'Conectado al proyecto'}
                   </span>
                 )}
               </div>

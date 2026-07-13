@@ -21,11 +21,12 @@ test('runCommand passes metacharacters as literal arguments without invoking a s
   }
 });
 
-test('Vercel authentication stays connected when the project is not linked', async () => {
+test('Vercel keeps account auth separate from project connection', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-vercel-'));
   try {
     const service = await checkVercel(tempDir, async () => ({ success: true, stdout: 'fersoliz77', stderr: '' }));
-    assert.equal(service.connected, true);
+    assert.equal(service.connected, false);
+    assert.equal(service.authenticated, true);
     assert.equal(service.user, 'fersoliz77');
     assert.equal(service.projectLinked, false);
   } finally {
@@ -33,7 +34,7 @@ test('Vercel authentication stays connected when the project is not linked', asy
   }
 });
 
-test('Supabase authentication stays connected when the project is not initialized', async () => {
+test('Supabase keeps account auth separate from project connection', async () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-supabase-'));
   try {
     const service = await checkSupabase(tempDir, async () => ({
@@ -41,7 +42,8 @@ test('Supabase authentication stays connected when the project is not initialize
       stdout: '[{"id":"org-id","name":"mktsolutions"}]',
       stderr: '',
     }));
-    assert.equal(service.connected, true);
+    assert.equal(service.connected, false);
+    assert.equal(service.authenticated, true);
     assert.equal(service.user, 'mktsolutions');
     assert.equal(service.projectLinked, false);
   } finally {
@@ -54,4 +56,17 @@ test('Supabase uses its native executable on Windows to prevent console flashes'
   const invocation = resolveCliInvocation('supabase', (candidate) => candidate.endsWith('supabase.exe'));
   assert.match(invocation.file, /supabase\.exe$/i);
   assert.deepEqual(invocation.argsPrefix, []);
+});
+
+test('global provider status still reports authenticated accounts as connected', async () => {
+  const vercel = await checkVercel(null, async () => ({ success: true, stdout: 'fersoliz77', stderr: '' }));
+  const supabase = await checkSupabase(null, async () => ({
+    success: true,
+    stdout: '[{"id":"org-id","name":"fersoliz"}]',
+    stderr: '',
+  }));
+  assert.equal(vercel.connected, true);
+  assert.equal(vercel.authenticated, true);
+  assert.equal(supabase.connected, true);
+  assert.equal(supabase.authenticated, true);
 });
