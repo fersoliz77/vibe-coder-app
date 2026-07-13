@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { app } = require('electron');
+const { validateProjectCwd } = require('../ipc/fsGuards');
 
 let projectsFilePath;
 
@@ -34,42 +36,45 @@ function isProjectRegistered(projectPath) {
 }
 
 function saveProjects(projects) {
-  try {
-    fs.writeFileSync(projectsFilePath, JSON.stringify(projects, null, 2));
-  } catch (error) {
-    console.error('Error saving projects:', error);
-  }
+  fs.writeFileSync(projectsFilePath, JSON.stringify(projects, null, 2));
 }
 
-function setupProjectHandlers(ipcMain) {
+function registerProject(projectPath, metadata = {}) {
+  const canonicalPath = validateProjectCwd(projectPath);
+  const projects = getProjects();
+  const existingIndex = projects.findIndex((project) => normalizeProjectPath(project.path) === normalizeProjectPath(canonicalPath));
+  if (existingIndex >= 0) {
+    projects[existingIndex] = { ...projects[existingIndex], ...metadata, path: canonicalPath, lastOpened: Date.now() };
+    saveProjects(projects);
+    return projects[existingIndex];
+  }
+  const project = {
+    id: `proj_${crypto.randomUUID()}`,
+    name: metadata.name || path.basename(canonicalPath),
+    path: canonicalPath,
+    createdAt: Date.now(),
+    lastOpened: Date.now(),
+    ...metadata,
+  };
+  projects.unshift(project);
+  saveProjects(projects);
+  return project;
+}
+
+function setupProjectHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('projects:list', () => {
     return getProjects();
   });
 
   ipcMain.handle('projects:add', (_, projectPath) => {
-    const projects = getProjects();
-    
-    // Check if already exists
-    const existingIndex = projects.findIndex(p => p.path === projectPath);
-    if (existingIndex >= 0) {
-      // Update last opened
-      projects[existingIndex].lastOpened = Date.now();
-      saveProjects(projects);
-      return projects[existingIndex];
-    }
-    
-    // Create new
-    const newProject = {
-      id: `proj_${Date.now()}`,
-      name: path.basename(projectPath),
-      path: projectPath,
-      createdAt: Date.now(),
-      lastOpened: Date.now()
-    };
-    
-    projects.unshift(newProject);
-    saveProjects(projects);
-    return newProject;
+    return registerProject(projectPath);
+  });
+
+  ipcMain.handle('projects:import', async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog(getMainWindow?.(), { properties: ['openDirectory'] });
+    if (result.canceled || !result.filePaths?.[0]) return null;
+    return registerProject(result.filePaths[0]);
   });
 
   ipcMain.handle('projects:remove', (_, projectId) => {
@@ -95,4 +100,5 @@ module.exports = {
   setupProjectHandlers,
   getProjects,
   isProjectRegistered,
+  registerProject,
 };

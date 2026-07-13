@@ -62,4 +62,4 @@ This folder is the implementation reference for the Windows desktop application.
 
 ## Current Baseline
 
-This documentation set reflects the current Electron + React application structure, including school authentication, seven-day offline access, restricted mode, the hardened project-aware filesystem bridge, modular Explorer, terminal integration, user-connected AI providers, services dashboard, and store-backed project persistence.
+This documentation set reflects the current Electron + React application structure, including school authentication, seven-day offline access, restricted mode, the hardened project-aware filesystem bridge, modular Explorer, terminal integration, user-connected AI providers, services dashboard, Windows environment setup, guided cloud project provisioning, and store-backed project persistence.

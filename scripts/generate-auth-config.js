@@ -1,6 +1,19 @@
 const fs = require('fs');
 const path = require('path');
 
+try {
+  const envPath = path.join(__dirname, '..', '.env');
+  for (const line of fs.readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const separator = trimmed.indexOf('=');
+    if (separator < 1) continue;
+    const key = trimmed.slice(0, separator).trim();
+    const value = trimmed.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+    if (!process.env[key]) process.env[key] = value;
+  }
+} catch {}
+
 const supabaseUrl = process.env.VIBE_SUPABASE_URL?.replace(/\/$/, '');
 const anonKey = process.env.VIBE_SUPABASE_ANON_KEY;
 if (!supabaseUrl || !anonKey) {

@@ -4,6 +4,31 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-07-13
+
+### Scope
+
+- Added Windows environment setup and guided full-stack project creation.
+- Added web and Flutter Android project templates optimized for Vercel.
+- Automated GitHub, Vercel, Firebase, and Supabase provisioning.
+- Restored working Windows packaging and generated an NSIS installer.
+
+### Key Changes
+
+- Added `environmentManager.js`, `projectProvisioner.js`, Setup Center, and Create Project Wizard.
+- Added temporary location grants, cancellable subprocess tracking, sanitized progress, and partial-failure recovery.
+- Bundled the official Supabase CLI and reused native `node-pty` prebuilds during packaging.
+- Added 16 environment/provisioning tests without creating cloud resources.
+
+### Validation
+
+- `npm run check` with 41 passing tests.
+- `npm audit --omit=dev` with zero vulnerabilities.
+- `npm run package:dir` and packaged executable smoke test.
+- `npm run package` produced `dist-electron/Vibe IDE Code Setup 1.0.0.exe`.
+
+---
+
 ## 2026-07-11
 
 ### Scope

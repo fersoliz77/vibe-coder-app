@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
+import SetupCenter from '../setup/SetupCenter';
 import './SettingsPanel.css';
 
 const ACCESSIBILITY_KEY = 'vibe-accessibility';
@@ -93,6 +94,10 @@ export default function SettingsPanel({ theme, onSetTheme }) {
             <button className="btn btn--danger" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('logout')}>{busy === 'logout' ? 'Cerrando...' : 'Cerrar sesión'}</button>
             {message && <span className="settings-message" role="status">{message}</span>}
           </div>
+        </section>
+
+        <section className="settings-card settings-card--wide settings-card--setup">
+          <SetupCenter compact />
         </section>
 
         <section className="settings-card">

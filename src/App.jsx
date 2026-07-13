@@ -137,6 +137,7 @@ function Workspace() {
           services={serviceHook.services}
           claudeAvailable={claudeHook.isAvailable}
           onRefreshServices={() => serviceHook.checkAll(null)}
+          onOpenSetup={() => setActiveView(VIEWS.SETTINGS)}
         />
       );
     }

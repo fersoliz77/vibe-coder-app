@@ -8,7 +8,9 @@ const { setupServiceHandlers } = require('./services/serviceManager');
 const { setupTerminalHandlers, terminateAllTerminals } = require('./services/terminalManager');
 const { setupClaudeHandlers, terminateAllClaudeProcesses } = require('./services/claudeManager');
 const { setupOpenAIHandlers, terminateAllOpenAIProcesses } = require('./services/openaiManager');
-const { initProjectManager, setupProjectHandlers } = require('./services/projectManager');
+const { initProjectManager, setupProjectHandlers, registerProject } = require('./services/projectManager');
+const { setupEnvironmentHandlers, cancelEnvironmentInstallation } = require('./services/environmentManager');
+const { setupProjectProvisionerHandlers } = require('./services/projectProvisioner');
 const { setupStoreHandlers } = require('./ipc/storeManager');
 const { AuthService, setupAuthHandlers } = require('./auth/authService');
 const { AuthRealtime } = require('./auth/authRealtime');
@@ -100,6 +102,7 @@ app.whenReady().then(() => {
   let leaseTimer = null;
   let notifyAuthState;
   let authRealtime;
+  let projectProvisioner;
   const revalidateAndNotify = async () => {
     if (!authService.getState().authenticated) return;
     await authService.revalidate();
@@ -110,6 +113,8 @@ app.whenReady().then(() => {
       terminateAllTerminals();
       terminateAllClaudeProcesses();
       terminateAllOpenAIProcesses();
+      cancelEnvironmentInstallation();
+      projectProvisioner?.terminateAllProvisions();
     }
     previousPolicy = state.policy;
     if (leaseTimer) clearTimeout(leaseTimer);
@@ -134,6 +139,8 @@ app.whenReady().then(() => {
     clearInterval(authRefreshTimer);
     if (leaseTimer) clearTimeout(leaseTimer);
     authRealtime.stop().catch(() => {});
+    cancelEnvironmentInstallation();
+    projectProvisioner?.terminateAllProvisions();
   });
 
   // Initialize Managers
@@ -144,7 +151,9 @@ app.whenReady().then(() => {
   setupFileSystemHandlers();
 
   // Setup IPC handlers for each subsystem
-  setupProjectHandlers(ipcMain);
+  setupProjectHandlers(ipcMain, () => mainWindow);
+  setupEnvironmentHandlers(ipcMain, () => mainWindow);
+  projectProvisioner = setupProjectProvisionerHandlers(ipcMain, () => mainWindow, registerProject);
   setupServiceHandlers(ipcMain);
   setupTerminalHandlers(ipcMain, () => mainWindow);
   setupClaudeHandlers(ipcMain, () => mainWindow);

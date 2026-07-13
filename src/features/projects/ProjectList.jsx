@@ -1,13 +1,21 @@
 import { useState, useEffect } from 'react';
 import GlobalServices from '../services/GlobalServices';
+import CreateProjectWizard from './CreateProjectWizard';
 import './ProjectList.css';
 
-export default function ProjectList({ onProjectSelect, services = [], claudeAvailable = false, onRefreshServices }) {
+export default function ProjectList({ onProjectSelect, onOpenSetup, services = [], claudeAvailable = false, onRefreshServices }) {
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [createdProject, setCreatedProject] = useState(null);
+  const [environmentMissing, setEnvironmentMissing] = useState(false);
+  const [projectError, setProjectError] = useState('');
 
   useEffect(() => {
     loadProjects();
+    window.electronAPI?.setup?.check({ includeMobile: false, backend: 'firebase' })
+      .then((environment) => setEnvironmentMissing(Boolean(environment?.summary?.requiredMissing)))
+      .catch(() => {});
   }, []);
 
   const loadProjects = async () => {
@@ -24,23 +32,25 @@ export default function ProjectList({ onProjectSelect, services = [], claudeAvai
   };
 
   const handleImport = async () => {
-    if (window.electronAPI && window.electronAPI.projects) {
-      const folderPath = await window.electronAPI.projects.openDirectoryDialog();
-      if (folderPath) {
-        const newProject = await window.electronAPI.projects.add(folderPath);
-        onProjectSelect(newProject);
+    setProjectError('');
+    try {
+      if (window.electronAPI && window.electronAPI.projects) {
+        const newProject = await window.electronAPI.projects.import();
+        if (newProject) onProjectSelect(newProject);
       }
+    } catch (error) {
+      setProjectError(error?.message || 'No se pudo importar la carpeta seleccionada.');
     }
   };
 
   const handleCreate = async () => {
-    if (window.electronAPI && window.electronAPI.projects) {
-      const folderPath = await window.electronAPI.projects.createDirectoryDialog();
-      if (folderPath) {
-        const newProject = await window.electronAPI.projects.add(folderPath);
-        onProjectSelect(newProject);
-      }
-    }
+    setCreatedProject(null);
+    setWizardOpen(true);
+  };
+
+  const closeWizard = () => {
+    setWizardOpen(false);
+    if (createdProject) onProjectSelect(createdProject);
   };
 
   const handleSelect = async (project) => {
@@ -62,14 +72,18 @@ export default function ProjectList({ onProjectSelect, services = [], claudeAvai
     <div className="project-dashboard-layout">
       <div className="project-list-main">
         <div className="project-header">
-          <h1 className="project-title">Your Projects</h1>
+          <div><h1 className="project-title">Tus proyectos</h1><p className="project-subtitle">Creá, conectá y administrá aplicaciones desde un solo lugar.</p></div>
+          <button className="btn btn--primary" type="button" onClick={handleCreate}>Crear proyecto</button>
         </div>
+
+        {environmentMissing && <div className="project-setup-banner"><div><strong>El entorno necesita preparación</strong><span>Revisá e instalá las herramientas necesarias antes de crear proyectos.</span></div><button type="button" onClick={onOpenSetup}>Revisar entorno</button></div>}
+        {projectError && <div className="project-error" role="alert">{projectError}</div>}
 
       {/* Project Cards Grid */}
       {!isLoading && projects.length > 0 ? (
         <div className="project-grid">
           {projects.map(proj => (
-            <div key={proj.id} className="glass-card project-card" onClick={() => handleSelect(proj)}>
+            <div key={proj.id} className="glass-card project-card" role="button" tabIndex="0" onClick={() => handleSelect(proj)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleSelect(proj); } }}>
               <div className="project-card__header">
                 <div className="project-card__icon-wrapper project-card__icon-wrapper--folder">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -80,6 +94,7 @@ export default function ProjectList({ onProjectSelect, services = [], claudeAvai
                   className="project-card__remove"
                   onClick={(e) => handleRemove(e, proj.id)}
                   title="Remove from list"
+                  aria-label={`Quitar ${proj.name} de la lista`}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -110,11 +125,11 @@ export default function ProjectList({ onProjectSelect, services = [], claudeAvai
         {/* Text Links: Create / Import */}
         <div className="project-actions-bar">
           <button className="project-action-link" onClick={handleCreate}>
-            + New Project
+            + Crear proyecto
           </button>
           <span className="project-actions-divider">·</span>
           <button className="project-action-link" onClick={handleImport}>
-            Import existing folder
+            Importar carpeta existente
           </button>
         </div>
       </div>
@@ -122,7 +137,7 @@ export default function ProjectList({ onProjectSelect, services = [], claudeAvai
       <div className="project-list-sidebar">
         <GlobalServices services={services} onRefresh={onRefreshServices} />
       </div>
+      {wizardOpen && <CreateProjectWizard onClose={closeWizard} onCreated={(response) => { setCreatedProject(response.project); loadProjects(); }} />}
     </div>
   );
 }
-

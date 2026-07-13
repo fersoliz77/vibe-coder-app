@@ -37,11 +37,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ─── Projects ──────────────────────────────────────
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
-    add: (path) => ipcRenderer.invoke('projects:add', path),
+    import: () => ipcRenderer.invoke('projects:import'),
     remove: (id) => ipcRenderer.invoke('projects:remove', id),
     updateLastOpened: (id) => ipcRenderer.invoke('projects:update-last-opened', id),
     openDirectoryDialog: () => ipcRenderer.invoke('dialog:open-directory'),
     createDirectoryDialog: () => ipcRenderer.invoke('dialog:create-directory'),
+  },
+
+  setup: {
+    check: (options) => ipcRenderer.invoke('setup:environment-check', options),
+    install: (options) => ipcRenderer.invoke('setup:environment-install', options),
+    cancel: () => ipcRenderer.invoke('setup:environment-cancel'),
+    onProgress: (callback) => subscribe('setup:environment-progress', callback, (event) => [event]),
+  },
+
+  projectCreation: {
+    getDefaultLocation: () => ipcRenderer.invoke('projects:get-default-root'),
+    chooseLocation: () => ipcRenderer.invoke('projects:choose-location'),
+    getOptions: () => ipcRenderer.invoke('projects:get-provisioning-options'),
+    provision: (request, locationGrant) => ipcRenderer.invoke('projects:provision', request, locationGrant),
+    cancel: () => ipcRenderer.invoke('projects:cancel-provisioning'),
+    onProgress: (callback) => subscribe('projects:provisioning-progress', callback, (event) => [event]),
   },
 
   // ─── File System ───────────────────────────────

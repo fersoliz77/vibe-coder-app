@@ -4,6 +4,11 @@
 
 ### Added
 
+- Guided project creation for Next.js, React Vite, and Flutter Android plus Next.js mobile suites.
+- Setup Center for Windows tool diagnosis and one-confirmation installation.
+- Automatic private GitHub repository, personal Vercel project, production deployment, and backend provisioning.
+- Firebase Spark Auth/Firestore and Supabase Nano client configuration.
+- Bundled Supabase CLI and verified NSIS installer generation.
 - Professional Docs folder structure with architecture and operations records.
 - IDE-style Explorer with editor panes, Git integration, and advanced file operations.
 - Filesystem guard layer for project-aware path validation.
@@ -12,6 +17,8 @@
 
 ### Changed
 
+- Project import and registration now validate paths in the Electron main process.
+- Windows packaging uses tested native prebuilds instead of requiring Visual Studio Build Tools.
 - Project title and path presentation in the custom titlebar.
 - Explorer interaction model now uses a custom pointer-based move system.
 - Explorer internals are now split into focused UI modules and feature hooks instead of a mostly monolithic implementation.

@@ -11,16 +11,40 @@ These surfaces handle project entry, project registration, and the default contr
 - `src/features/projects/ProjectList.jsx`
 - `src/features/projects/ProjectList.css`
 - `electron/services/projectManager.js`
+- `electron/services/projectProvisioner.js`
+- `electron/services/environmentManager.js`
+- `src/features/projects/CreateProjectWizard.jsx`
+- `src/features/setup/SetupCenter.jsx`
 - `src/store/useAppStore.js`
 
 ### Responsibilities
 
 - List known local projects from the registry
-- Create a new project folder and register it
+- Create complete web or mobile-suite projects through a guided wizard
 - Import an existing folder and register it
 - Open an existing project and update its last-opened timestamp
 - Remove a project from the registry without deleting it from disk
 - Surface global provider status before a project is entered
+- Diagnose and install the Windows development environment
+- Create and connect private GitHub, Vercel, Firebase, and Supabase resources
+
+### Guided Creation
+
+- Web projects support Next.js TypeScript and React Vite TypeScript.
+- Mobile suites use one private repository with `web/` for Next.js and `mobile/` for Flutter Android.
+- Vercel is always the web deployment provider and uses the authenticated personal scope.
+- The backend choice is exclusive: Firebase Spark with Auth and Firestore, or Supabase Nano.
+- Firebase Storage and Hosting are intentionally excluded; Vercel handles web hosting.
+- New projects default to `Documents\Vibe Projects`, with a native folder picker to change the parent directory.
+- Provider operations expose progress, support cancellation, and preserve partial local work without automatically deleting remote resources.
+
+### Setup Center
+
+- Detects Node.js, npm, Git, GitHub CLI, Vercel CLI, the selected backend CLI, Flutter, JDK 17, and Android SDK.
+- Installs missing allowlisted tools only after one explicit user confirmation.
+- Supabase CLI is bundled with the desktop application.
+- Flutter is installed from the official stable repository when needed.
+- The project list warns when required tools are missing, and Settings provides the permanent environment management surface.
 
 ### Project Registry Model
 
@@ -37,7 +61,7 @@ These surfaces handle project entry, project registration, and the default contr
 ### UI Behavior Notes
 
 - `ProjectList.jsx` loads registered projects on mount through `window.electronAPI.projects.list()`.
-- Creating and importing projects rely on project-specific directory dialogs exposed through preload.
+- Creating uses short-lived main-process location grants. Importing is completed atomically by a native main-process dialog.
 - Selecting a card updates `lastOpened` before switching into the workspace.
 - Removing a card unregisters the project from the app but does not delete the folder from disk.
 
