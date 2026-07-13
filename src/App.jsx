@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './layouts/sidebar/Sidebar';
 import Dashboard from './features/dashboard/Dashboard';
 import ProjectList from './features/projects/ProjectList';
@@ -13,6 +13,7 @@ import { useAppStore } from './store/useAppStore';
 import AuthGate from './features/auth/AuthGate';
 import { useAuth } from './features/auth/AuthContext';
 import SettingsPanel from './features/settings/SettingsPanel';
+import OpenCodeSetupDialog from './features/opencode/OpenCodeSetupDialog';
 import './styles/App.css';
 
 const VIEWS = {
@@ -29,6 +30,9 @@ function Workspace() {
   const { state: authState } = useAuth();
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
   const [isMaximized, setIsMaximized] = useState(false);
+  const [openCodeStatus, setOpenCodeStatus] = useState(null);
+  const [openCodeSetup, setOpenCodeSetup] = useState({ open: false, phase: 'idle', progress: '', error: '' });
+  const openCodeRequest = useRef(0);
   const {
     currentProject,
     theme,
@@ -97,15 +101,86 @@ function Workspace() {
     setActiveView(VIEWS.OPENAI);
   }, [currentProject]);
 
-  const handleProjectSelect = useCallback((project) => {
-    setCurrentProject(project);
-    setActiveView(VIEWS.DASHBOARD);
+  const launchOpenCodeTerminal = useCallback(async (requestId) => {
+    if (!currentProject) return;
+    const terminal = await terminalHook.createTerminal({ name: 'OpenCode', mode: 'opencode' });
+    if (requestId !== openCodeRequest.current) {
+      if (terminal?.id) terminalHook.closeTerminal(terminal.id);
+      return;
+    }
+    if (terminal?.error) {
+      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: terminal.error });
+      return;
+    }
+    setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
+    setActiveView(VIEWS.TERMINAL);
+  }, [currentProject, terminalHook.createTerminal, terminalHook.closeTerminal]);
+
+  const handleOpenCode = useCallback(async () => {
+    if (!currentProject || !window.electronAPI?.opencode) return;
+    const requestId = ++openCodeRequest.current;
+    setOpenCodeSetup({ open: true, phase: 'checking', progress: '', error: '' });
+    try {
+      const status = await window.electronAPI.opencode.getStatus();
+      if (requestId !== openCodeRequest.current) return;
+      setOpenCodeStatus(status);
+      if (status.usable) await launchOpenCodeTerminal(requestId);
+      else setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: status.installed ? 'La instalación existente de OpenCode no se puede ejecutar y debe repararse.' : '' });
+    } catch (error) {
+      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || 'No se pudo comprobar OpenCode.' });
+    }
+  }, [currentProject, launchOpenCodeTerminal]);
+
+  const installOpenCode = useCallback(async () => {
+    const requestId = ++openCodeRequest.current;
+    setOpenCodeSetup({ open: true, phase: 'installing', progress: 'Descargando el paquete oficial…', error: '' });
+    try {
+      const result = await window.electronAPI.opencode.install();
+      if (requestId !== openCodeRequest.current) return;
+      if (result.cancelled) {
+        setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: '' });
+        return;
+      }
+      if (!result.success) throw new Error(result.error || 'No se pudo instalar OpenCode.');
+      setOpenCodeStatus(result.status);
+      await launchOpenCodeTerminal(requestId);
+    } catch (error) {
+      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || 'No se pudo instalar OpenCode.' });
+    }
+  }, [launchOpenCodeTerminal]);
+
+  const closeOpenCodeSetup = useCallback(() => {
+    openCodeRequest.current += 1;
+    setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
   }, []);
 
+  useEffect(() => {
+    if (!window.electronAPI?.opencode?.onInstallProgress) return undefined;
+    return window.electronAPI.opencode.onInstallProgress((progress) => {
+      setOpenCodeSetup((current) => current.phase === 'installing'
+        ? { ...current, progress: progress.message || current.progress }
+        : current);
+    });
+  }, []);
+
+  const handleNavigate = useCallback((view) => {
+    if (view === 'opencode') handleOpenCode();
+    else setActiveView(view);
+  }, [handleOpenCode]);
+
+  const handleProjectSelect = useCallback((project) => {
+    terminalHook.closeAllTerminals();
+    closeOpenCodeSetup();
+    setCurrentProject(project);
+    setActiveView(VIEWS.DASHBOARD);
+  }, [terminalHook.closeAllTerminals, closeOpenCodeSetup, setCurrentProject]);
+
   const handleBackToProjects = useCallback(() => {
+    terminalHook.closeAllTerminals();
+    closeOpenCodeSetup();
     clearCurrentProject();
     setActiveView(VIEWS.PROJECTS);
-  }, [clearCurrentProject]);
+  }, [clearCurrentProject, terminalHook.closeAllTerminals, closeOpenCodeSetup]);
 
   // Theme toggle
   const toggleTheme = useCallback(() => {
@@ -161,6 +236,7 @@ function Workspace() {
             onRefreshService={serviceHook.checkOne}
             onOpenTerminal={handleOpenTerminal}
             onOpenClaude={handleOpenClaude}
+            onOpenCode={handleOpenCode}
             onOpenProjects={() => setActiveView(VIEWS.PROJECTS)}
           />
         );
@@ -211,9 +287,10 @@ function Workspace() {
       <div className="app-layout">
         <Sidebar
           activeView={activeView}
-          onNavigate={setActiveView}
+          onNavigate={handleNavigate}
           connectedCount={serviceHook.connectedCount}
           claudeAvailable={claudeHook.isAvailable}
+          openCodeAvailable={Boolean(openCodeStatus?.installed)}
           isDarkMode={isDarkMode}
           onToggleTheme={toggleTheme}
           currentProject={currentProject}
@@ -223,6 +300,7 @@ function Workspace() {
         <main className="main-content">
           {renderView()}
         </main>
+        {openCodeSetup.open && <OpenCodeSetupDialog state={openCodeSetup} onClose={closeOpenCodeSetup} onInstall={installOpenCode} />}
       </div>
     </>
   );

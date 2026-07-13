@@ -4,6 +4,8 @@
 
 ### Added
 
+- Optional OpenCode agent with explicit installation consent and project-terminal launch.
+- Independent OpenCode provider status for configured OAuth/API connections.
 - Guided project creation for Next.js, React Vite, and Flutter Android plus Next.js mobile suites.
 - Setup Center for Windows tool diagnosis and one-confirmation installation.
 - Automatic private GitHub repository, personal Vercel project, production deployment, and backend provisioning.
@@ -17,6 +19,7 @@
 
 ### Changed
 
+- Agent terminals now close when switching projects, and OpenCode uses a main-process-resolved executable instead of shell lookup.
 - Project import and registration now validate paths in the Electron main process.
 - Windows packaging uses tested native prebuilds instead of requiring Visual Studio Build Tools.
 - Project title and path presentation in the custom titlebar.

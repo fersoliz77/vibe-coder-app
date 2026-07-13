@@ -49,6 +49,7 @@ This folder is the implementation reference for the Windows desktop application.
 - `Docs/03-Features/TERMINAL.md`
 - `Docs/03-Features/CLAUDE.md`
 - `Docs/03-Features/PROJECTS_AND_DASHBOARD.md`
+- `Docs/03-Features/OPENCODE.md`
 
 `Docs/03-Features/SERVICES_TERMINAL_CLAUDE.md` remains only as a legacy overview and should not be treated as the main implementation reference.
 

@@ -8,6 +8,7 @@ const { setupServiceHandlers } = require('./services/serviceManager');
 const { setupTerminalHandlers, terminateAllTerminals } = require('./services/terminalManager');
 const { setupClaudeHandlers, terminateAllClaudeProcesses } = require('./services/claudeManager');
 const { setupOpenAIHandlers, terminateAllOpenAIProcesses } = require('./services/openaiManager');
+const { setupOpenCodeHandlers, terminateAllOpenCodeProcesses } = require('./services/openCodeManager');
 const { initProjectManager, setupProjectHandlers, registerProject } = require('./services/projectManager');
 const { setupEnvironmentHandlers, cancelEnvironmentInstallation } = require('./services/environmentManager');
 const { setupProjectProvisionerHandlers } = require('./services/projectProvisioner');
@@ -113,6 +114,7 @@ app.whenReady().then(() => {
       terminateAllTerminals();
       terminateAllClaudeProcesses();
       terminateAllOpenAIProcesses();
+      terminateAllOpenCodeProcesses();
       cancelEnvironmentInstallation();
       projectProvisioner?.terminateAllProvisions();
     }
@@ -141,6 +143,8 @@ app.whenReady().then(() => {
     authRealtime.stop().catch(() => {});
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
+    terminateAllOpenCodeProcesses();
+    terminateAllTerminals();
   });
 
   // Initialize Managers
@@ -158,6 +162,7 @@ app.whenReady().then(() => {
   setupTerminalHandlers(ipcMain, () => mainWindow);
   setupClaudeHandlers(ipcMain, () => mainWindow);
   setupOpenAIHandlers(ipcMain, () => mainWindow);
+  setupOpenCodeHandlers(ipcMain, () => mainWindow);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

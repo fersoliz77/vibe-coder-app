@@ -15,6 +15,9 @@ This log records implementation history in chronological order. Each entry shoul
 
 ### Key Changes
 
+- Added optional OpenCode `1.17.18` detection, native installation consent, provider status, and direct PTY launch.
+- Kept OpenCode out of the installer and Setup Center requirements so it is downloaded only when requested.
+- Added a main-process terminal mode that prevents project-local command hijacking.
 - Added `environmentManager.js`, `projectProvisioner.js`, Setup Center, and Create Project Wizard.
 - Added temporary location grants, cancellable subprocess tracking, sanitized progress, and partial-failure recovery.
 - Bundled the official Supabase CLI and reused native `node-pty` prebuilds during packaging.
@@ -22,10 +25,11 @@ This log records implementation history in chronological order. Each entry shoul
 
 ### Validation
 
-- `npm run check` with 41 passing tests.
+- `npm run check` with 45 passing tests.
 - `npm audit --omit=dev` with zero vulnerabilities.
 - `npm run package:dir` and packaged executable smoke test.
 - `npm run package` produced `dist-electron/Vibe IDE Code Setup 1.0.0.exe`.
+- Real OpenCode `1.17.18` status detected OpenAI and Anthropic without exposing credentials.
 
 ---
 

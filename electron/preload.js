@@ -141,4 +141,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onError: (callback) => subscribe('openai:error', callback),
     onLoginProgress: (callback) => subscribe('openai:login-progress', callback),
   },
+
+  opencode: {
+    getStatus: () => ipcRenderer.invoke('opencode:status'),
+    install: () => ipcRenderer.invoke('opencode:install'),
+    onInstallProgress: (callback) => subscribe('opencode:install-progress', callback, (progress) => [progress]),
+  },
 });

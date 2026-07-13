@@ -2,6 +2,7 @@ import ServiceCard from '../services/ServiceCard';
 import GlobalServices from '../services/GlobalServices';
 import { useAuth } from '../auth/AuthContext';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
+import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
 import './Dashboard.css';
 
 const QUICK_ACTIONS = [
@@ -22,9 +23,15 @@ const QUICK_ACTIONS = [
     description: 'Jump into the AI panel with this project preloaded.',
     icon: <ClaudeIcon />,
   },
+  {
+    id: 'opencode',
+    title: 'OpenCode',
+    description: 'Launch the OpenCode agent in a dedicated project terminal.',
+    icon: <OpenCodeIcon />,
+  },
 ];
 
-export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOpenProjects, onRefreshAll, onRefreshService, currentProject }) {
+export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOpenCode, onOpenProjects, onRefreshAll, onRefreshService, currentProject }) {
   const { services: serviceList, connectedCount } = services;
   const { state: authState } = useAuth();
   const membership = authState.membership || {};
@@ -92,7 +99,8 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                 </button>
               )}
               {currentProject && QUICK_ACTIONS.map((action) => {
-                const handleClick = action.id === 'terminal' ? onOpenTerminal : onOpenClaude;
+                const handlers = { terminal: onOpenTerminal, claude: onOpenClaude, opencode: onOpenCode };
+                const handleClick = handlers[action.id];
                 return (
                   <button
                     key={action.id}

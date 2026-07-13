@@ -30,18 +30,23 @@ export default function SettingsPanel({ theme, onSetTheme }) {
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [accessibility, setAccessibility] = useState(readAccessibility);
-  const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, error: '' });
+  const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
 
   const refreshProviders = async () => {
     setProviders((current) => ({ ...current, loading: true, error: '' }));
     try {
-      const [claude, openai] = await Promise.all([
+      const [claudeResult, openaiResult, openCodeResult] = await Promise.allSettled([
         window.electronAPI.claude.getStatus(),
         window.electronAPI.openai.getStatus(),
+        window.electronAPI.opencode.getStatus(),
       ]);
-      setProviders({ loading: false, claude, openai, error: '' });
+      const claude = claudeResult.status === 'fulfilled' ? claudeResult.value : null;
+      const openai = openaiResult.status === 'fulfilled' ? openaiResult.value : null;
+      const opencode = openCodeResult.status === 'fulfilled' ? openCodeResult.value : null;
+      const failed = [claudeResult, openaiResult, openCodeResult].some((result) => result.status === 'rejected');
+      setProviders({ loading: false, claude, openai, opencode, error: failed ? 'Uno o más estados no están disponibles.' : '' });
     } catch {
-      setProviders({ loading: false, claude: null, openai: null, error: 'Estado no disponible con el acceso actual.' });
+      setProviders({ loading: false, claude: null, openai: null, opencode: null, error: 'Estado no disponible con el acceso actual.' });
     }
   };
 
@@ -117,10 +122,11 @@ export default function SettingsPanel({ theme, onSetTheme }) {
 
         <section className="settings-card settings-card--wide">
           <div className="settings-card__heading"><div><span>BYOAI</span><h2>Tus modelos, tus cuentas</h2></div><button className="btn btn--small" type="button" disabled={providers.loading} onClick={refreshProviders}>Actualizar estados</button></div>
-          <p className="settings-copy">Vibe IDE Code se conecta a las instalaciones locales de Claude Code y OpenAI Codex. La autenticación, el modelo elegido, los costos y los límites pertenecen a tu cuenta con cada proveedor. Vibe IDE Code no solicita ni almacena tokens.</p>
+          <p className="settings-copy">Claude Code, OpenAI Codex y OpenCode mantienen autenticaciones independientes. OpenCode es opcional y sólo se descarga cuando confirmas su instalación. Vibe IDE Code no solicita ni almacena sus tokens.</p>
           <div className="settings-providers">
             <ProviderStatus name="Claude Code" loading={providers.loading} connected={providers.claude?.authenticated} detail={!providers.claude?.installed ? 'CLI no instalada' : providers.claude?.authenticated ? `Conectado${providers.claude.version ? ` · ${providers.claude.version}` : ''}` : 'Instalado, sin autenticar'} />
             <ProviderStatus name="OpenAI · Codex" loading={providers.loading} connected={providers.openai?.authenticated} detail={providers.openai?.authenticated ? `Conectado · ${providers.openai.email || 'cuenta OpenAI'}` : 'No conectado'} />
+            <ProviderStatus name="OpenCode" loading={providers.loading} connected={providers.opencode?.authenticated} detail={!providers.opencode?.installed ? 'Opcional · no instalado' : !providers.opencode?.usable ? 'Instalación detectada, requiere reparación' : providers.opencode?.authenticated ? `${providers.opencode.providers.join(', ')}${providers.opencode.version ? ` · ${providers.opencode.version}` : ''}` : 'Instalado · usa /connect en la terminal'} />
           </div>
           {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
         </section>

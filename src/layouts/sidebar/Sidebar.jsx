@@ -1,5 +1,6 @@
 import './Sidebar.css';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
+import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
 
 const NAV_ITEMS = [
   {
@@ -47,9 +48,14 @@ const NAV_ITEMS = [
       </svg>
     ),
   },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    icon: <OpenCodeIcon />,
+  },
 ];
 
-export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
+export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
   return (
     <aside className="sidebar">
       {/* Navigation */}
@@ -93,6 +99,9 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                   <span className="sidebar__badge sidebar__badge--success">{connectedCount}</span>
                 )}
                 {item.id === 'claude' && claudeAvailable && (
+                  <span className="sidebar__badge sidebar__badge--success">✓</span>
+                )}
+                {item.id === 'opencode' && openCodeAvailable && (
                   <span className="sidebar__badge sidebar__badge--success">✓</span>
                 )}
               </button>

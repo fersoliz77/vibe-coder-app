@@ -584,5 +584,6 @@ module.exports = {
   installAllEnvironment,
   normalizeOptions,
   parseVersionOutput,
+  resolveNpmInvocation,
   setupEnvironmentHandlers,
 };

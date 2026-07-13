@@ -19,6 +19,7 @@ The terminal feature provides project-scoped shell access inside the app.
 - Resize PTY sessions when terminal containers change size
 - Close terminal sessions and keep active tab routing coherent
 - Fall back to a renderer-visible error state when `node-pty` is unavailable
+- Launch the trusted OpenCode executable directly in a dedicated project terminal
 
 ## Behavior
 
@@ -46,6 +47,7 @@ The terminal feature provides project-scoped shell access inside the app.
 - `electron/services/terminalManager.js` keeps PTY processes in an in-memory `Map`.
 - A new terminal receives a generated id such as `term-1`.
 - The default shell comes from `COMSPEC` on Windows or `SHELL` on Unix-like systems.
+- The allowlisted `opencode` mode resolves its executable in the main process and bypasses project-local command lookup.
 - PTY output is pushed back to the renderer with `terminal:data` events.
 
 ### Resize and Close Behavior
@@ -70,6 +72,7 @@ If `node-pty` is unavailable, the renderer still creates a placeholder terminal 
 
 - Terminal sessions are runtime-only and are not restored after app restart.
 - Shell startup behavior depends on the local machine environment.
+- All terminal sessions are closed when the active project changes.
 - PTY creation assumes the requested project path is valid and available on disk.
 
 ## Risk Notes

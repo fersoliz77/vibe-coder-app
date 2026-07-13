@@ -15,11 +15,12 @@ export function useTerminal(projectPath) {
       return newTerm;
     }
 
-    const mergedOptions = { cwd: projectPath, ...options };
+    const { name, ...terminalOptions } = options;
+    const mergedOptions = { cwd: projectPath, ...terminalOptions };
     const result = await window.electronAPI.terminal.create(mergedOptions);
     const newTerm = {
       id: result.id,
-      name: `Terminal ${terminals.length + 1}`,
+      name: name || `Terminal ${terminals.length + 1}`,
       shell: result.shell,
       error: result.error,
     };
@@ -60,6 +61,15 @@ export function useTerminal(projectPath) {
     xtermRefs.current.set(id, xtermInstance);
   }, []);
 
+  const closeAllTerminals = useCallback(() => {
+    for (const terminal of terminals) {
+      window.electronAPI?.terminal?.destroy(terminal.id);
+      xtermRefs.current.delete(terminal.id);
+    }
+    setTerminals([]);
+    setActiveTerminalId(null);
+  }, [terminals]);
+
   const getXterm = useCallback((id) => {
     return xtermRefs.current.get(id);
   }, []);
@@ -93,5 +103,6 @@ export function useTerminal(projectPath) {
     resizeTerminal,
     registerXterm,
     getXterm,
+    closeAllTerminals,
   };
 }
