@@ -66,6 +66,12 @@ function assertSafeModel(model) {
   return value;
 }
 
+function buildOpenCodeAuthCommand(opencodePath, action) {
+  if (!path.isAbsolute(opencodePath)) throw new Error('OpenCode path must be absolute.');
+  if (action !== 'login' && action !== 'logout') throw new Error('Unsupported OpenCode authentication action.');
+  return `call "${opencodePath.replaceAll('"', '""')}" auth ${action} & exit`;
+}
+
 async function sendChatMessage(prompt, conversationHistory = [], model, cwd, mainWindow) {
   return new Promise((resolve) => {
     let validatedCwd;
@@ -183,7 +189,7 @@ function setupOpenAIHandlers(ipcMain, getMainWindow) {
     try {
       const command = process.env.ComSpec || 'cmd.exe';
       const opencodePath = resolveOpenCodePath();
-      const child = spawn(command, ['/d', '/s', '/c', `start "OpenCode authentication" "${opencodePath}" auth login`], {
+      const child = spawn(command, ['/d', '/k', buildOpenCodeAuthCommand(opencodePath, 'login')], {
         detached: true,
         windowsHide: false,
         stdio: 'ignore',
@@ -200,7 +206,7 @@ function setupOpenAIHandlers(ipcMain, getMainWindow) {
     try {
       const command = process.env.ComSpec || 'cmd.exe';
       const opencodePath = resolveOpenCodePath();
-      const child = spawn(command, ['/d', '/s', '/c', `start "OpenCode logout" "${opencodePath}" auth logout`], {
+      const child = spawn(command, ['/d', '/k', buildOpenCodeAuthCommand(opencodePath, 'logout')], {
         detached: true,
         windowsHide: false,
         stdio: 'ignore',
@@ -241,4 +247,4 @@ function terminateAllOpenAIProcesses() {
   activeRun = null;
 }
 
-module.exports = { setupOpenAIHandlers, terminateAllOpenAIProcesses };
+module.exports = { buildOpenCodeAuthCommand, setupOpenAIHandlers, terminateAllOpenAIProcesses };

@@ -1,18 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
+import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import './ClaudePanel.css';
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
-
-function ClaudeAvatar({ size = 20 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z" />
-      <path d="M6 10a6 6 0 0 0 12 0" />
-      <path d="M12 16v4" />
-      <path d="M8 22h8" />
-    </svg>
-  );
-}
 
 function ProgressLog({ entries }) {
   const bottomRef = useRef(null);
@@ -36,7 +26,7 @@ function NotInstalledScreen({ onInstall, isInstalling, installLog }) {
   return (
     <div className="claude-setup-screen">
       <div className="claude-setup-screen__icon">
-        <ClaudeAvatar size={48} />
+        <ClaudeIcon size={48} />
       </div>
       <h2 className="claude-setup-screen__title">Claude Code no está instalado</h2>
       <p className="claude-setup-screen__desc">
@@ -70,7 +60,7 @@ function NotAuthenticatedScreen({ onLogin, isLoggingIn, loginLog, version }) {
   return (
     <div className="claude-setup-screen">
       <div className="claude-setup-screen__icon claude-setup-screen__icon--auth">
-        <ClaudeAvatar size={48} />
+        <ClaudeIcon size={48} />
         <div className="claude-setup-screen__icon-badge">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
         </div>
@@ -147,7 +137,7 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
         {messages.length === 0 && !currentResponse && (
           <div className="claude-panel__welcome">
             <div className="claude-panel__welcome-icon">
-              <ClaudeAvatar size={48} />
+              <ClaudeIcon size={48} />
             </div>
             <h3 className="claude-panel__welcome-title">Claude Code Assistant</h3>
             <p className="claude-panel__welcome-desc text-secondary">
@@ -189,7 +179,7 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
         {messages.map((msg, i) => (
           <div key={i} className={`claude-panel__message claude-panel__message--${msg.role}`}>
             {msg.role === 'user' && <div className="claude-panel__message-avatar claude-panel__message-avatar--user">Tú</div>}
-            {msg.role === 'assistant' && <div className="claude-panel__message-avatar claude-panel__message-avatar--assistant"><ClaudeAvatar size={14} /></div>}
+            {msg.role === 'assistant' && <div className="claude-panel__message-avatar claude-panel__message-avatar--assistant"><ClaudeIcon size={14} /></div>}
             {msg.role === 'error' && <div className="claude-panel__message-avatar claude-panel__message-avatar--error">!</div>}
             <div className="claude-panel__message-content">
               <pre className="claude-panel__message-text">{msg.content}</pre>
@@ -199,7 +189,7 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
 
         {currentResponse && (
           <div className="claude-panel__message claude-panel__message--assistant claude-panel__message--streaming">
-            <div className="claude-panel__message-avatar claude-panel__message-avatar--assistant"><ClaudeAvatar size={14} /></div>
+            <div className="claude-panel__message-avatar claude-panel__message-avatar--assistant"><ClaudeIcon size={14} /></div>
             <div className="claude-panel__message-content">
               <pre className="claude-panel__message-text">{currentResponse}</pre>
               <div className="claude-panel__cursor" />
@@ -281,7 +271,7 @@ export default function ClaudePanel({
       {/* Header — always shown */}
       <div className="claude-panel__header">
         <div className="claude-panel__header-left">
-          <div className="claude-panel__avatar"><ClaudeAvatar /></div>
+          <div className="claude-panel__avatar"><ClaudeIcon size={20} /></div>
           <div className="claude-panel__header-info">
             <h2 className="claude-panel__title">Claude Code</h2>
             <span className={`claude-panel__status ${isAvailable ? 'claude-panel__status--available' : status.loading ? 'claude-panel__status--loading' : ''}`}>

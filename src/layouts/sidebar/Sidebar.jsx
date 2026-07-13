@@ -1,4 +1,5 @@
 import './Sidebar.css';
+import ClaudeIcon from '../../components/icons/ClaudeIcon';
 
 const NAV_ITEMS = [
   {
@@ -35,16 +36,7 @@ const NAV_ITEMS = [
   {
     id: 'claude',
     label: 'Claude AI',
-    icon: (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M12 2a4 4 0 0 1 4 4v1a4 4 0 0 1-8 0V6a4 4 0 0 1 4-4z" />
-        <path d="M6 10a6 6 0 0 0 12 0" />
-        <path d="M12 16v4" />
-        <path d="M8 22h8" />
-        <circle cx="9" cy="7" r="0.8" fill="currentColor" />
-        <circle cx="15" cy="7" r="0.8" fill="currentColor" />
-      </svg>
-    ),
+    icon: <ClaudeIcon />,
   },
   {
     id: 'openai',
