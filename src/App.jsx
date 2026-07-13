@@ -159,7 +159,10 @@ function Workspace() {
   const handleOpenCode = useCallback(async () => {
     if (!currentProject || !window.electronAPI?.opencode) return;
     const requestId = ++openCodeRequest.current;
-    setOpenCodeSetup({ open: true, phase: 'checking', progress: '', error: '' });
+    if (openCodeStatus?.usable) {
+      await launchOpenCodeTerminal(requestId);
+      return;
+    }
     try {
       const status = await window.electronAPI.opencode.getStatus();
       if (requestId !== openCodeRequest.current) return;
@@ -169,7 +172,7 @@ function Workspace() {
     } catch (error) {
       setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || 'No se pudo comprobar OpenCode.' });
     }
-  }, [currentProject, launchOpenCodeTerminal]);
+  }, [currentProject, launchOpenCodeTerminal, openCodeStatus]);
 
   const installOpenCode = useCallback(async () => {
     const requestId = ++openCodeRequest.current;
