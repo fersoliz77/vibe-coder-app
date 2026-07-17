@@ -5,6 +5,8 @@ export function useTerminal(projectPath) {
   const [activeTerminalId, setActiveTerminalId] = useState(null);
   const xtermRefs = useRef(new Map());
 
+  const [openCodeTerminal, setOpenCodeTerminal] = useState(null);
+
   const createTerminal = useCallback(async (options = {}) => {
     if (!window.electronAPI?.terminal) {
       // Browser fallback
@@ -28,6 +30,31 @@ export function useTerminal(projectPath) {
     setActiveTerminalId(result.id);
     return newTerm;
   }, [terminals.length, projectPath]);
+
+  const createOpenCodeTerminal = useCallback(async () => {
+    if (!window.electronAPI?.terminal) return null;
+    if (openCodeTerminal) return openCodeTerminal;
+
+    const result = await window.electronAPI.terminal.create({
+      cwd: projectPath,
+      name: 'OpenCode',
+      mode: 'opencode'
+    });
+
+    if (result.error) {
+      console.error('Failed to create preloaded OpenCode terminal:', result.error);
+      return null;
+    }
+
+    const newTerm = {
+      id: result.id,
+      name: 'OpenCode',
+      shell: result.shell,
+      error: result.error,
+    };
+    setOpenCodeTerminal(newTerm);
+    return newTerm;
+  }, [openCodeTerminal, projectPath]);
 
   const closeTerminal = useCallback((id) => {
     if (window.electronAPI?.terminal) {
@@ -68,7 +95,13 @@ export function useTerminal(projectPath) {
     }
     setTerminals([]);
     setActiveTerminalId(null);
-  }, [terminals]);
+
+    if (openCodeTerminal) {
+      window.electronAPI?.terminal?.destroy(openCodeTerminal.id);
+      xtermRefs.current.delete(openCodeTerminal.id);
+      setOpenCodeTerminal(null);
+    }
+  }, [terminals, openCodeTerminal]);
 
   const getXterm = useCallback((id) => {
     return xtermRefs.current.get(id);
@@ -84,14 +117,18 @@ export function useTerminal(projectPath) {
     });
 
     const unsubscribeExit = window.electronAPI.terminal.onExit((id) => {
-      closeTerminal(id);
+      if (openCodeTerminal && id === openCodeTerminal.id) {
+        setOpenCodeTerminal(null);
+      } else {
+        closeTerminal(id);
+      }
     });
 
     return () => {
       unsubscribeData?.();
       unsubscribeExit?.();
     };
-  }, [closeTerminal]);
+  }, [closeTerminal, openCodeTerminal]);
 
   return {
     terminals,
@@ -104,5 +141,7 @@ export function useTerminal(projectPath) {
     registerXterm,
     getXterm,
     closeAllTerminals,
+    openCodeTerminal,
+    createOpenCodeTerminal,
   };
 }

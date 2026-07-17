@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { getName, getParentDirectory } from './explorerUtils';
 
 export function useExplorerKeyboardShortcuts({
+  t,
   activeTabDirty,
   clipboardEntry,
   setClipboardEntry,
@@ -36,7 +37,7 @@ export function useExplorerKeyboardShortcuts({
         event.preventDefault();
         const path = selectedPaths[0];
         setClipboardEntry({ path, name: getName(path), mode: 'copy' });
-        setStatusMessage(`Copied ${getName(path)}.`);
+        setStatusMessage(t('explorer.copied', { name: getName(path) }));
         return;
       }
 
@@ -44,7 +45,7 @@ export function useExplorerKeyboardShortcuts({
         event.preventDefault();
         const path = selectedPaths[0];
         setClipboardEntry({ path, name: getName(path), mode: 'cut' });
-        setStatusMessage(`Cut ${getName(path)}.`);
+        setStatusMessage(t('explorer.cut', { name: getName(path) }));
         return;
       }
 
@@ -64,5 +65,5 @@ export function useExplorerKeyboardShortcuts({
 
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [activeTabDirty, clipboardEntry, handlePasteInto, projectPath, selectedEntry, selectedPaths, setClipboardEntry, setRenamingPath, setRenamingValue, setStatusMessage]);
+  }, [activeTabDirty, clipboardEntry, handlePasteInto, projectPath, selectedEntry, selectedPaths, setClipboardEntry, setRenamingPath, setRenamingValue, setStatusMessage, t]);
 }

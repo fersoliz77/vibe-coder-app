@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { getName, getParentDirectory, isStagedCode } from './explorerUtils';
 
 export function useExplorerActions({
+  t,
   project,
   selectedEntry,
   selectedPaths,
@@ -52,14 +53,14 @@ export function useExplorerActions({
     }
     const result = await window.electronAPI.fs.renameEntry(project.path, node.path, nextName);
     if (!result.success) {
-      setStatusMessage(result.error || 'Rename failed.');
+      setStatusMessage(result.error || t('explorer.renameFailed'));
       return;
     }
     remapPaths(result.oldPath, result.path);
     clearRename();
     await refreshTree();
-    setStatusMessage('Renamed successfully.');
-  }, [project.path, refreshTree, remapPaths]);
+    setStatusMessage(t('explorer.renamed'));
+  }, [project.path, refreshTree, remapPaths, t]);
 
   const handleContextMenu = useCallback((event, node, selectNodeWithRoot) => {
     event.preventDefault();
@@ -89,7 +90,7 @@ export function useExplorerActions({
     }
 
     if (!result?.success) {
-      setStatusMessage(result?.error || 'Action failed.');
+      setStatusMessage(result?.error || t('explorer.actionFailed'));
       return;
     }
 
@@ -103,15 +104,15 @@ export function useExplorerActions({
     await refreshTree();
     setModalAction(null);
     setStatusMessage(
-      modalAction.type === 'bulk-delete' ? 'Deleted selected items.' :
-      modalAction.type === 'delete' ? 'Deleted successfully.' :
-      modalAction.type === 'git-commit' ? 'Commit created successfully.' :
-      'Created successfully.'
+      modalAction.type === 'bulk-delete' ? t('explorer.deletedSelected') :
+      modalAction.type === 'delete' ? t('explorer.deleted') :
+      modalAction.type === 'git-commit' ? t('explorer.commitCreated') :
+      t('explorer.created')
     );
     if (modalAction.type === 'new-file' && result.path) {
       await openPreview(result.path);
     }
-  }, [modalAction, openPreview, project.path, refreshTree, removeTabsForPaths, selectedPaths, setSelectedEntry, setSelectedPaths]);
+  }, [modalAction, openPreview, project.path, refreshTree, removeTabsForPaths, selectedPaths, setSelectedEntry, setSelectedPaths, t]);
 
   const handleGitStageToggle = useCallback(async (entry) => {
     const absolutePath = `${project.path}\\${String(entry.path || '').replace(/\//g, '\\')}`;
@@ -120,13 +121,13 @@ export function useExplorerActions({
       : await window.electronAPI.fs.gitStage(project.path, absolutePath);
 
     if (!result.success) {
-      setStatusMessage(result.error || 'Git action failed.');
+      setStatusMessage(result.error || t('explorer.gitActionFailed'));
       return;
     }
 
     await loadGitStatus();
-    setStatusMessage(isStagedCode(entry.code) ? `Unstaged ${entry.path}.` : `Staged ${entry.path}.`);
-  }, [loadGitStatus, project.path]);
+    setStatusMessage(isStagedCode(entry.code) ? t('explorer.unstaged', entry) : t('explorer.staged', entry));
+  }, [loadGitStatus, project.path, t]);
 
   const openCommitAction = useCallback(() => {
     setModalAction({ type: 'git-commit' });
@@ -137,19 +138,19 @@ export function useExplorerActions({
     if (getParentDirectory(sourcePath) === targetDir) return;
     const result = await window.electronAPI.fs.moveEntry(project.path, sourcePath, targetDir);
     if (!result.success) {
-      setStatusMessage(result.error || 'Move failed.');
+      setStatusMessage(result.error || t('explorer.moveFailed'));
       return;
     }
     remapPaths(result.oldPath, result.path);
     await refreshTree();
-    setStatusMessage(`Moved ${getName(result.oldPath)} into ${getName(targetDir)}.`);
-  }, [project.path, refreshTree, remapPaths]);
+    setStatusMessage(t('explorer.movedInto', { name: getName(result.oldPath), target: getName(targetDir) }));
+  }, [project.path, refreshTree, remapPaths, t]);
 
   const handleCopyEntry = useCallback((node, mode = 'copy') => {
     setClipboardEntry({ path: node.path, name: node.name, mode, isDirectory: node.isDirectory });
     setContextMenu(null);
-    setStatusMessage(`${mode === 'cut' ? 'Cut' : 'Copied'} ${node.name}.`);
-  }, []);
+    setStatusMessage(t(mode === 'cut' ? 'explorer.cut' : 'explorer.copied', node));
+  }, [t]);
 
   const handlePasteInto = useCallback(async (node) => {
     if (!clipboardEntry) return;
@@ -158,7 +159,7 @@ export function useExplorerActions({
       ? await window.electronAPI.fs.moveEntry(project.path, clipboardEntry.path, targetDir)
       : await window.electronAPI.fs.copyEntry(project.path, clipboardEntry.path, targetDir);
     if (!result.success) {
-      setStatusMessage(result.error || 'Paste failed.');
+      setStatusMessage(result.error || t('explorer.pasteFailed'));
       return;
     }
     if (clipboardEntry.mode === 'cut') {
@@ -166,37 +167,37 @@ export function useExplorerActions({
       setClipboardEntry(null);
     }
     await refreshTree();
-    setStatusMessage(`${clipboardEntry.mode === 'cut' ? 'Moved' : 'Pasted'} ${clipboardEntry.name} into ${getName(targetDir)}.`);
+    setStatusMessage(t(clipboardEntry.mode === 'cut' ? 'explorer.movedInto' : 'explorer.pastedInto', { name: clipboardEntry.name, target: getName(targetDir) }));
     setContextMenu(null);
-  }, [clipboardEntry, project.path, refreshTree, remapPaths]);
+  }, [clipboardEntry, project.path, refreshTree, remapPaths, t]);
 
   const handleDuplicateEntry = useCallback(async (node) => {
     const result = await window.electronAPI.fs.duplicateEntry(project.path, node.path);
     if (!result.success) {
-      setStatusMessage(result.error || 'Duplicate failed.');
+      setStatusMessage(result.error || t('explorer.duplicateFailed'));
       return;
     }
     await refreshTree();
-    setStatusMessage(`Duplicated ${node.name}.`);
+    setStatusMessage(t('explorer.duplicated', node));
     setContextMenu(null);
-  }, [project.path, refreshTree]);
+  }, [project.path, refreshTree, t]);
 
   const contextActions = useMemo(() => {
     if (!contextMenu?.node) return [];
     const node = contextMenu.node;
     return [
-      { id: 'new-file', label: 'New File', onClick: () => openCreateAction('new-file', node) },
-      { id: 'new-folder', label: 'New Folder', onClick: () => openCreateAction('new-folder', node) },
-      { id: 'rename', label: 'Rename', onClick: () => { setRenamingPath(node.path); setRenamingValue(node.name); setContextMenu(null); }, hidden: node.isRoot },
-      { id: 'copy', label: 'Copy', onClick: () => handleCopyEntry(node, 'copy'), hidden: node.isRoot },
-      { id: 'cut', label: 'Cut', onClick: () => handleCopyEntry(node, 'cut'), hidden: node.isRoot },
-      { id: 'paste', label: 'Paste Into', onClick: () => handlePasteInto(node), disabled: !clipboardEntry },
-      { id: 'duplicate', label: 'Duplicate', onClick: () => handleDuplicateEntry(node), hidden: node.isRoot },
-      { id: 'reveal', label: 'Open in Explorer', onClick: () => revealFolder(node.isDirectory ? node.path : getParentDirectory(node.path)) },
-      { id: 'open', label: 'Open File', onClick: () => openExternal(node.path), hidden: node.isDirectory },
-      { id: 'delete', label: selectedPaths.length > 1 && selectedPaths.includes(node.path) ? `Delete ${selectedPaths.length} Selected` : 'Delete', danger: true, onClick: () => openDeleteAction(node), hidden: node.isRoot && selectedPaths.length <= 1 },
+      { id: 'new-file', label: t('explorer.newFileMenu'), onClick: () => openCreateAction('new-file', node) },
+      { id: 'new-folder', label: t('explorer.newFolderMenu'), onClick: () => openCreateAction('new-folder', node) },
+      { id: 'rename', label: t('explorer.rename'), onClick: () => { setRenamingPath(node.path); setRenamingValue(node.name); setContextMenu(null); }, hidden: node.isRoot },
+      { id: 'copy', label: t('explorer.copy'), onClick: () => handleCopyEntry(node, 'copy'), hidden: node.isRoot },
+      { id: 'cut', label: t('explorer.cutLabel'), onClick: () => handleCopyEntry(node, 'cut'), hidden: node.isRoot },
+      { id: 'paste', label: t('explorer.pasteInto'), onClick: () => handlePasteInto(node), disabled: !clipboardEntry },
+      { id: 'duplicate', label: t('explorer.duplicate'), onClick: () => handleDuplicateEntry(node), hidden: node.isRoot },
+      { id: 'reveal', label: t('explorer.openInExplorer'), onClick: () => revealFolder(node.isDirectory ? node.path : getParentDirectory(node.path)) },
+      { id: 'open', label: t('explorer.openFile'), onClick: () => openExternal(node.path), hidden: node.isDirectory },
+      { id: 'delete', label: selectedPaths.length > 1 && selectedPaths.includes(node.path) ? t('explorer.deleteSelectedCount', { count: selectedPaths.length }) : t('explorer.delete'), danger: true, onClick: () => openDeleteAction(node), hidden: node.isRoot && selectedPaths.length <= 1 },
     ].filter((item) => !item.hidden);
-  }, [clipboardEntry, contextMenu, handleCopyEntry, handleDuplicateEntry, handlePasteInto, openCreateAction, openDeleteAction, openExternal, revealFolder, selectedPaths, setRenamingPath, setRenamingValue]);
+  }, [clipboardEntry, contextMenu, handleCopyEntry, handleDuplicateEntry, handlePasteInto, openCreateAction, openDeleteAction, openExternal, revealFolder, selectedPaths, setRenamingPath, setRenamingValue, t]);
 
   return {
     contextMenu,

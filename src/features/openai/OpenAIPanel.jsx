@@ -1,14 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useI18n } from '../../i18n/I18nContext';
 import './OpenAIPanel.css';
-
-const REASONING_LABELS = {
-  low: 'Low · rápido',
-  medium: 'Medium · equilibrado',
-  high: 'High · profundo',
-  xhigh: 'XHigh · muy profundo',
-  max: 'Max · máximo',
-  ultra: 'Ultra · delegación automática',
-};
 
 function OpenAIAvatar({ size = 20 }) {
   return (
@@ -35,18 +27,19 @@ function ProgressLog({ entries }) {
 }
 
 function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
+  const { t } = useI18n();
   return (
     <div className="openai-setup-screen">
       <div className="openai-setup-screen__icon">
         <OpenAIAvatar size={48} />
       </div>
-      <h2 className="openai-setup-screen__title">Conectá tu cuenta de OpenAI</h2>
+      <h2 className="openai-setup-screen__title">{t('ai.openaiConnectTitle')}</h2>
       <p className="openai-setup-screen__desc">
-        Iniciá sesión mediante el flujo oficial de OpenAI. Codex administra la sesión localmente; Vibe IDE Code no almacena tokens ni incluye créditos de IA.
+        {t('ai.openaiConnectCopy')}
       </p>
 
       <div className="openai-setup-screen__steps">
-        {['Abrí la autenticación oficial de OpenAI', 'Iniciá sesión con tu cuenta', 'Autorizá Codex', 'Volvé a Vibe IDE Code'].map((step, i) => (
+        {t('ai.openaiLoginSteps').map((step, i) => (
           <div key={i} className="openai-setup-screen__step">
             <span className="openai-setup-screen__step-num">{i + 1}</span>
             <span>{step}</span>
@@ -57,12 +50,12 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
       {isLoggingIn ? (
         <div className="openai-setup-screen__installing">
           <div className="openai-spinner" />
-          <span>Esperando autenticación en el navegador…</span>
+          <span>{t('ai.waitingBrowserAuth')}</span>
         </div>
       ) : (
         <button className="btn btn--primary btn--large openai-btn" onClick={onLogin}>
           <OpenAIAvatar size={18} />
-          Conectar con OpenAI
+          {t('ai.connectWithOpenAI')}
         </button>
       )}
 
@@ -72,6 +65,7 @@ function NotAuthScreen({ onLogin, isLoggingIn, loginLog }) {
 }
 
 function ChatScreen({ email, messages, currentResponse, isRunning, input, setInput, onSend, onCancel, onLogout, inputRef, model, setModel, models, reasoning, setReasoning }) {
+  const { t } = useI18n();
   const messagesEndRef = useRef(null);
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -87,12 +81,12 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
         {messages.length === 0 && !currentResponse && (
           <div className="openai-panel__welcome">
             <div className="openai-panel__welcome-icon"><OpenAIAvatar size={48} /></div>
-            <h3 className="openai-panel__welcome-title">ChatGPT Assistant</h3>
+            <h3 className="openai-panel__welcome-title">{t('ai.openaiWelcome')}</h3>
             <p className="openai-panel__welcome-desc text-secondary">
-              Conectado como <strong>{email}</strong>. ¡Preguntá lo que quieras!
+              {t('ai.connectedAs', { email })}
             </p>
             <div className="openai-panel__model-selector">
-              <label>Modelo
+              <label>{t('ai.model')}
                 <select value={model} onChange={(event) => {
                   const nextModel = models.find((item) => item.id === event.target.value);
                   setModel(event.target.value);
@@ -101,17 +95,17 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
                   {models.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
               </label>
-              <label>Razonamiento
+              <label>{t('ai.reasoning')}
                 <select value={reasoning} onChange={(event) => setReasoning(event.target.value)}>
-                  {(models.find((item) => item.id === model)?.reasoningLevels || ['medium']).map((level) => <option key={level} value={level}>{REASONING_LABELS[level] || level}</option>)}
+                  {(models.find((item) => item.id === model)?.reasoningLevels || ['medium']).map((level) => <option key={level} value={level}>{t(`ai.reasoningLabels.${level}`) === `ai.reasoningLabels.${level}` ? level : t(`ai.reasoningLabels.${level}`)}</option>)}
                 </select>
               </label>
               <small>{models.find((item) => item.id === model)?.description}</small>
             </div>
             <div className="openai-panel__suggestions">
-              {['Creá un componente React', 'Revisá este código', 'Explicá este error', 'Escribí tests'].map(s => (
-                <button key={s} className="openai-panel__suggestion btn btn--small" onClick={() => { setInput(s); inputRef.current?.focus(); }}>
-                  {s}
+              {['react', 'review', 'explainError', 'tests'].map(key => (
+                <button key={key} className="openai-panel__suggestion btn btn--small" onClick={() => { setInput(t(`ai.suggestions.${key}`)); inputRef.current?.focus(); }}>
+                  {t(`ai.suggestions.${key}`)}
                 </button>
               ))}
             </div>
@@ -120,7 +114,7 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
 
         {messages.map((msg, i) => (
           <div key={i} className={`openai-panel__message openai-panel__message--${msg.role}`}>
-            {msg.role === 'user' && <div className="openai-panel__message-avatar openai-panel__message-avatar--user">Tú</div>}
+            {msg.role === 'user' && <div className="openai-panel__message-avatar openai-panel__message-avatar--user">{t('ai.you')}</div>}
             {msg.role === 'assistant' && <div className="openai-panel__message-avatar openai-panel__message-avatar--assistant"><OpenAIAvatar size={14} /></div>}
             {msg.role === 'error' && <div className="openai-panel__message-avatar openai-panel__message-avatar--error">!</div>}
             <div className="openai-panel__message-content">
@@ -142,7 +136,7 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
         {isRunning && !currentResponse && (
           <div className="openai-panel__thinking">
             <div className="openai-panel__thinking-dots"><span /><span /><span /></div>
-            <span className="text-tertiary">ChatGPT está pensando…</span>
+            <span className="text-tertiary">{t('ai.thinkingChatGPT')}</span>
           </div>
         )}
 
@@ -157,27 +151,32 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Preguntale algo a ChatGPT…"
+            placeholder={t('ai.askChatGPT')}
             rows={1}
           />
           <div className="openai-panel__input-actions">
             {isRunning ? (
-              <button className="btn btn--small btn--danger" onClick={onCancel}>■ Stop</button>
+              <button className="btn btn--small btn--danger" onClick={onCancel}>■ {t('ai.stop')}</button>
             ) : (
               <button className="btn btn--small btn--primary openai-btn-send" onClick={onSend} disabled={!input.trim()}>
-                Enviar ↵
+                {t('ai.send')} ↵
               </button>
             )}
           </div>
         </div>
-        <p className="openai-panel__input-hint text-tertiary">Enter para enviar · Shift+Enter para nueva línea</p>
+        <p className="openai-panel__input-hint text-tertiary">{t('ai.inputHint')}</p>
       </div>
     </>
   );
 }
 
 export default function OpenAIPanel({ cwd }) {
+  const { t } = useI18n();
+  // Optimistic auth: assume authenticated if we have a cached status from a
+  // previous session (stored as a lightweight flag in the electron store).
+  // The real check runs in background and updates silently.
   const [status, setStatus] = useState({ authenticated: false, email: null });
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginLog, setLoginLog] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -189,14 +188,62 @@ export default function OpenAIPanel({ cwd }) {
   const [reasoning, setReasoning] = useState('medium');
   const streamRef = useRef('');
   const inputRef = useRef(null);
+  const saveTimerRef = useRef(null);
 
+  // ── Persistence helpers ──────────────────────────────────────────────────
+  const storageKey = `chat:openai:${cwd || 'global'}`;
+
+  const saveHistory = useCallback((msgs) => {
+    if (!window.electronAPI?.store) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      // Keep only last 50 messages to avoid unbounded growth
+      const toSave = msgs.slice(-50);
+      window.electronAPI.store.set(storageKey, toSave);
+    }, 1000);
+  }, [storageKey]);
+
+  const clearHistory = useCallback(() => {
+    if (!window.electronAPI?.store) return;
+    clearTimeout(saveTimerRef.current);
+    window.electronAPI.store.delete(storageKey);
+  }, [storageKey]);
+
+  // ── Load persisted history on mount / project change ────────────────────
+  useEffect(() => {
+    if (!window.electronAPI?.store) return;
+    window.electronAPI.store.get(storageKey, []).then((saved) => {
+      if (Array.isArray(saved) && saved.length > 0) {
+        setMessages(saved);
+      }
+    });
+  }, [storageKey]);
+
+  // ── Auth: optimistic load then background verify ─────────────────────────
   const refreshStatus = useCallback(async () => {
     if (!window.electronAPI?.openai) return;
     const s = await window.electronAPI.openai.getStatus();
     setStatus(s);
+    setIsAuthLoading(false);
+    // Persist the auth flag so next launch can show chat immediately
+    if (window.electronAPI?.store) {
+      window.electronAPI.store.set('openai:authenticated', s.authenticated);
+    }
   }, []);
 
-  useEffect(() => { refreshStatus(); }, [refreshStatus]);
+  useEffect(() => {
+    if (!window.electronAPI) return;
+    // Optimistically show chat if we were authenticated last session
+    const runOptimistic = async () => {
+      const wasAuthenticated = await window.electronAPI.store?.get('openai:authenticated', false);
+      if (wasAuthenticated) {
+        setStatus({ authenticated: true, email: 'OpenAI account' });
+      }
+      // Always verify in background regardless
+      refreshStatus();
+    };
+    runOptimistic();
+  }, [refreshStatus]);
 
   useEffect(() => {
     window.electronAPI?.openai?.getModels().then(({ models: availableModels, defaultModel }) => {
@@ -219,7 +266,11 @@ export default function OpenAIPanel({ cwd }) {
         setIsRunning(false);
         const finalContent = streamRef.current || output || '';
         if (finalContent) {
-          setMessages(prev => [...prev, { role: 'assistant', content: finalContent, timestamp: Date.now() }]);
+          setMessages(prev => {
+            const next = [...prev, { role: 'assistant', content: finalContent, timestamp: Date.now() }];
+            saveHistory(next);
+            return next;
+          });
         }
         setCurrentResponse('');
         streamRef.current = '';
@@ -235,7 +286,7 @@ export default function OpenAIPanel({ cwd }) {
       }),
     ];
     return () => unsubs.forEach(u => u?.());
-  }, []);
+  }, [saveHistory]);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
@@ -243,7 +294,7 @@ export default function OpenAIPanel({ cwd }) {
     const result = await window.electronAPI.openai.login();
     setIsLoggingIn(false);
     if (result.success) {
-      setLoginLog([{ type: 'info', text: 'Cuenta OpenAI conectada correctamente.' }]);
+        setLoginLog([{ type: 'info', text: t('ai.loginSuccess') }]);
       await refreshStatus();
     } else {
       setLoginLog([{ type: 'error', text: result.error }]);
@@ -253,6 +304,10 @@ export default function OpenAIPanel({ cwd }) {
   const handleLogout = async () => {
     await window.electronAPI.openai.logout();
     setMessages([]);
+    clearHistory();
+    if (window.electronAPI?.store) {
+      window.electronAPI.store.set('openai:authenticated', false);
+    }
     await refreshStatus();
   };
 
@@ -260,7 +315,9 @@ export default function OpenAIPanel({ cwd }) {
     const trimmed = input.trim();
     if (!trimmed || isRunning) return;
     const history = messages.filter(m => m.role !== 'error').map(m => ({ role: m.role, content: m.content }));
-    setMessages(prev => [...prev, { role: 'user', content: trimmed, timestamp: Date.now() }]);
+    const newMessages = [...messages, { role: 'user', content: trimmed, timestamp: Date.now() }];
+    setMessages(newMessages);
+    saveHistory(newMessages);
     setInput('');
     setIsRunning(true);
     setCurrentResponse('');
@@ -272,10 +329,21 @@ export default function OpenAIPanel({ cwd }) {
     window.electronAPI.openai.cancel();
     setIsRunning(false);
     if (streamRef.current) {
-      setMessages(prev => [...prev, { role: 'assistant', content: streamRef.current + '\n\n*[Cancelado]*', timestamp: Date.now() }]);
+      setMessages(prev => {
+        const next = [...prev, { role: 'assistant', content: `${streamRef.current}\n\n*[${t('ai.cancelledResponse')}]*`, timestamp: Date.now() }];
+        saveHistory(next);
+        return next;
+      });
       setCurrentResponse('');
       streamRef.current = '';
     }
+  };
+
+  const handleClear = () => {
+    setMessages([]);
+    setCurrentResponse('');
+    streamRef.current = '';
+    clearHistory();
   };
 
   return (
@@ -287,20 +355,20 @@ export default function OpenAIPanel({ cwd }) {
             <h2 className="openai-panel__title">ChatGPT</h2>
             <span className={`openai-panel__status ${status.authenticated ? 'openai-panel__status--available' : ''}`}>
               <span className={`status-dot ${status.authenticated ? 'status-dot--connected' : 'status-dot--disconnected'}`} />
-              {status.authenticated ? `Conectado · ${status.email}` : 'No conectado'}
+              {status.authenticated ? `${t('ai.connected')} · ${status.email}` : t('ai.notConnected')}
             </span>
           </div>
         </div>
         <div className="openai-panel__header-actions">
           {status.authenticated && messages.length > 0 && (
-            <button className="btn btn--small" onClick={() => { setMessages([]); setCurrentResponse(''); streamRef.current = ''; }}>Limpiar</button>
+            <button className="btn btn--small" onClick={handleClear}>{t('ai.clear')}</button>
           )}
           {status.authenticated && (
-            <button className="btn btn--small btn--ghost" onClick={handleLogout} title="Cerrar sesión">
+            <button className="btn btn--small btn--ghost" onClick={handleLogout} title={t('ai.logout')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           )}
-          <button className="btn btn--small btn--ghost" onClick={refreshStatus} title="Actualizar estado">
+          <button className="btn btn--small btn--ghost" onClick={refreshStatus} title={t('ai.refresh')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
         </div>

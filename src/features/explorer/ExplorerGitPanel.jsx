@@ -1,4 +1,5 @@
 import { isStagedCode, toAbsoluteProjectPath } from './explorerUtils';
+import { useI18n } from '../../i18n/I18nContext';
 
 export function ExplorerGitPanel({
   gitStatus,
@@ -10,19 +11,20 @@ export function ExplorerGitPanel({
   handleGitStageToggle,
   projectPath,
 }) {
+  const { t } = useI18n();
   return (
     <div className="file-explorer__git-panel">
       <div className="file-explorer__git-header">
-        <div className="file-explorer__git-title">Changes</div>
+        <div className="file-explorer__git-title">{t('explorer.changes')}</div>
         <div className="file-explorer__git-actions">
-          <button className="file-explorer__git-btn" type="button" onClick={loadGitStatus}>Refresh</button>
-          <button className="file-explorer__git-btn" type="button" onClick={openCommitAction} disabled={stagedEntries.length === 0}>Commit</button>
+          <button className="file-explorer__git-btn" type="button" onClick={loadGitStatus}>{t('services.refresh')}</button>
+          <button className="file-explorer__git-btn" type="button" onClick={openCommitAction} disabled={stagedEntries.length === 0}>{t('explorer.commit')}</button>
         </div>
       </div>
       {gitStatusError ? (
         <div className="file-explorer__git-empty">{gitStatusError}</div>
       ) : gitStatus.length === 0 ? (
-        <div className="file-explorer__git-empty">Working tree clean</div>
+        <div className="file-explorer__git-empty">{t('explorer.workingTreeClean')}</div>
       ) : (
         <div className="file-explorer__git-list">
           {gitStatus.slice(0, 40).map((entry) => (
@@ -32,7 +34,7 @@ export function ExplorerGitPanel({
                 <span className="file-explorer__git-path">{entry.path}</span>
               </button>
               <button className="file-explorer__git-btn" type="button" onClick={() => handleGitStageToggle(entry)}>
-                {isStagedCode(entry.code) ? 'Unstage' : 'Stage'}
+                {isStagedCode(entry.code) ? t('explorer.unstage') : t('explorer.stage')}
               </button>
             </div>
           ))}

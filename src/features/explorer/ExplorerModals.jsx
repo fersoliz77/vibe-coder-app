@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { useI18n } from '../../i18n/I18nContext';
 
 export function ActionModal({ action, onClose, onConfirm }) {
+  const { t } = useI18n();
   const [value, setValue] = useState('');
 
   useEffect(() => {
@@ -14,11 +16,11 @@ export function ActionModal({ action, onClose, onConfirm }) {
   const isBulkDelete = action.type === 'bulk-delete';
   const isCommit = action.type === 'git-commit';
   const titles = {
-    'new-file': 'Create File',
-    'new-folder': 'Create Folder',
-    delete: `Delete ${action.node?.isDirectory ? 'Folder' : 'File'}`,
-    'bulk-delete': 'Delete Selected Items',
-    'git-commit': 'Create Commit',
+    'new-file': t('explorer.createFile'),
+    'new-folder': t('explorer.createFolder'),
+    delete: action.node?.isDirectory ? t('explorer.deleteFolder') : t('explorer.deleteFile'),
+    'bulk-delete': t('explorer.deleteSelected'),
+    'git-commit': t('explorer.createCommit'),
   };
 
   return (
@@ -27,11 +29,11 @@ export function ActionModal({ action, onClose, onConfirm }) {
         <h3 className="file-modal__title">{titles[action.type]}</h3>
         {isDelete || isBulkDelete ? (
           <p className="file-modal__text">
-            {isBulkDelete ? `This permanently deletes ${action.count} selected items.` : <>This permanently deletes <strong>{action.node?.name}</strong>.</>}
+            {isBulkDelete ? t('explorer.deleteSelectedCopy', { count: action.count }) : t('explorer.deleteCopy', { name: action.node?.name })}
           </p>
         ) : (
           <>
-            <p className="file-modal__text">{isCommit ? 'Write a commit message for the staged changes.' : action.targetDir}</p>
+            <p className="file-modal__text">{isCommit ? t('explorer.commitCopy') : action.targetDir}</p>
             <input
               className="file-modal__input"
               value={value}
@@ -42,9 +44,9 @@ export function ActionModal({ action, onClose, onConfirm }) {
           </>
         )}
         <div className="file-modal__actions">
-          <button className="btn btn--small" type="button" onClick={onClose}>Cancel</button>
+          <button className="btn btn--small" type="button" onClick={onClose}>{t('explorer.cancel')}</button>
           <button className={`btn btn--small ${(isDelete || isBulkDelete) ? 'btn--danger' : 'btn--primary'}`} type="button" onClick={() => onConfirm(value.trim())} disabled={!isDelete && !isBulkDelete && !value.trim()}>
-            {(isDelete || isBulkDelete) ? 'Delete' : isCommit ? 'Commit' : 'Create'}
+            {(isDelete || isBulkDelete) ? t('explorer.delete') : isCommit ? t('explorer.commit') : t('explorer.create')}
           </button>
         </div>
       </div>
@@ -53,16 +55,17 @@ export function ActionModal({ action, onClose, onConfirm }) {
 }
 
 export function ConfirmModal({ state, onCancel, onConfirm }) {
+  const { t } = useI18n();
   if (!state) return null;
 
   return (
     <div className="file-modal-backdrop" onClick={onCancel}>
       <div className="file-modal" onClick={(event) => event.stopPropagation()}>
-        <h3 className="file-modal__title">Unsaved Changes</h3>
+        <h3 className="file-modal__title">{t('explorer.unsavedChanges')}</h3>
         <p className="file-modal__text">{state.message}</p>
         <div className="file-modal__actions">
-          <button className="btn btn--small" type="button" onClick={onCancel}>Keep Editing</button>
-          <button className="btn btn--small btn--danger" type="button" onClick={onConfirm}>Discard</button>
+          <button className="btn btn--small" type="button" onClick={onCancel}>{t('explorer.keepEditing')}</button>
+          <button className="btn btn--small btn--danger" type="button" onClick={onConfirm}>{t('explorer.discard')}</button>
         </div>
       </div>
     </div>

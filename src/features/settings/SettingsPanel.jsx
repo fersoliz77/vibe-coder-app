@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import SetupCenter from '../setup/SetupCenter';
+import { useI18n } from '../../i18n/I18nContext';
 import './SettingsPanel.css';
 
 const ACCESSIBILITY_KEY = 'vibe-accessibility';
+
+const SETTINGS_TABS = [
+  { id: 'services', labelKey: 'settings.tabs.services', descriptionKey: 'settings.tabs.servicesCopy' },
+  { id: 'preferences', labelKey: 'settings.tabs.preferences', descriptionKey: 'settings.tabs.preferencesCopy' },
+  { id: 'account', labelKey: 'settings.tabs.account', descriptionKey: 'settings.tabs.accountCopy' },
+];
 
 function readAccessibility() {
   try {
@@ -14,23 +21,26 @@ function readAccessibility() {
 }
 
 function ProviderStatus({ name, detail, connected, loading }) {
+  const { t } = useI18n();
   return (
     <div className="settings-provider">
       <span className={`status-dot ${loading ? 'status-dot--checking' : connected ? 'status-dot--connected' : 'status-dot--disconnected'}`} />
       <div>
         <strong>{name}</strong>
-        <span>{loading ? 'Comprobando...' : detail}</span>
+        <span>{loading ? t('settings.checking') : detail}</span>
       </div>
     </div>
   );
 }
 
-export default function SettingsPanel({ theme, onSetTheme }) {
+export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding }) {
   const { state, revalidate, logout } = useAuth();
+  const { language, setLanguage, t, formatDate } = useI18n();
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [accessibility, setAccessibility] = useState(readAccessibility);
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
+  const [activeTab, setActiveTab] = useState('services');
 
   const refreshProviders = async () => {
     setProviders((current) => ({ ...current, loading: true, error: '' }));
@@ -44,15 +54,15 @@ export default function SettingsPanel({ theme, onSetTheme }) {
       const openai = openaiResult.status === 'fulfilled' ? openaiResult.value : null;
       const opencode = openCodeResult.status === 'fulfilled' ? openCodeResult.value : null;
       const failed = [claudeResult, openaiResult, openCodeResult].some((result) => result.status === 'rejected');
-      setProviders({ loading: false, claude, openai, opencode, error: failed ? 'Uno o más estados no están disponibles.' : '' });
+      setProviders({ loading: false, claude, openai, opencode, error: failed ? t('settings.providerUnavailable') : '' });
     } catch {
-      setProviders({ loading: false, claude: null, openai: null, opencode: null, error: 'Estado no disponible con el acceso actual.' });
+      setProviders({ loading: false, claude: null, openai: null, opencode: null, error: t('settings.statusUnavailable') });
     }
   };
 
   useEffect(() => {
     refreshProviders();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     localStorage.setItem(ACCESSIBILITY_KEY, JSON.stringify(accessibility));
@@ -65,9 +75,9 @@ export default function SettingsPanel({ theme, onSetTheme }) {
     setMessage('');
     try {
       await (action === 'revalidate' ? revalidate() : logout());
-      if (action === 'revalidate') setMessage('Acceso revalidado correctamente.');
+      if (action === 'revalidate') setMessage(t('settings.accessRevalidated'));
     } catch (error) {
-      setMessage(error?.message || 'No se pudo completar la acción.');
+      setMessage(error?.message || t('settings.actionFailed'));
     } finally {
       setBusy('');
     }
@@ -79,57 +89,81 @@ export default function SettingsPanel({ theme, onSetTheme }) {
   return (
     <div className="settings-panel">
       <header className="settings-header">
-        <div><p className="settings-eyebrow">Preferencias</p><h1>Settings</h1></div>
-        <p>Cuenta, experiencia local y proveedores de IA.</p>
+        <div><p className="settings-eyebrow">{t('settings.headingEyebrow')}</p><h1>{t('settings.heading')}</h1></div>
+        <p>{t('settings.headingCopy')}</p>
       </header>
 
-      <div className="settings-grid">
-        <section className="settings-card settings-card--wide">
-          <div className="settings-card__heading"><div><span>Identidad</span><h2>Cuenta y acceso escolar</h2></div><span className={`settings-pill settings-pill--${state.policy}`}>{state.policy}</span></div>
-          <dl className="settings-details">
-            <div><dt>Email</dt><dd>{state.user?.email || 'No disponible'}</dd></div>
-            <div><dt>Escuela</dt><dd>{membership.schoolName || membership.schoolId || 'No asignada'}</dd></div>
-            <div><dt>Membresía</dt><dd>{membership.status || 'Sin estado'}</dd></div>
-            <div><dt>Plan</dt><dd>{membership.planName || 'Sin plan asignado'}</dd></div>
-            <div><dt>Progreso</dt><dd>{membership.completedLessons || 0}/{membership.totalLessons || 0} lecciones · {Math.round(membership.progressPercentage || 0)}%</dd></div>
-            <div><dt>Lease offline</dt><dd>{lease ? lease.toLocaleString() : 'No disponible'}</dd></div>
-          </dl>
-          <div className="settings-actions">
-            <button className="btn btn--primary" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('revalidate')}>{busy === 'revalidate' ? 'Revalidando...' : 'Revalidar acceso'}</button>
-            <button className="btn btn--danger" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('logout')}>{busy === 'logout' ? 'Cerrando...' : 'Cerrar sesión'}</button>
-            {message && <span className="settings-message" role="status">{message}</span>}
-          </div>
-        </section>
+      <div className="settings-shell">
+        <nav className="settings-tabs" aria-label={t('settings.sections')} role="tablist">
+          {SETTINGS_TABS.map((tab) => <button key={tab.id} id={`settings-tab-${tab.id}`} className={activeTab === tab.id ? 'is-active' : ''} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={`settings-panel-${tab.id}`} onClick={() => setActiveTab(tab.id)}><strong>{t(tab.labelKey)}</strong><span>{t(tab.descriptionKey)}</span></button>)}
+        </nav>
 
-        <section className="settings-card settings-card--wide settings-card--setup">
-          <SetupCenter compact />
-        </section>
+        <div className="settings-content">
+          {activeTab === 'services' && (
+            <div id="settings-panel-services" role="tabpanel" aria-labelledby="settings-tab-services" className="settings-tab-panel">
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.aiProviders')}</span><h2>{t('settings.modelsAccounts')}</h2></div><button className="btn btn--small" type="button" disabled={providers.loading} onClick={refreshProviders}>{t('settings.refreshStatuses')}</button></div>
+                <p className="settings-copy">{t('settings.providerCopy')}</p>
+                <div className="settings-providers">
+                  <ProviderStatus name="Claude Code" loading={providers.loading} connected={providers.claude?.authenticated} detail={!providers.claude?.installed ? t('settings.cliNotInstalled') : providers.claude?.authenticated ? `${t('settings.connected')}${providers.claude.version ? ` · ${providers.claude.version}` : ''}` : t('settings.installedUnauthenticated')} />
+                  <ProviderStatus name="OpenAI · Codex" loading={providers.loading} connected={providers.openai?.authenticated} detail={providers.openai?.authenticated ? `${t('settings.connected')} · ${providers.openai.email || t('settings.openAIAccount')}` : t('settings.notConnected')} />
+                  <ProviderStatus name="OpenCode" loading={providers.loading} connected={providers.opencode?.authenticated} detail={!providers.opencode?.installed ? t('settings.optionalNotInstalled') : !providers.opencode?.usable ? t('settings.repairRequired') : providers.opencode?.authenticated ? `${providers.opencode.providers.join(', ')}${providers.opencode.version ? ` · ${providers.opencode.version}` : ''}` : t('settings.connectInTerminal')} />
+                </div>
+                {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
+              </section>
+              <section className="settings-card settings-card--setup">
+                <div className="settings-card__heading"><div><span>{t('settings.localTools')}</span><h2>{t('settings.devEnvironment')}</h2></div><button className="btn btn--small btn--ghost" type="button" onClick={onReopenOnboarding}>{t('settings.openGuidedSetup')}</button></div>
+                <SetupCenter compact />
+              </section>
+            </div>
+          )}
 
-        <section className="settings-card">
-          <div className="settings-card__heading"><div><span>Interfaz</span><h2>Apariencia</h2></div></div>
-          <p className="settings-copy">Usa el tema existente en todo el workspace.</p>
-          <div className="settings-segmented" aria-label="Tema visual">
-            {['dark', 'light'].map((option) => <button type="button" key={option} className={theme === option ? 'is-active' : ''} aria-pressed={theme === option} onClick={() => onSetTheme(option)}>{option === 'dark' ? 'Oscuro' : 'Claro'}</button>)}
-          </div>
-        </section>
+          {activeTab === 'preferences' && (
+            <div id="settings-panel-preferences" role="tabpanel" aria-labelledby="settings-tab-preferences" className="settings-tab-panel settings-preferences">
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.interface')}</span><h2>{t('settings.appearance')}</h2></div><span className="settings-saved">{t('settings.savedAutomatically')}</span></div>
+                <p className="settings-copy">{t('settings.appearanceCopy')}</p>
+                <div className="settings-segmented" aria-label={t('settings.visualTheme')}>
+                  {['dark', 'light'].map((option) => <button type="button" key={option} className={theme === option ? 'is-active' : ''} aria-pressed={theme === option} onClick={() => onSetTheme(option)}>{t(`settings.${option}`)}</button>)}
+                </div>
+              </section>
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.interface')}</span><h2>{t('settings.language')}</h2></div><span className="settings-saved">{t('settings.savedAutomatically')}</span></div>
+                <p className="settings-copy">{t('settings.languageCopy')}</p>
+                <div className="settings-segmented" aria-label={t('settings.language')}>
+                  {['en', 'es'].map((option) => <button type="button" key={option} className={language === option ? 'is-active' : ''} aria-pressed={language === option} onClick={() => setLanguage(option)}>{t(`settings.${option === 'en' ? 'english' : 'spanish'}`)}</button>)}
+                </div>
+              </section>
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.accessibility')}</span><h2>{t('settings.visualComfort')}</h2></div><span className="settings-saved">{t('settings.savedOnDevice')}</span></div>
+                <p className="settings-copy">{t('settings.accessibilityCopy')}</p>
+                <label className="settings-toggle"><span><strong>{t('settings.highContrast')}</strong><small>{t('settings.highContrastCopy')}</small></span><input type="checkbox" checked={accessibility.highContrast} onChange={(event) => setAccessibility((value) => ({ ...value, highContrast: event.target.checked }))} /></label>
+                <label className="settings-toggle"><span><strong>{t('settings.reduceMotion')}</strong><small>{t('settings.reduceMotionCopy')}</small></span><input type="checkbox" checked={accessibility.reducedMotion} onChange={(event) => setAccessibility((value) => ({ ...value, reducedMotion: event.target.checked }))} /></label>
+              </section>
+            </div>
+          )}
 
-        <section className="settings-card">
-          <div className="settings-card__heading"><div><span>Local</span><h2>Accesibilidad</h2></div></div>
-          <p className="settings-copy">Estas preferencias se guardan únicamente en este dispositivo.</p>
-          <label className="settings-toggle"><span><strong>Alto contraste</strong><small>Refuerza texto y bordes.</small></span><input type="checkbox" checked={accessibility.highContrast} onChange={(event) => setAccessibility((value) => ({ ...value, highContrast: event.target.checked }))} /></label>
-          <label className="settings-toggle"><span><strong>Reducir movimiento</strong><small>Desactiva animaciones y transiciones.</small></span><input type="checkbox" checked={accessibility.reducedMotion} onChange={(event) => setAccessibility((value) => ({ ...value, reducedMotion: event.target.checked }))} /></label>
-        </section>
-
-        <section className="settings-card settings-card--wide">
-          <div className="settings-card__heading"><div><span>BYOAI</span><h2>Tus modelos, tus cuentas</h2></div><button className="btn btn--small" type="button" disabled={providers.loading} onClick={refreshProviders}>Actualizar estados</button></div>
-          <p className="settings-copy">Claude Code, OpenAI Codex y OpenCode mantienen autenticaciones independientes. OpenCode es opcional y sólo se descarga cuando confirmas su instalación. Vibe IDE Code no solicita ni almacena sus tokens.</p>
-          <div className="settings-providers">
-            <ProviderStatus name="Claude Code" loading={providers.loading} connected={providers.claude?.authenticated} detail={!providers.claude?.installed ? 'CLI no instalada' : providers.claude?.authenticated ? `Conectado${providers.claude.version ? ` · ${providers.claude.version}` : ''}` : 'Instalado, sin autenticar'} />
-            <ProviderStatus name="OpenAI · Codex" loading={providers.loading} connected={providers.openai?.authenticated} detail={providers.openai?.authenticated ? `Conectado · ${providers.openai.email || 'cuenta OpenAI'}` : 'No conectado'} />
-            <ProviderStatus name="OpenCode" loading={providers.loading} connected={providers.opencode?.authenticated} detail={!providers.opencode?.installed ? 'Opcional · no instalado' : !providers.opencode?.usable ? 'Instalación detectada, requiere reparación' : providers.opencode?.authenticated ? `${providers.opencode.providers.join(', ')}${providers.opencode.version ? ` · ${providers.opencode.version}` : ''}` : 'Instalado · usa /connect en la terminal'} />
-          </div>
-          {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
-        </section>
+          {activeTab === 'account' && (
+            <div id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account" className="settings-tab-panel">
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.identity')}</span><h2>{t('settings.schoolAccount')}</h2></div><span className={`settings-pill settings-pill--${state.policy}`}>{state.policy}</span></div>
+                <dl className="settings-details">
+                  <div><dt>{t('auth.email')}</dt><dd>{state.user?.email || t('settings.unavailable')}</dd></div>
+                  <div><dt>{t('settings.school')}</dt><dd>{membership.schoolName || membership.schoolId || t('settings.schoolUnassigned')}</dd></div>
+                  <div><dt>{t('settings.membership')}</dt><dd>{membership.status || t('settings.noStatus')}</dd></div>
+                  <div><dt>{t('settings.plan')}</dt><dd>{membership.planName || t('settings.noPlan')}</dd></div>
+                  <div><dt>{t('settings.progress')}</dt><dd>{t('settings.lessons', { completed: membership.completedLessons || 0, total: membership.totalLessons || 0, percentage: Math.round(membership.progressPercentage || 0) })}</dd></div>
+                  <div><dt>{t('settings.offlineLease')}</dt><dd>{lease ? formatDate(lease, { dateStyle: 'medium', timeStyle: 'short' }) : t('settings.unavailable')}</dd></div>
+                </dl>
+                <div className="settings-actions">
+                  <button className="btn btn--primary" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('revalidate')}>{busy === 'revalidate' ? t('settings.revalidating') : t('settings.revalidate')}</button>
+                  <button className="btn btn--danger" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('logout')}>{busy === 'logout' ? t('settings.loggingOut') : t('settings.logout')}</button>
+                  {message && <span className="settings-message" role="status">{message}</span>}
+                </div>
+              </section>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

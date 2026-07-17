@@ -2,8 +2,10 @@ import { useState, useEffect } from 'react';
 import GlobalServices from '../services/GlobalServices';
 import CreateProjectWizard from './CreateProjectWizard';
 import './ProjectList.css';
+import { useI18n } from '../../i18n/I18nContext';
 
 export default function ProjectList({ onProjectSelect, onOpenSetup, services = [], claudeAvailable = false, onRefreshServices }) {
+  const { t, formatDate } = useI18n();
   const [projects, setProjects] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -13,7 +15,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
 
   useEffect(() => {
     loadProjects();
-    window.electronAPI?.setup?.check({ includeMobile: false, backend: 'firebase' })
+    window.electronAPI?.setup?.check({ includeMobile: true, backend: 'firebase' })
       .then((environment) => setEnvironmentMissing(Boolean(environment?.summary?.requiredMissing)))
       .catch(() => {});
   }, []);
@@ -39,7 +41,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         if (newProject) onProjectSelect(newProject);
       }
     } catch (error) {
-      setProjectError(error?.message || 'No se pudo importar la carpeta seleccionada.');
+      setProjectError(error?.message || t('projects.importFailed'));
     }
   };
 
@@ -72,11 +74,11 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
     <div className="project-dashboard-layout">
       <div className="project-list-main">
         <div className="project-header">
-          <div><h1 className="project-title">Tus proyectos</h1><p className="project-subtitle">Creá, conectá y administrá aplicaciones desde un solo lugar.</p></div>
-          <button className="btn btn--primary" type="button" onClick={handleCreate}>Crear proyecto</button>
+          <div><h1 className="project-title">{t('projects.heading')}</h1><p className="project-subtitle">{t('projects.subtitle')}</p></div>
+          <button className="btn btn--primary" type="button" onClick={handleCreate}>{t('projects.create')}</button>
         </div>
 
-        {environmentMissing && <div className="project-setup-banner"><div><strong>El entorno necesita preparación</strong><span>Revisá e instalá las herramientas necesarias antes de crear proyectos.</span></div><button type="button" onClick={onOpenSetup}>Revisar entorno</button></div>}
+        {environmentMissing && <div className="project-setup-banner"><div><strong>{t('projects.environmentNeeded')}</strong><span>{t('projects.environmentCopy')}</span></div><button type="button" onClick={onOpenSetup}>{t('projects.reviewEnvironment')}</button></div>}
         {projectError && <div className="project-error" role="alert">{projectError}</div>}
 
       {/* Project Cards Grid */}
@@ -93,8 +95,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
                 <button
                   className="project-card__remove"
                   onClick={(e) => handleRemove(e, proj.id)}
-                  title="Remove from list"
-                  aria-label={`Quitar ${proj.name} de la lista`}
+                  title={t('projects.remove')}
+                  aria-label={t('projects.removeAria', { name: proj.name })}
                 >
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <line x1="18" y1="6" x2="6" y2="18"></line>
@@ -109,7 +111,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
                 </p>
                 <div className="project-card__meta">
                   <span className="project-card__date">
-                    Last opened: {new Date(proj.lastOpened).toLocaleDateString()}
+                    {t('projects.lastOpened', { date: formatDate(proj.lastOpened) })}
                   </span>
                 </div>
               </div>
@@ -118,18 +120,18 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         </div>
       ) : !isLoading ? (
         <div className="project-empty">
-          <p className="text-tertiary">No projects yet. Create or import one below.</p>
+          <p className="text-tertiary">{t('projects.empty')}</p>
         </div>
       ) : null}
 
         {/* Text Links: Create / Import */}
         <div className="project-actions-bar">
           <button className="project-action-link" onClick={handleCreate}>
-            + Crear proyecto
+            + {t('projects.create')}
           </button>
           <span className="project-actions-divider">·</span>
           <button className="project-action-link" onClick={handleImport}>
-            Importar carpeta existente
+            {t('projects.import')}
           </button>
         </div>
       </div>

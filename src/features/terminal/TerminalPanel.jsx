@@ -1,4 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react';
+import { useI18n } from '../../i18n/I18nContext';
 import './TerminalPanel.css';
 
 export default function TerminalPanel({
@@ -11,6 +12,7 @@ export default function TerminalPanel({
   resizeTerminal,
   registerXterm,
 }) {
+  const { t } = useI18n();
   const containerRef = useRef(null);
   const xtermInstancesRef = useRef(new Map());
   const fitAddonsRef = useRef(new Map());
@@ -26,13 +28,26 @@ export default function TerminalPanel({
   // Initialize xterm for active terminal
   useEffect(() => {
     if (!activeTerminalId || !containerRef.current) return;
+    if (xtermInstancesRef.current.has(activeTerminalId)) return;
 
-    const containerId = `terminal-container-${activeTerminalId}`;
-    const el = document.getElementById(containerId);
-    if (!el || xtermInstancesRef.current.has(activeTerminalId)) return;
+    // The DOM element may not be painted yet when the effect fires (React batches
+    // state updates). We try immediately; if the element isn't there yet, we retry
+    // on the next animation frame.
+    const tryInit = () => {
+      const containerId = `terminal-container-${activeTerminalId}`;
+      const el = document.getElementById(containerId);
+      if (!el) {
+        requestAnimationFrame(() => {
+          const el2 = document.getElementById(containerId);
+          if (el2 && !xtermInstancesRef.current.has(activeTerminalId)) initTerminal(el2);
+        });
+        return;
+      }
+      initTerminal(el);
+    };
 
     // Dynamically import xterm (works with Vite)
-    const initTerminal = async () => {
+    const initTerminal = async (el) => {
       try {
         const { Terminal } = await import('@xterm/xterm');
         const { FitAddon } = await import('@xterm/addon-fit');
@@ -78,10 +93,23 @@ export default function TerminalPanel({
         // Import CSS
         await import('@xterm/xterm/css/xterm.css');
 
-        setTimeout(() => {
-          fitAddon.fit();
-          resizeTerminal(activeTerminalId, xterm.cols, xterm.rows);
-        }, 100);
+        // Fit after paint: rAF ensures the element is visible before measuring,
+        // and the two timeouts handle slow transitions / first-open rendering.
+        requestAnimationFrame(() => {
+          try { fitAddon.fit(); } catch {}
+          setTimeout(() => {
+            try {
+              fitAddon.fit();
+              resizeTerminal(activeTerminalId, xterm.cols, xterm.rows);
+            } catch {}
+          }, 100);
+          setTimeout(() => {
+            try {
+              fitAddon.fit();
+              resizeTerminal(activeTerminalId, xterm.cols, xterm.rows);
+            } catch {}
+          }, 400);
+        });
 
         // Forward input to PTY
         xterm.onData((data) => {
@@ -111,7 +139,7 @@ export default function TerminalPanel({
       }
     };
 
-    initTerminal();
+    tryInit();
   }, [activeTerminalId, terminals]);
 
   useEffect(() => {
@@ -173,7 +201,7 @@ export default function TerminalPanel({
               <button
                 className="terminal-panel__tab-close"
                 onClick={(e) => handleCloseTab(e, term.id)}
-                title="Close terminal"
+                title={t('terminal.close')}
                 type="button"
               >
                 ×
@@ -181,7 +209,7 @@ export default function TerminalPanel({
             </div>
           ))}
         </div>
-        <button className="terminal-panel__new-tab" onClick={handleNewTerminal} title="New Terminal" type="button">
+        <button className="terminal-panel__new-tab" onClick={handleNewTerminal} title={t('terminal.new')} type="button">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="5" x2="12" y2="19" />
             <line x1="5" y1="12" x2="19" y2="12" />
@@ -201,9 +229,9 @@ export default function TerminalPanel({
         ))}
         {terminals.length === 0 && (
           <div className="terminal-panel__empty">
-            <p className="text-secondary">No terminals open</p>
+            <p className="text-secondary">{t('terminal.none')}</p>
             <button className="btn btn--primary" onClick={handleNewTerminal} type="button">
-              Open Terminal
+              {t('terminal.open')}
             </button>
           </div>
         )}

@@ -9,6 +9,19 @@ const execFileAsync = util.promisify(execFile);
 const SUPPORTED_BACKENDS = Object.freeze(['firebase', 'supabase']);
 const SUPABASE_INSTRUCTION = 'Instala Supabase CLI siguiendo la guía oficial: https://supabase.com/docs/guides/local-development/cli/getting-started. Después, vuelve a comprobar el entorno.';
 const MAX_OUTPUT_LENGTH = 12_000;
+const ANDROID_API_LEVEL = '35';
+const ANDROID_BUILD_TOOLS_VERSION = '35.0.0';
+const ANDROID_AVD_NAME = 'Vibe_API_35';
+const ANDROID_SYSTEM_IMAGE = 'system-images;android-35;google_apis;x86_64';
+const ANDROID_COMMAND_LINE_TOOLS_VERSION = '13114758';
+const ANDROID_COMMAND_LINE_TOOLS_URL = `https://dl.google.com/android/repository/commandlinetools-win-${ANDROID_COMMAND_LINE_TOOLS_VERSION}_latest.zip`;
+const ANDROID_SDK_PACKAGES = Object.freeze([
+  'platform-tools',
+  'platforms;android-35',
+  `build-tools;${ANDROID_BUILD_TOOLS_VERSION}`,
+  'emulator',
+  ANDROID_SYSTEM_IMAGE,
+]);
 
 const WINGET_ARGS = Object.freeze([
   'install',
@@ -127,6 +140,48 @@ function getProcessEnv(extra = {}) {
   delete env.ELECTRON_RUN_AS_NODE;
   delete env.ELECTRON_NO_ASAR;
   return env;
+}
+
+function getDefaultAndroidSdkPath() {
+  return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Android', 'Sdk');
+}
+
+function getAndroidSdkPath() {
+  return [process.env.ANDROID_SDK_ROOT, process.env.ANDROID_HOME, getDefaultAndroidSdkPath()]
+    .filter(Boolean)
+    .find((candidate) => fs.existsSync(candidate)) || getDefaultAndroidSdkPath();
+}
+
+function getAndroidAvdPath() {
+  return path.join(process.env.ANDROID_AVD_HOME || path.join(os.homedir(), '.android', 'avd'), `${ANDROID_AVD_NAME}.avd`);
+}
+
+function getAndroidSdkManagerPath(sdkPath) {
+  const root = path.join(sdkPath, 'cmdline-tools');
+  const candidates = [path.join(root, 'latest', 'bin', 'sdkmanager.bat')];
+  try {
+    for (const entry of fs.readdirSync(root)) candidates.push(path.join(root, entry, 'bin', 'sdkmanager.bat'));
+  } catch {}
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function getAndroidAvdManagerPath(sdkPath) {
+  const root = path.join(sdkPath, 'cmdline-tools');
+  const candidates = [path.join(root, 'latest', 'bin', 'avdmanager.bat')];
+  try {
+    for (const entry of fs.readdirSync(root)) candidates.push(path.join(root, entry, 'bin', 'avdmanager.bat'));
+  } catch {}
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
+function getAvdHardwareConfig(totalMemory = os.totalmem(), cpuCount = os.cpus().length) {
+  if (totalMemory < 6 * 1024 ** 3 || cpuCount <= 2) {
+    return { ramMb: 1024, cpuCores: 1, heapMb: 256, dataPartition: '4G' };
+  }
+  if (totalMemory < 12 * 1024 ** 3 || cpuCount <= 4) {
+    return { ramMb: 1536, cpuCores: 2, heapMb: 384, dataPartition: '6G' };
+  }
+  return { ramMb: 2048, cpuCores: Math.min(4, cpuCount), heapMb: 512, dataPartition: '8G' };
 }
 
 async function findExecutable(name, candidates = []) {
@@ -272,40 +327,61 @@ async function probeSupabase() {
 
 async function probeFlutter() {
   const installedPath = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'flutter', 'bin', 'flutter.bat');
-  const flutterPath = await findExecutable('flutter.bat', [installedPath]);
-  if (!flutterPath) return { installed: false, version: null, path: null };
-  const binDir = path.dirname(flutterPath);
-  const dart = path.join(binDir, 'cache', 'dart-sdk', 'bin', 'dart.exe');
-  const snapshot = path.join(binDir, 'cache', 'flutter_tools.snapshot');
-  if (!fs.existsSync(dart) || !fs.existsSync(snapshot)) return { installed: true, version: null, path: flutterPath };
-  const result = await runProbe(dart, [snapshot, '--version', '--machine']);
+  const invocation = await resolveFlutterToolInvocation([installedPath]);
+  if (!invocation) {
+    const flutterPath = await findExecutable('flutter.bat', [installedPath]);
+    return flutterPath ? { installed: true, version: null, path: flutterPath } : { installed: false, version: null, path: null };
+  }
+  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version', '--machine']);
   let version = parseVersionOutput('flutter', result.output);
   if (!version) {
     try { version = JSON.parse(result.output).frameworkVersion || null; } catch {}
   }
-  return { installed: true, version, path: flutterPath };
+  return { installed: true, version, path: invocation.flutterPath };
+}
+
+async function resolveFlutterToolInvocation(extraCandidates = []) {
+  const managedPath = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'flutter', 'bin', 'flutter.bat');
+  const flutterPath = await findExecutable('flutter.bat', [...extraCandidates, managedPath]);
+  if (!flutterPath) return null;
+  const binDir = path.dirname(flutterPath);
+  const dart = path.join(binDir, 'cache', 'dart-sdk', 'bin', 'dart.exe');
+  const snapshot = path.join(binDir, 'cache', 'flutter_tools.snapshot');
+  if (!fs.existsSync(dart) || !fs.existsSync(snapshot)) return null;
+  return { file: dart, argsPrefix: [snapshot], flutterPath };
 }
 
 function probeAndroidSdk() {
-  const sdkPath = [
-    process.env.ANDROID_SDK_ROOT,
-    process.env.ANDROID_HOME,
-    path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Android', 'Sdk'),
-  ].filter(Boolean).find((candidate) => fs.existsSync(candidate));
-  if (!sdkPath) {
+  const sdkPath = getAndroidSdkPath();
+  const components = {
+    commandLineTools: Boolean(getAndroidSdkManagerPath(sdkPath)),
+    platformTools: fs.existsSync(path.join(sdkPath, 'platform-tools', 'adb.exe')),
+    platform: fs.existsSync(path.join(sdkPath, 'platforms', `android-${ANDROID_API_LEVEL}`, 'android.jar')),
+    buildTools: fs.existsSync(path.join(sdkPath, 'build-tools', ANDROID_BUILD_TOOLS_VERSION, 'aapt.exe')),
+    emulator: fs.existsSync(path.join(sdkPath, 'emulator', 'emulator.exe')),
+    systemImage: fs.existsSync(path.join(sdkPath, 'system-images', `android-${ANDROID_API_LEVEL}`, 'google_apis', 'x86_64', 'package.xml')),
+    avd: fs.existsSync(path.join(getAndroidAvdPath(), 'config.ini')),
+  };
+  const missing = Object.entries(components).filter(([, available]) => !available).map(([name]) => name);
+  if (missing.length) {
+    const labels = {
+      commandLineTools: 'las herramientas de linea de comandos',
+      platformTools: 'platform-tools',
+      platform: `Android API ${ANDROID_API_LEVEL}`,
+      buildTools: `build-tools ${ANDROID_BUILD_TOOLS_VERSION}`,
+      emulator: 'el emulador',
+      systemImage: 'la imagen Google APIs x86_64 de API 35',
+      avd: `el AVD ${ANDROID_AVD_NAME}`,
+    };
     return {
       installed: false,
       version: null,
-      path: null,
-      instruction: 'Android Studio instalará el SDK. Ábrelo una vez para completar el asistente y aceptar las licencias.',
+      path: fs.existsSync(sdkPath) ? sdkPath : null,
+      components,
+      instruction: `Faltan ${missing.map((name) => labels[name]).join(', ')}. Ejecuta la instalacion del entorno para preparar el SDK y el AVD sin abrir el emulador.`,
     };
   }
-  let version = null;
-  try {
-    const versions = fs.readdirSync(path.join(sdkPath, 'build-tools')).filter((entry) => /^\d+(?:\.\d+)+/.test(entry));
-    version = versions.sort((a, b) => b.localeCompare(a, undefined, { numeric: true }))[0] || null;
-  } catch {}
-  return { installed: true, version, path: sdkPath };
+  return { installed: true, version: ANDROID_BUILD_TOOLS_VERSION, path: sdkPath, components };
 }
 
 function getJdk17Candidates() {
@@ -420,13 +496,13 @@ function appendOutput(current, chunk) {
   return combined.length > MAX_OUTPUT_LENGTH ? combined.slice(-MAX_OUTPUT_LENGTH) : combined;
 }
 
-function runTracked(run, file, args, progress) {
+function runTracked(run, file, args, progress, extraEnv = {}) {
   return new Promise((resolve) => {
     let stdout = '';
     let stderr = '';
     let settled = false;
     const child = spawn(file, args, {
-      env: getProcessEnv(),
+      env: getProcessEnv(extraEnv),
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
@@ -452,6 +528,102 @@ function runTracked(run, file, args, progress) {
     child.once('error', (error) => finish({ success: false, code: null, error: error.message }));
     child.once('close', (code) => finish({ success: code === 0, code, error: code === 0 ? null : `${path.basename(file)} finalizó con código ${code}.` }));
   });
+}
+
+async function installAndroidCommandLineTools(run, sdkPath, progress) {
+  const destination = path.join(sdkPath, 'cmdline-tools', 'latest');
+  if (getAndroidSdkManagerPath(sdkPath)) return { success: true, skipped: true };
+  fs.mkdirSync(path.dirname(destination), { recursive: true });
+  const archive = path.join(sdkPath, `commandlinetools-${ANDROID_COMMAND_LINE_TOOLS_VERSION}.zip`);
+  const extractPath = path.join(sdkPath, `.commandlinetools-${run.id}`);
+  fs.rmSync(extractPath, { recursive: true, force: true });
+  const script = [
+    "$ErrorActionPreference = 'Stop'",
+    'Invoke-WebRequest -Uri $env:VIBE_ANDROID_TOOLS_URL -OutFile $env:VIBE_ANDROID_TOOLS_ARCHIVE -UseBasicParsing',
+    'Expand-Archive -LiteralPath $env:VIBE_ANDROID_TOOLS_ARCHIVE -DestinationPath $env:VIBE_ANDROID_TOOLS_EXTRACT -Force',
+    "$source = Join-Path $env:VIBE_ANDROID_TOOLS_EXTRACT 'cmdline-tools'",
+    "if (!(Test-Path -LiteralPath (Join-Path $source 'bin\\sdkmanager.bat'))) { throw 'The downloaded Android command-line tools archive has an unexpected layout.' }",
+    'Remove-Item -LiteralPath $env:VIBE_ANDROID_TOOLS_DESTINATION -Recurse -Force -ErrorAction SilentlyContinue',
+    'Move-Item -LiteralPath $source -Destination $env:VIBE_ANDROID_TOOLS_DESTINATION',
+    'Remove-Item -LiteralPath $env:VIBE_ANDROID_TOOLS_ARCHIVE -Force -ErrorAction SilentlyContinue',
+    'Remove-Item -LiteralPath $env:VIBE_ANDROID_TOOLS_EXTRACT -Recurse -Force -ErrorAction SilentlyContinue',
+  ].join('; ');
+  const result = await runTracked(run, 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], progress, {
+    VIBE_ANDROID_TOOLS_URL: ANDROID_COMMAND_LINE_TOOLS_URL,
+    VIBE_ANDROID_TOOLS_ARCHIVE: archive,
+    VIBE_ANDROID_TOOLS_EXTRACT: extractPath,
+    VIBE_ANDROID_TOOLS_DESTINATION: destination,
+  });
+  if (!result.success) {
+    fs.rmSync(extractPath, { recursive: true, force: true });
+    fs.rmSync(archive, { force: true });
+  }
+  return result;
+}
+
+function runAndroidBatch(run, managerPath, progress, sdkPath, acceptLicenses = false) {
+  const script = acceptLicenses
+    ? "1..100 | ForEach-Object { 'y' } | & $env:VIBE_ANDROID_MANAGER '--licenses'; exit $LASTEXITCODE"
+    : "& $env:VIBE_ANDROID_MANAGER 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0' 'emulator' 'system-images;android-35;google_apis;x86_64'; exit $LASTEXITCODE";
+  return runTracked(run, 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], progress, {
+    ANDROID_SDK_ROOT: sdkPath,
+    ANDROID_HOME: sdkPath,
+    VIBE_ANDROID_MANAGER: managerPath,
+  });
+}
+
+function tuneAndroidAvd() {
+  const configPath = path.join(getAndroidAvdPath(), 'config.ini');
+  const hardware = getAvdHardwareConfig();
+  let lines = [];
+  try { lines = fs.readFileSync(configPath, 'utf8').split(/\r?\n/).filter(Boolean); } catch {}
+  const values = {
+    'AvdId': ANDROID_AVD_NAME,
+    'abi.type': 'x86_64',
+    'image.sysdir.1': 'system-images/android-35/google_apis/x86_64/',
+    'tag.display': 'Google APIs',
+    'tag.id': 'google_apis',
+    'hw.cpu.ncore': String(hardware.cpuCores),
+    'hw.ramSize': String(hardware.ramMb),
+    'vm.heapSize': String(hardware.heapMb),
+    'disk.dataPartition.size': hardware.dataPartition,
+  };
+  const remaining = new Set(Object.keys(values));
+  lines = lines.map((line) => {
+    const key = line.split('=', 1)[0];
+    if (!remaining.has(key)) return line;
+    remaining.delete(key);
+    return `${key}=${values[key]}`;
+  });
+  for (const key of remaining) lines.push(`${key}=${values[key]}`);
+  fs.writeFileSync(configPath, `${lines.join('\n')}\n`, 'utf8');
+}
+
+async function provisionAndroidSdk(run, progress) {
+  const sdkPath = getAndroidSdkPath();
+  fs.mkdirSync(sdkPath, { recursive: true });
+  let result = await installAndroidCommandLineTools(run, sdkPath, progress);
+  if (!result.success) return result;
+  const sdkmanager = getAndroidSdkManagerPath(sdkPath);
+  const avdmanager = getAndroidAvdManagerPath(sdkPath);
+  if (!sdkmanager || !avdmanager) return { success: false, error: 'No se encontraron sdkmanager y avdmanager despues de instalar las herramientas de linea de comandos.' };
+
+  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath, true);
+  if (!result.success) return result;
+  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath);
+  if (!result.success) return result;
+
+  if (!fs.existsSync(path.join(getAndroidAvdPath(), 'config.ini'))) {
+    const script = "'no' | & $env:VIBE_ANDROID_MANAGER 'create' 'avd' '--name' 'Vibe_API_35' '--package' 'system-images;android-35;google_apis;x86_64' '--force'; exit $LASTEXITCODE";
+    result = await runTracked(run, 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], progress, {
+      ANDROID_SDK_ROOT: sdkPath,
+      ANDROID_HOME: sdkPath,
+      VIBE_ANDROID_MANAGER: avdmanager,
+    });
+    if (!result.success) return result;
+  }
+  tuneAndroidAvd();
+  return { success: true };
 }
 
 async function resolveInstallationInvocation(step) {
@@ -485,12 +657,14 @@ async function installAllEnvironment(options = {}, onProgress) {
     const before = await checkEnvironment(normalized);
     if (run.cancelled) return { success: false, cancelled: true, steps: results };
     const plan = buildInstallationPlan(normalized, before);
-    emitProgress(progress, { type: 'start', current: 0, total: plan.length, message: plan.length ? 'Iniciando instalación secuencial.' : 'El entorno ya está preparado.' });
+    const provisioningNeeded = normalized.includeMobile && !before.items.find((item) => item.id === 'android-sdk')?.installed;
+    const totalSteps = plan.length + (provisioningNeeded ? 1 : 0);
+    emitProgress(progress, { type: 'start', current: 0, total: totalSteps, message: totalSteps ? 'Iniciando instalación secuencial.' : 'El entorno ya está preparado.' });
 
     for (let index = 0; index < plan.length; index += 1) {
       if (run.cancelled) break;
       const step = plan[index];
-      const baseEvent = { stepId: step.id, label: step.label, current: index + 1, total: plan.length };
+      const baseEvent = { stepId: step.id, label: step.label, current: index + 1, total: totalSteps };
       emitProgress(progress, { type: 'step-start', ...baseEvent, message: `Instalando ${step.label}...` });
 
       if (run.cancelled) break;
@@ -537,6 +711,27 @@ async function installAllEnvironment(options = {}, onProgress) {
       });
     }
 
+    if (!run.cancelled && provisioningNeeded) {
+      const baseEvent = { stepId: 'android-sdk-provision', label: 'Android SDK y AVD API 35', current: plan.length + 1, total: totalSteps };
+      emitProgress(progress, { type: 'step-start', ...baseEvent, message: 'Preparando las herramientas, imagen y AVD de Android...' });
+      const [java, flutter] = await Promise.all([probeEnvironmentItem('java'), probeEnvironmentItem('flutter')]);
+      const androidStudioStep = results.find((result) => result.id === 'android-sdk');
+      let execution;
+      if (!java.installed || !flutter.installed || (androidStudioStep && !androidStudioStep.success)) {
+        const missing = [!java.installed && 'JDK 17', !flutter.installed && 'Flutter', androidStudioStep && !androidStudioStep.success && 'Android Studio'].filter(Boolean).join(' y ');
+        execution = { success: false, error: `No se puede preparar Android hasta que estén disponibles: ${missing}.` };
+      } else {
+        execution = await provisionAndroidSdk(run, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+      }
+      const result = { id: 'android-sdk-provision', ...execution };
+      results.push(result);
+      emitProgress(progress, {
+        type: execution.success ? 'step-complete' : 'step-error',
+        ...baseEvent,
+        message: execution.success ? 'Android SDK y AVD API 35 completados.' : execution.error,
+      });
+    }
+
     if (run.cancelled) {
       emitProgress(progress, { type: 'cancelled', message: 'Instalación cancelada.' });
       return { success: false, cancelled: true, steps: results };
@@ -576,14 +771,24 @@ function setupEnvironmentHandlers(ipcMain, getMainWindow) {
 }
 
 module.exports = {
+  ANDROID_AVD_NAME,
+  ANDROID_BUILD_TOOLS_VERSION,
+  ANDROID_COMMAND_LINE_TOOLS_URL,
+  ANDROID_SDK_PACKAGES,
+  ANDROID_SYSTEM_IMAGE,
   INSTALL_ALLOWLIST,
   SUPABASE_INSTRUCTION,
   buildInstallationPlan,
   cancelEnvironmentInstallation,
   checkEnvironment,
+  getAvdHardwareConfig,
+  getAndroidAvdPath,
+  getAndroidSdkPath,
+  getProcessEnv,
   installAllEnvironment,
   normalizeOptions,
   parseVersionOutput,
   resolveNpmInvocation,
+  resolveFlutterToolInvocation,
   setupEnvironmentHandlers,
 };

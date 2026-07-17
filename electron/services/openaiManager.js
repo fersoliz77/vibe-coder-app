@@ -27,6 +27,16 @@ let activeLogin = null;
 let nextRunId = 1;
 let currentRunId = 0;
 
+// ─── Status cache (avoids re-running codex login status on every panel open) ──
+const OPENAI_STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let _openAIStatusCache = null;
+let _openAIStatusCacheAt = 0;
+
+function invalidateOpenAIStatusCache() {
+  _openAIStatusCache = null;
+  _openAIStatusCacheAt = 0;
+}
+
 function cleanProviderEnv() {
   const env = { ...process.env, NO_COLOR: '1', TERM: 'dumb' };
   delete env.ELECTRON_RUN_AS_NODE;
@@ -114,6 +124,10 @@ function buildCodexExecArgs(model, reasoning) {
 }
 
 async function getOpenAIStatus() {
+  const now = Date.now();
+  if (_openAIStatusCache && (now - _openAIStatusCacheAt) < OPENAI_STATUS_CACHE_TTL_MS) {
+    return _openAIStatusCache;
+  }
   let executable;
   try {
     executable = resolveCodexPath();
@@ -128,12 +142,15 @@ async function getOpenAIStatus() {
     });
     const output = `${stdout}\n${stderr}`.trim();
     const authenticated = /logged in/i.test(output);
-    return {
+    const result = {
       installed: true,
       authenticated,
       email: authenticated ? (/chatgpt/i.test(output) ? 'ChatGPT account' : 'OpenAI account') : null,
       provider: 'OpenAI',
     };
+    _openAIStatusCache = result;
+    _openAIStatusCacheAt = Date.now();
+    return result;
   } catch (error) {
     return { installed: true, authenticated: false, email: null, provider: 'OpenAI', error: error.stderr?.trim() || null };
   }
@@ -173,6 +190,13 @@ function loginWithOpenAI(mainWindow) {
     child.on('close', async (code) => {
       activeLogin = null;
       const status = await getOpenAIStatus();
+      // Update cache with the fresh post-login status
+      if (status.authenticated) {
+        _openAIStatusCache = status;
+        _openAIStatusCacheAt = Date.now();
+      } else {
+        invalidateOpenAIStatusCache();
+      }
       resolve(status.authenticated
         ? { success: true, state: status }
         : { success: false, error: code === 0 ? 'OpenAI authentication did not complete.' : `Codex login exited with code ${code}.` });
@@ -181,6 +205,7 @@ function loginWithOpenAI(mainWindow) {
 }
 
 async function logoutFromOpenAI() {
+  invalidateOpenAIStatusCache();
   try {
     await execFileAsync(resolveCodexPath(), ['logout'], {
       env: cleanProviderEnv(),
@@ -281,4 +306,4 @@ function terminateAllOpenAIProcesses() {
   activeLogin = null;
 }
 
-module.exports = { buildCodexExecArgs, getOpenAIModels, getOpenAIStatus, normalizeModelCatalog, resolveCodexPath, setupOpenAIHandlers, terminateAllOpenAIProcesses };
+module.exports = { buildCodexExecArgs, getOpenAIModels, getOpenAIStatus, invalidateOpenAIStatusCache, normalizeModelCatalog, resolveCodexPath, setupOpenAIHandlers, terminateAllOpenAIProcesses };

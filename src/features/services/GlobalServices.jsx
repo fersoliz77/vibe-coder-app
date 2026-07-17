@@ -1,4 +1,5 @@
 import './GlobalServices.css';
+import { useI18n } from '../../i18n/I18nContext';
 
 const SERVICE_DEFS = [
   {
@@ -55,6 +56,7 @@ const SERVICE_DEFS = [
 ];
 
 export default function GlobalServices({ services, inProject = false, onRefresh }) {
+  const { t } = useI18n();
   const getService = (id) => {
     return services.find(x => x.id === id) || { connected: false, checking: true };
   };
@@ -75,17 +77,17 @@ export default function GlobalServices({ services, inProject = false, onRefresh 
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M2 12h4l2-9 4 18 2-9h6" />
           </svg>
-          {inProject ? 'Project Services' : 'Provider Status'}
+          {inProject ? t('services.projectServices') : t('services.providerStatus')}
         </div>
         <div className="global-services__header-right">
           <div className={`global-services__badge ${anyChecking ? 'global-services__badge--checking' : allOperational ? 'global-services__badge--ok' : 'global-services__badge--warn'}`}>
-            {anyChecking ? 'Checking...' : `${connectedCount}/${serviceList.length} Connected`}
+            {anyChecking ? t('services.checking') : t('services.connectedCount', { connected: connectedCount, total: serviceList.length })}
           </div>
           {onRefresh && (
             <button
               className={`global-services__refresh ${anyChecking ? 'spinning' : ''}`}
               onClick={onRefresh}
-              title="Refresh status"
+              title={t('services.refreshStatus')}
               disabled={anyChecking}
             >
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -108,12 +110,12 @@ export default function GlobalServices({ services, inProject = false, onRefresh 
               <div className="global-service-item__info">
                 <span className="global-service-item__name">{service.name}</span>
                 {!service.checking && service.user && (
-                  <span className="global-service-item__account">{inProject ? `Cuenta: ${service.user}` : service.user}</span>
+                  <span className="global-service-item__account">{inProject ? t('services.account', { user: service.user }) : service.user}</span>
                 )}
                 {/* Account authentication and local project linking are separate states. */}
                 {!service.checking && inProject && (
                   <span className={`global-service-item__project ${service.projectLinked === false ? 'global-service-item__project--unlinked' : ''}`}>
-                    ↳ {!service.authenticated && service.projectLinked ? 'Cuenta no autenticada' : service.projectLinked === false ? 'Proyecto no vinculado' : service.project || 'Conectado al proyecto'}
+                    ↳ {!service.authenticated && service.projectLinked ? t('services.unauthenticated') : service.projectLinked === false ? t('services.unlinked') : service.project || t('services.linked')}
                   </span>
                 )}
               </div>

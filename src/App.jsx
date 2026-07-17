@@ -14,6 +14,10 @@ import AuthGate from './features/auth/AuthGate';
 import { useAuth } from './features/auth/AuthContext';
 import SettingsPanel from './features/settings/SettingsPanel';
 import OpenCodeSetupDialog from './features/opencode/OpenCodeSetupDialog';
+import OpenCodePanel from './features/opencode/OpenCodePanel';
+import OnboardingWizard from './features/setup/OnboardingWizard';
+import PreviewCenter from './features/preview/PreviewCenter';
+import { useI18n } from './i18n/I18nContext';
 import './styles/App.css';
 
 const VIEWS = {
@@ -24,22 +28,28 @@ const VIEWS = {
   CLAUDE: 'claude',
   OPENAI: 'openai',
   SETTINGS: 'settings',
+  OPENCODE: 'opencode',
+  PREVIEW: 'preview',
 };
 
 const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
 
 function Workspace() {
   const { state: authState } = useAuth();
+  const { t } = useI18n();
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
   const [isMaximized, setIsMaximized] = useState(false);
   const [openCodeStatus, setOpenCodeStatus] = useState(null);
   const [openCodeSetup, setOpenCodeSetup] = useState({ open: false, phase: 'idle', progress: '', error: '' });
+  const [openAIAvailable, setOpenAIAvailable] = useState(false);
   const openCodeRequest = useRef(0);
+
+  // Onboarding: null = not yet loaded from store, false = needs onboarding, true = done
+  const [onboardingDone, setOnboardingDone] = useState(null);
   const {
     currentProject,
     theme,
     initialized,
-    init,
     setCurrentProject,
     clearCurrentProject,
     setTheme,
@@ -65,8 +75,12 @@ function Workspace() {
   }, [currentProject]);
 
   useEffect(() => {
-    init();
-  }, [init]);
+    // Load onboarding flag from persistent store
+    if (!window.electronAPI?.store) { setOnboardingDone(true); return; }
+    window.electronAPI.store.get('onboardingCompleted', false).then((done) => {
+      setOnboardingDone(Boolean(done));
+    });
+  }, []);
 
   useEffect(() => {
     try {
@@ -108,17 +122,17 @@ function Workspace() {
             } else if (result?.cancelled) {
               setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
             } else if (!result?.busy) {
-              setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: result?.error || 'No se pudo dejar OpenCode operativo en el primer inicio.' });
+              setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: result?.error || t('app.openCodeFirstRunFailed') });
             }
           }
         }
       } catch {
-        if (!cancelled) setOpenCodeSetup((current) => current.open ? current : { open: true, phase: 'error', progress: '', error: 'No se pudo preparar OpenCode durante el primer inicio.' });
+        if (!cancelled) setOpenCodeSetup((current) => current.open ? current : { open: true, phase: 'error', progress: '', error: t('app.openCodeFirstRunPrepareFailed') });
       }
     };
     runBootstrap();
     return () => { cancelled = true; };
-  }, [initialized]);
+  }, [initialized, t]);
 
   // Quick action: open terminal from dashboard
   const handleOpenTerminal = useCallback(() => {
@@ -140,43 +154,32 @@ function Workspace() {
     setActiveView(VIEWS.OPENAI);
   }, [currentProject]);
 
-  const launchOpenCodeTerminal = useCallback(async (requestId) => {
-    if (!currentProject) return;
-    const terminal = await terminalHook.createTerminal({ name: 'OpenCode' });
-    if (requestId !== openCodeRequest.current) {
-      if (terminal?.id) terminalHook.closeTerminal(terminal.id);
-      return;
-    }
-    if (terminal?.error) {
-      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: terminal.error });
-      return;
-    }
-    terminalHook.writeToTerminal(terminal.id, 'opencode\r');
-    setOpenCodeSetup({ open: false, phase: 'idle', progress: '', error: '' });
-    setActiveView(VIEWS.TERMINAL);
-  }, [currentProject, terminalHook.createTerminal, terminalHook.closeTerminal, terminalHook.writeToTerminal]);
-
   const handleOpenCode = useCallback(async () => {
     if (!currentProject || !window.electronAPI?.opencode) return;
     const requestId = ++openCodeRequest.current;
     if (openCodeStatus?.usable) {
-      await launchOpenCodeTerminal(requestId);
+      terminalHook.createOpenCodeTerminal();
+      setActiveView(VIEWS.OPENCODE);
       return;
     }
     try {
       const status = await window.electronAPI.opencode.getStatus();
       if (requestId !== openCodeRequest.current) return;
       setOpenCodeStatus(status);
-      if (status.usable) await launchOpenCodeTerminal(requestId);
-      else setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: status.installed ? 'La instalación existente de OpenCode no se puede ejecutar y debe repararse.' : '' });
+      if (status.usable) {
+        terminalHook.createOpenCodeTerminal();
+        setActiveView(VIEWS.OPENCODE);
+      } else {
+        setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: status.installed ? t('app.openCodeRepair') : '' });
+      }
     } catch (error) {
-      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || 'No se pudo comprobar OpenCode.' });
+      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || t('app.openCodeCheckFailed') });
     }
-  }, [currentProject, launchOpenCodeTerminal, openCodeStatus]);
+  }, [currentProject, openCodeStatus, terminalHook.createOpenCodeTerminal, t]);
 
   const installOpenCode = useCallback(async () => {
     const requestId = ++openCodeRequest.current;
-    setOpenCodeSetup({ open: true, phase: 'installing', progress: 'Descargando el paquete oficial…', error: '' });
+    setOpenCodeSetup({ open: true, phase: 'installing', progress: t('app.downloadingOfficialPackage'), error: '' });
     try {
       const result = await window.electronAPI.opencode.install();
       if (requestId !== openCodeRequest.current) return;
@@ -184,13 +187,34 @@ function Workspace() {
         setOpenCodeSetup({ open: true, phase: 'idle', progress: '', error: '' });
         return;
       }
-      if (!result.success) throw new Error(result.error || 'No se pudo instalar OpenCode.');
+      if (!result.success) throw new Error(result.error || t('app.openCodeInstallFailed'));
       setOpenCodeStatus(result.status);
-      await launchOpenCodeTerminal(requestId);
+      terminalHook.createOpenCodeTerminal();
+      setActiveView(VIEWS.OPENCODE);
     } catch (error) {
-      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || 'No se pudo instalar OpenCode.' });
+      setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || t('app.openCodeInstallFailed') });
     }
-  }, [launchOpenCodeTerminal]);
+  }, [terminalHook.createOpenCodeTerminal, t]);
+
+  // Preload OpenCode in background when project is selected and OpenCode is usable
+  useEffect(() => {
+    if (currentProject && openCodeStatus?.usable) {
+      terminalHook.createOpenCodeTerminal();
+    }
+  }, [currentProject, openCodeStatus, terminalHook.createOpenCodeTerminal]);
+
+  // Check OpenAI connection status to show green check badge in sidebar
+  useEffect(() => {
+    if (!window.electronAPI?.openai) return;
+    const checkOpenAI = async () => {
+      try {
+        const s = await window.electronAPI.openai.getStatus();
+        setOpenAIAvailable(Boolean(s?.authenticated));
+      } catch {}
+    };
+    checkOpenAI();
+  }, [activeView]);
+
 
   const closeOpenCodeSetup = useCallback(() => {
     openCodeRequest.current += 1;
@@ -220,16 +244,24 @@ function Workspace() {
   const handleProjectSelect = useCallback((project) => {
     terminalHook.closeAllTerminals();
     closeOpenCodeSetup();
+    if (currentProject?.path && currentProject.path !== project.path) {
+      window.electronAPI?.preview?.web?.stop(currentProject.path).catch(() => {});
+      window.electronAPI?.preview?.android?.stopEmulator(currentProject.path).catch(() => {});
+    }
     setCurrentProject(project);
     setActiveView(VIEWS.DASHBOARD);
-  }, [terminalHook.closeAllTerminals, closeOpenCodeSetup, setCurrentProject]);
+  }, [terminalHook.closeAllTerminals, closeOpenCodeSetup, currentProject, setCurrentProject]);
 
   const handleBackToProjects = useCallback(() => {
     terminalHook.closeAllTerminals();
     closeOpenCodeSetup();
+    if (currentProject?.path) {
+      window.electronAPI?.preview?.web?.stop(currentProject.path).catch(() => {});
+      window.electronAPI?.preview?.android?.stopEmulator(currentProject.path).catch(() => {});
+    }
     clearCurrentProject();
     setActiveView(VIEWS.PROJECTS);
-  }, [clearCurrentProject, terminalHook.closeAllTerminals, closeOpenCodeSetup]);
+  }, [clearCurrentProject, terminalHook.closeAllTerminals, closeOpenCodeSetup, currentProject]);
 
   // Theme toggle
   const toggleTheme = useCallback(() => {
@@ -247,11 +279,11 @@ function Workspace() {
 
   const renderView = () => {
     if (!initialized) {
-      return <div className="main-content__loading">Loading workspace...</div>;
+      return <div className="main-content__loading">{t('common.loadingWorkspace')}</div>;
     }
 
     if (activeView === VIEWS.SETTINGS) {
-      return <SettingsPanel theme={theme} onSetTheme={setTheme} />;
+      return <SettingsPanel theme={theme} onSetTheme={setTheme} onReopenOnboarding={() => setOnboardingDone(false)} />;
     }
 
     if (activeView === VIEWS.PROJECTS) {
@@ -275,6 +307,8 @@ function Workspace() {
         return <OpenAIPanel cwd={currentProject?.path} />;
       case VIEWS.FILES:
         return <FileExplorer project={currentProject} />;
+      case VIEWS.PREVIEW:
+        return currentProject ? <PreviewCenter project={currentProject} /> : null;
       case VIEWS.DASHBOARD:
       default:
         return (
@@ -292,6 +326,18 @@ function Workspace() {
     }
   };
 
+  // While we haven't loaded the onboarding flag yet, render nothing
+  if (onboardingDone === null) return null;
+
+  // Show full-screen onboarding wizard on first launch
+  if (!onboardingDone) {
+    return (
+      <OnboardingWizard
+        onComplete={() => setOnboardingDone(true)}
+      />
+    );
+  }
+
   return (
     <>
       {/* Custom Titlebar */}
@@ -305,7 +351,7 @@ function Workspace() {
             <div className="titlebar__project-name">{currentProject.name}</div>
             <button
               className="titlebar__project-path"
-              title={`Open parent folder: ${currentProject.path}`}
+              title={t('common.openParentFolder', { path: currentProject.path })}
               onClick={handleOpenProjectParent}
               onMouseDown={(event) => event.stopPropagation()}
               onMouseUp={(event) => event.stopPropagation()}
@@ -316,17 +362,17 @@ function Workspace() {
           </div>
         )}
         <div className="titlebar__controls">
-          <button className="titlebar__btn" onClick={handleMinimize} title="Minimize">
+          <button className="titlebar__btn" onClick={handleMinimize} title={t('common.minimize')}>
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 8h10v1H3z"/></svg>
           </button>
-          <button className="titlebar__btn" onClick={handleMaximize} title="Maximize">
+          <button className="titlebar__btn" onClick={handleMaximize} title={t('common.maximize')}>
             {isMaximized ? (
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 5v8h8V5H3zm7 7H4V6h6v6zm1-8v1h2v6h-2v1h3V4h-3z"/></svg>
             ) : (
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V3H3zm9 9H4V4h8v8z"/></svg>
             )}
           </button>
-          <button className="titlebar__btn titlebar__btn--close" onClick={handleClose} title="Close">
+          <button className="titlebar__btn titlebar__btn--close" onClick={handleClose} title={t('common.close')}>
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 7.293l3.646-3.647.708.708L8.707 8l3.647 3.646-.708.708L8 8.707l-3.646 3.647-.708-.708L7.293 8 3.646 4.354l.708-.708L8 7.293z"/></svg>
           </button>
         </div>
@@ -340,6 +386,7 @@ function Workspace() {
           connectedCount={serviceHook.connectedCount}
           claudeAvailable={claudeHook.isAvailable}
           openCodeAvailable={Boolean(openCodeStatus?.installed)}
+          openAIAvailable={openAIAvailable}
           isDarkMode={isDarkMode}
           onToggleTheme={toggleTheme}
           currentProject={currentProject}
@@ -347,7 +394,22 @@ function Workspace() {
           authState={authState}
         />
         <main className="main-content">
-          {renderView()}
+          {currentProject && (
+            <div
+              style={{
+                display: activeView === VIEWS.OPENCODE ? 'block' : 'none',
+                height: '100%',
+                width: '100%',
+              }}
+            >
+              <OpenCodePanel
+                activeView={activeView}
+                project={currentProject}
+                terminalHook={terminalHook}
+              />
+            </div>
+          )}
+          {activeView !== VIEWS.OPENCODE && renderView()}
         </main>
         {openCodeSetup.open && <OpenCodeSetupDialog state={openCodeSetup} onClose={closeOpenCodeSetup} onInstall={installOpenCode} />}
       </div>

@@ -11,6 +11,16 @@ const PACKAGE_NAME = 'opencode-ai';
 const INSTALL_PACKAGE = `${PACKAGE_NAME}@1.17.18`;
 let activeInstallation = null;
 
+// ─── Status cache (avoids re-running opencode --version + auth list on every click) ──
+const STATUS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+let _statusCache = null;
+let _statusCacheAt = 0;
+
+function invalidateStatusCache() {
+  _statusCache = null;
+  _statusCacheAt = 0;
+}
+
 function stripAnsi(value) {
   return String(value || '').replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '').trim();
 }
@@ -64,7 +74,7 @@ function parseAuthProviders(output) {
   return [...new Set(providers)].slice(0, 50);
 }
 
-async function getOpenCodeStatus() {
+async function _fetchOpenCodeStatus() {
   const executablePath = await findOpenCodePath();
   if (!executablePath) return { installed: false, usable: false, authenticated: false, path: null, version: null, providers: [] };
   let version = null;
@@ -98,6 +108,17 @@ async function getOpenCodeStatus() {
   };
 }
 
+async function getOpenCodeStatus() {
+  const now = Date.now();
+  if (_statusCache && (now - _statusCacheAt) < STATUS_CACHE_TTL_MS) {
+    return _statusCache;
+  }
+  const result = await _fetchOpenCodeStatus();
+  _statusCache = result;
+  _statusCacheAt = Date.now();
+  return result;
+}
+
 function sanitizeProgress(value) {
   return stripAnsi(value).replace(/[\r\n]+/g, ' ').slice(0, 500);
 }
@@ -106,6 +127,7 @@ async function installOpenCode(onProgress = () => {}) {
   if (activeInstallation) return { success: false, busy: true, error: 'OpenCode installation is already running.' };
   const reservation = { process: null };
   activeInstallation = reservation;
+  invalidateStatusCache(); // force fresh check during install
   const existing = await getOpenCodeStatus();
   if (existing.usable) {
     activeInstallation = null;

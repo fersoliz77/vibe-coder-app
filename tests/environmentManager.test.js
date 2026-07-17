@@ -2,12 +2,31 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  ANDROID_AVD_NAME,
+  ANDROID_BUILD_TOOLS_VERSION,
+  ANDROID_COMMAND_LINE_TOOLS_URL,
+  ANDROID_SDK_PACKAGES,
+  ANDROID_SYSTEM_IMAGE,
   INSTALL_ALLOWLIST,
   SUPABASE_INSTRUCTION,
   buildInstallationPlan,
+  getAvdHardwareConfig,
   normalizeOptions,
   parseVersionOutput,
 } = require('../electron/services/environmentManager');
+
+test('Android provisioning uses pinned Google packages and conservative adaptive AVD settings', () => {
+  assert.equal(ANDROID_AVD_NAME, 'Vibe_API_35');
+  assert.equal(ANDROID_BUILD_TOOLS_VERSION, '35.0.0');
+  assert.equal(ANDROID_SYSTEM_IMAGE, 'system-images;android-35;google_apis;x86_64');
+  assert.match(ANDROID_COMMAND_LINE_TOOLS_URL, /^https:\/\/dl\.google\.com\/android\/repository\/commandlinetools-win-13114758_latest\.zip$/);
+  assert.deepEqual(ANDROID_SDK_PACKAGES, [
+    'platform-tools', 'platforms;android-35', 'build-tools;35.0.0', 'emulator', 'system-images;android-35;google_apis;x86_64',
+  ]);
+  assert.deepEqual(getAvdHardwareConfig(4 * 1024 ** 3, 8), { ramMb: 1024, cpuCores: 1, heapMb: 256, dataPartition: '4G' });
+  assert.deepEqual(getAvdHardwareConfig(8 * 1024 ** 3, 4), { ramMb: 1536, cpuCores: 2, heapMb: 384, dataPartition: '6G' });
+  assert.deepEqual(getAvdHardwareConfig(16 * 1024 ** 3, 12), { ramMb: 2048, cpuCores: 4, heapMb: 512, dataPartition: '8G' });
+});
 
 test('installation plan is restricted to the fixed allowlist and preserves dependency order', () => {
   const plan = buildInstallationPlan(

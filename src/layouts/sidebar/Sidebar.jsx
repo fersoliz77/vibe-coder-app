@@ -1,11 +1,12 @@
 import './Sidebar.css';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
+import { useI18n } from '../../i18n/I18nContext';
 
 const NAV_ITEMS = [
   {
     id: 'dashboard',
-    label: 'Dashboard',
+    labelKey: 'sidebar.dashboard',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
@@ -17,7 +18,7 @@ const NAV_ITEMS = [
   },
   {
     id: 'files',
-    label: 'Explorer',
+    labelKey: 'sidebar.explorer',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
@@ -26,11 +27,21 @@ const NAV_ITEMS = [
   },
   {
     id: 'terminal',
-    label: 'Terminal',
+    labelKey: 'sidebar.terminal',
     icon: (
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <polyline points="4 17 10 11 4 5" />
         <line x1="12" y1="19" x2="20" y2="19" />
+      </svg>
+    ),
+  },
+  {
+    id: 'preview',
+    labelKey: 'sidebar.preview',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="15" rx="2" />
+        <path d="m10 9 5 3-5 3V9Z" />
       </svg>
     ),
   },
@@ -55,7 +66,8 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
+export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
+  const { t } = useI18n();
   return (
     <aside className="sidebar">
       {/* Navigation */}
@@ -63,10 +75,10 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
         {!currentProject && (
           <>
             <button className={`sidebar__item ${activeView === 'dashboard' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('dashboard')} type="button">
-              <span className="sidebar__icon">{NAV_ITEMS[0].icon}</span><span className="sidebar__label">Dashboard</span>
+              <span className="sidebar__icon">{NAV_ITEMS[0].icon}</span><span className="sidebar__label">{t('sidebar.dashboard')}</span>
             </button>
             <button className={`sidebar__item ${activeView === 'projects' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('projects')} type="button">
-              <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg></span><span className="sidebar__label">Projects</span>
+              <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 7h6l2 2h10v10H3z"/><path d="M3 7V5h6l2 2"/></svg></span><span className="sidebar__label">{t('sidebar.projects')}</span>
             </button>
           </>
         )}
@@ -83,7 +95,7 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                   <polyline points="12 19 5 12 12 5"></polyline>
                 </svg>
               </span>
-              <span className="sidebar__label">All Projects</span>
+              <span className="sidebar__label">{t('sidebar.allProjects')}</span>
             </button>
 
             {NAV_ITEMS.map((item) => (
@@ -91,10 +103,10 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                 key={item.id}
                 className={`sidebar__item ${activeView === item.id ? 'sidebar__item--active' : ''}`}
                 onClick={() => onNavigate(item.id)}
-                title={item.label}
+                title={item.labelKey ? t(item.labelKey) : item.label}
               >
                 <span className="sidebar__icon">{item.icon}</span>
-                <span className="sidebar__label">{item.label}</span>
+                <span className="sidebar__label">{item.labelKey ? t(item.labelKey) : item.label}</span>
                 {item.id === 'dashboard' && connectedCount > 0 && (
                   <span className="sidebar__badge sidebar__badge--success">{connectedCount}</span>
                 )}
@@ -102,6 +114,9 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                   <span className="sidebar__badge sidebar__badge--success">✓</span>
                 )}
                 {item.id === 'opencode' && openCodeAvailable && (
+                  <span className="sidebar__badge sidebar__badge--success">✓</span>
+                )}
+                {item.id === 'openai' && openAIAvailable && (
                   <span className="sidebar__badge sidebar__badge--success">✓</span>
                 )}
               </button>
@@ -112,14 +127,14 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
 
       {/* Bottom section */}
       <div className="sidebar__footer">
-        <button className={`sidebar__item ${activeView === 'settings' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('settings')} title="Settings" type="button">
+       <button className={`sidebar__item ${activeView === 'settings' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('settings')} title={t('sidebar.settings')} type="button">
           <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 9 19.36a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.55-1.03H3v-4h.09A1.7 1.7 0 0 0 4.64 9a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1.03-1.55V3h4v.09A1.7 1.7 0 0 0 15 4.64a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.17.62.75 1.04 1.4 1.03H21v4h-.09A1.7 1.7 0 0 0 19.4 15z"/></svg></span>
-          <span className="sidebar__label">Settings · {authState.user?.email || 'Account'}</span>
+          <span className="sidebar__label">{t('sidebar.settings')} · {authState.user?.email || t('sidebar.account')}</span>
         </button>
         <button
           className="sidebar__item"
           onClick={onToggleTheme}
-          title={isDarkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}
+          title={isDarkMode ? t('sidebar.switchToLight') : t('sidebar.switchToDark')}
         >
           <span className="sidebar__icon">
             {isDarkMode ? (
@@ -142,7 +157,7 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
               </svg>
             )}
           </span>
-          <span className="sidebar__label">Toggle Theme</span>
+          <span className="sidebar__label">{t('sidebar.toggleTheme')}</span>
         </button>
         <div className="sidebar__version">
           <span className="text-tertiary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>v1.0.0</span>

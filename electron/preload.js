@@ -147,4 +147,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     install: () => ipcRenderer.invoke('opencode:install'),
     onInstallProgress: (callback) => subscribe('opencode:install-progress', callback, (progress) => [progress]),
   },
+  preview: {
+    web: {
+      status: (cwd) => ipcRenderer.invoke('preview:web-status', cwd),
+      start: (cwd) => ipcRenderer.invoke('preview:web-start', cwd),
+      stop: (cwd) => ipcRenderer.invoke('preview:web-stop', cwd),
+      openExternal: (cwd) => ipcRenderer.invoke('preview:web-open-external', cwd),
+      onStatus: (callback) => subscribe('preview:web-status', callback, (status) => [status]),
+    },
+    android: {
+      status: (cwd) => ipcRenderer.invoke('preview:android-status', cwd),
+      startEmulator: (cwd) => ipcRenderer.invoke('preview:android-start-emulator', cwd),
+      stopEmulator: (cwd) => ipcRenderer.invoke('preview:android-stop-emulator', cwd),
+      runApp: (cwd) => ipcRenderer.invoke('preview:android-run-app', cwd),
+      stopApp: (cwd) => ipcRenderer.invoke('preview:android-stop-app', cwd),
+      onStatus: (callback) => subscribe('preview:android-status', callback, (status) => [status]),
+    },
+    onLog: (callback) => subscribe('preview:log', callback, (entry) => [entry]),
+  },
 });

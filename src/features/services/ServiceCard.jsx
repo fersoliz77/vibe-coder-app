@@ -1,4 +1,5 @@
 import './ServiceCard.css';
+import { useI18n } from '../../i18n/I18nContext';
 
 const SERVICE_ICONS = {
   vercel: (
@@ -51,6 +52,7 @@ const SERVICE_COLORS = {
 };
 
 export default function ServiceCard({ service, onRefresh }) {
+  const { t } = useI18n();
   const { id, name, connected, user, checking } = service;
   const colors = SERVICE_COLORS[id] || SERVICE_COLORS.github;
 
@@ -69,7 +71,7 @@ export default function ServiceCard({ service, onRefresh }) {
         <div className="service-card__status-wrap">
           <span className={`status-dot ${checking ? 'status-dot--checking' : connected ? 'status-dot--connected' : 'status-dot--disconnected'}`} />
           <span className="service-card__status-text">
-            {checking ? 'Checking...' : connected ? 'Connected' : 'Disconnected'}
+            {checking ? t('services.checking') : connected ? t('services.connected') : t('services.disconnected')}
           </span>
         </div>
       </div>
@@ -81,11 +83,11 @@ export default function ServiceCard({ service, onRefresh }) {
         )}
         {!checking && (
           <p className={`service-card__hint ${!service.project ? 'service-card__hint--warn' : ''}`}>
-            {!service.authenticated && service.projectLinked ? 'Cuenta no autenticada' : service.projectLinked === false ? 'Proyecto no vinculado' : service.project ? `Linked: ${service.project}` : 'Conectado al proyecto'}
+            {!service.authenticated && service.projectLinked ? t('services.unauthenticated') : service.projectLinked === false ? t('services.unlinked') : service.project ? `Linked: ${service.project}` : t('services.linked')}
           </p>
         )}
         {!connected && !checking && (
-          <p className="service-card__hint">Not authenticated</p>
+          <p className="service-card__hint">{t('services.notAuthenticated')}</p>
         )}
       </div>
 
@@ -98,7 +100,7 @@ export default function ServiceCard({ service, onRefresh }) {
           {checking ? (
             <span className="service-card__spinner">⟳</span>
           ) : (
-            '↻ Refresh'
+            `↻ ${t('services.refresh')}`
           )}
         </button>
       </div>

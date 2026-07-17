@@ -24,6 +24,35 @@ export function useClaude(projectPath) {
   const [currentResponse, setCurrentResponse] = useState('');
   const streamRef = useRef('');
 
+  const saveTimerRef = useRef(null);
+  const storageKey = `chat:claude:${projectPath || 'global'}`;
+
+  const saveHistory = useCallback((msgs) => {
+    if (!window.electronAPI?.store) return;
+    clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      const toSave = msgs.slice(-50);
+      window.electronAPI.store.set(storageKey, toSave);
+    }, 1000);
+  }, [storageKey]);
+
+  const clearHistory = useCallback(() => {
+    if (!window.electronAPI?.store) return;
+    clearTimeout(saveTimerRef.current);
+    window.electronAPI.store.delete(storageKey);
+  }, [storageKey]);
+
+  // Load history on mount or project change
+  useEffect(() => {
+    if (!window.electronAPI?.store) return;
+    setMessages([]); // Clear current UI state first
+    window.electronAPI.store.get(storageKey, []).then((saved) => {
+      if (Array.isArray(saved) && saved.length > 0) {
+        setMessages(saved);
+      }
+    });
+  }, [storageKey]);
+
   // ─── Status ───────────────────────────────────────────────────────────────
 
   const refreshStatus = useCallback(async () => {
@@ -67,42 +96,51 @@ export function useClaude(projectPath) {
   const logout = useCallback(async () => {
     if (!window.electronAPI?.claude) return;
     await window.electronAPI.claude.logout();
+    setMessages([]);
+    clearHistory();
     await refreshStatus();
-  }, [refreshStatus]);
+  }, [refreshStatus, clearHistory]);
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
 
   const sendPrompt = useCallback(async (prompt, cwd, model) => {
     if (!window.electronAPI?.claude) return;
     const userMessage = { role: 'user', content: prompt, timestamp: Date.now() };
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages((prev) => {
+      const next = [...prev, userMessage];
+      saveHistory(next);
+      return next;
+    });
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
     await window.electronAPI.claude.sendPrompt(prompt, cwd || projectPath, model);
-  }, [projectPath]);
+  }, [projectPath, saveHistory]);
 
   const cancel = useCallback(() => {
     if (!window.electronAPI?.claude) return;
     window.electronAPI.claude.cancel();
     setIsRunning(false);
     if (streamRef.current) {
-      setMessages((prev) => [
-        ...prev,
-        { role: 'assistant', content: streamRef.current + '\n\n*[Cancelled]*', timestamp: Date.now() },
-      ]);
+      setMessages((prev) => {
+        const next = [
+          ...prev,
+          { role: 'assistant', content: streamRef.current + '\n\n*[Cancelled]*', timestamp: Date.now() },
+        ];
+        saveHistory(next);
+        return next;
+      });
       setCurrentResponse('');
       streamRef.current = '';
     }
-  }, []);
+  }, [saveHistory]);
 
   const clear = useCallback(() => {
     setMessages([]);
     setCurrentResponse('');
     streamRef.current = '';
-  }, []);
-
-  // ─── Event listeners ──────────────────────────────────────────────────────
+    clearHistory();
+  }, [clearHistory]);
 
   useEffect(() => {
     if (!window.electronAPI?.claude) return;
@@ -114,24 +152,30 @@ export function useClaude(projectPath) {
       }),
       window.electronAPI.claude.onComplete(({ output } = {}) => {
         setIsRunning(false);
-        // Prefer streamed content; fall back to the full output sent with the complete event
-        // (claude --print buffers output and may deliver it all at close time)
         const finalContent = streamRef.current || output || '';
         if (finalContent) {
-          setMessages((prev) => [
-            ...prev,
-            { role: 'assistant', content: finalContent, timestamp: Date.now() },
-          ]);
+          setMessages((prev) => {
+            const next = [
+              ...prev,
+              { role: 'assistant', content: finalContent, timestamp: Date.now() },
+            ];
+            saveHistory(next);
+            return next;
+          });
         }
         setCurrentResponse('');
         streamRef.current = '';
       }),
       window.electronAPI.claude.onError((error) => {
         setIsRunning(false);
-        setMessages((prev) => [
-          ...prev,
-          { role: 'error', content: error, timestamp: Date.now() },
-        ]);
+        setMessages((prev) => {
+          const next = [
+            ...prev,
+            { role: 'error', content: error, timestamp: Date.now() },
+          ];
+          saveHistory(next);
+          return next;
+        });
         setCurrentResponse('');
         streamRef.current = '';
       }),
@@ -144,7 +188,7 @@ export function useClaude(projectPath) {
     ];
 
     return () => unsubs.forEach((u) => u?.());
-  }, []);
+  }, [saveHistory]);
 
   // Initial status check
   useEffect(() => {

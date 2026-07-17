@@ -1,10 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import './SetupCenter.css';
+import { useI18n } from '../../i18n/I18nContext';
 
-const BACKENDS = [
-  { value: 'firebase', label: 'Firebase' },
-  { value: 'supabase', label: 'Supabase' },
-];
+const ENVIRONMENT_OPTIONS = Object.freeze({ includeMobile: true, backend: 'firebase' });
 
 function StatusIcon({ installed, checking }) {
   if (checking) return <span className="setup-center__spinner" aria-hidden="true" />;
@@ -15,28 +13,27 @@ function StatusIcon({ installed, checking }) {
   );
 }
 
-function EnvironmentItem({ item, checking }) {
+function EnvironmentItem({ item, checking, t }) {
   return (
     <article className={`setup-center__item ${item?.installed ? 'is-ready' : 'is-missing'}`}>
       <StatusIcon installed={item?.installed} checking={checking} />
       <div className="setup-center__item-copy">
         <div className="setup-center__item-title">
-          <strong>{item?.name || 'Componente'}</strong>
+          <strong>{item?.name || t('setup.component')}</strong>
           <span className={`setup-center__requirement ${item?.required ? 'is-required' : ''}`}>
-            {item?.required ? 'Requerido' : 'Opcional'}
+            {item?.required ? t('setup.required') : t('setup.optional')}
           </span>
         </div>
-        <p>{checking ? 'Comprobando...' : item?.installed ? item.version || 'Instalado' : item?.instruction || 'No instalado'}</p>
+        <p>{checking ? t('setup.checking') : item?.installed ? item.version || t('setup.installed') : item?.instruction || t('setup.notInstalled')}</p>
         {item?.path && <code title={item.path}>{item.path}</code>}
       </div>
     </article>
   );
 }
 
-export default function SetupCenter({ compact = false, initialMobile = false, initialBackend = 'firebase' }) {
+export default function SetupCenter({ compact = false }) {
+  const { t } = useI18n();
   const checkSequence = useRef(0);
-  const [includeMobile, setIncludeMobile] = useState(initialMobile);
-  const [backend, setBackend] = useState(initialBackend);
   const [environment, setEnvironment] = useState(null);
   const [checking, setChecking] = useState(true);
   const [installing, setInstalling] = useState(false);
@@ -47,13 +44,13 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
   const [openCode, setOpenCode] = useState({ loading: true, installing: false, status: null, error: '', progress: '' });
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.setup : null;
-  const options = { includeMobile, backend };
+  const options = ENVIRONMENT_OPTIONS;
 
   const check = async () => {
     const sequence = ++checkSequence.current;
     if (!api?.check) {
       setChecking(false);
-      setError('La API de configuración no está disponible en esta ejecución.');
+      setError(t('setup.unavailableApi'));
       return;
     }
     setChecking(true);
@@ -62,10 +59,10 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
       const result = await api.check(options);
       if (sequence !== checkSequence.current) return;
       setEnvironment(result);
-      if (!result.supported) setError(result.error || 'Plataforma no compatible.');
+      if (!result.supported) setError(result.error || t('setup.unsupported'));
     } catch (checkError) {
       if (sequence !== checkSequence.current) return;
-      setError(checkError?.message || 'No se pudo comprobar el entorno.');
+      setError(checkError?.message || t('setup.checkFailed'));
     } finally {
       if (sequence === checkSequence.current) setChecking(false);
     }
@@ -73,11 +70,11 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
 
   useEffect(() => {
     check();
-  }, [includeMobile, backend]);
+  }, [t]);
 
   const checkOpenCode = async () => {
     if (!window.electronAPI?.opencode?.getStatus) {
-      setOpenCode({ loading: false, installing: false, status: null, error: 'OpenCode no está disponible en esta ejecución.', progress: '' });
+      setOpenCode({ loading: false, installing: false, status: null, error: t('setup.unavailableApi'), progress: '' });
       return;
     }
     setOpenCode((current) => ({ ...current, loading: true, error: '', progress: '' }));
@@ -85,13 +82,13 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
       const status = await window.electronAPI.opencode.getStatus();
       setOpenCode({ loading: false, installing: false, status, error: '', progress: '' });
     } catch (error) {
-      setOpenCode({ loading: false, installing: false, status: null, error: error?.message || 'No se pudo comprobar OpenCode.', progress: '' });
+      setOpenCode({ loading: false, installing: false, status: null, error: error?.message || t('app.openCodeCheckFailed'), progress: '' });
     }
   };
 
   useEffect(() => {
     checkOpenCode();
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!window.electronAPI?.opencode?.onInstallProgress) return undefined;
@@ -117,11 +114,11 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
     setLog([]);
     try {
       const result = await api.install(options);
-      if (!result.success && !result.cancelled) setError(result.error || 'Algunos componentes no pudieron instalarse. Revisa el progreso.');
+      if (!result.success && !result.cancelled) setError(result.error || t('setup.installFailed'));
       if (result.environment) setEnvironment(result.environment);
       else await check();
     } catch (installError) {
-      setError(installError?.message || 'No se pudo instalar el entorno.');
+      setError(installError?.message || t('setup.installEnvironmentFailed'));
     } finally {
       setInstalling(false);
     }
@@ -133,17 +130,17 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
 
   const installOpenCode = async () => {
     if (!window.electronAPI?.opencode?.install) return;
-    setOpenCode((current) => ({ ...current, installing: true, error: '', progress: 'Comprobando instalación de OpenCode…' }));
+    setOpenCode((current) => ({ ...current, installing: true, error: '', progress: t('setup.checkingOpenCode') }));
     try {
       const result = await window.electronAPI.opencode.install();
-      if (!result?.success && !result?.cancelled) throw new Error(result?.error || 'No se pudo instalar OpenCode.');
+      if (!result?.success && !result?.cancelled) throw new Error(result?.error || t('app.openCodeInstallFailed'));
       if (result?.status) {
         setOpenCode({ loading: false, installing: false, status: result.status, error: '', progress: '' });
       } else {
         await checkOpenCode();
       }
     } catch (error) {
-      setOpenCode((current) => ({ ...current, installing: false, error: error?.message || 'No se pudo instalar OpenCode.', progress: '' }));
+      setOpenCode((current) => ({ ...current, installing: false, error: error?.message || t('app.openCodeInstallFailed'), progress: '' }));
     }
   };
 
@@ -156,29 +153,20 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
     <section className={`setup-center ${compact ? 'setup-center--compact' : ''}`} aria-labelledby="setup-center-title">
       <header className="setup-center__header">
         <div>
-          <span className="setup-center__eyebrow">Entorno local</span>
-          <h2 id="setup-center-title">Centro de configuración</h2>
-          <p>Prepara las herramientas de desarrollo con una instalación controlada para Windows.</p>
+          <span className="setup-center__eyebrow">{t('setup.localEnvironment')}</span>
+          <h2 id="setup-center-title">{t('setup.center')}</h2>
+          <p>{t('setup.centerCopy')}</p>
         </div>
-        <div className="setup-center__score" aria-label={`${environment?.summary?.installed || 0} componentes listos`}>
+        <div className="setup-center__score" aria-label={t('setup.readyCount', { count: environment?.summary?.installed || 0, total: items.length || 0 })}>
           <strong>{environment?.summary?.installed || 0}</strong>
-          <span>de {items.length || '—'} listos</span>
+          <span>{t('setup.readyCount', { count: environment?.summary?.installed || 0, total: items.length || '—' })}</span>
         </div>
       </header>
 
       <div className="setup-center__controls">
-        <label>
-          <span>Backend</span>
-          <select value={backend} disabled={installing} onChange={(event) => setBackend(event.target.value)}>
-            {BACKENDS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-          </select>
-        </label>
-        <label className="setup-center__mobile-toggle">
-          <input type="checkbox" checked={includeMobile} disabled={installing} onChange={(event) => setIncludeMobile(event.target.checked)} />
-          <span><strong>Desarrollo móvil</strong><small>Flutter, JDK 17 y Android SDK</small></span>
-        </label>
+        <p>{t('setup.includes')}</p>
         <button className="setup-center__button is-secondary" type="button" disabled={checking || installing} onClick={check}>
-          {checking ? 'Comprobando...' : 'Volver a comprobar'}
+          {checking ? t('setup.checking') : t('setup.checkAgain')}
         </button>
       </div>
 
@@ -186,41 +174,41 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
 
       <div className="setup-center__groups" aria-busy={checking}>
         <div className="setup-center__group">
-          <div className="setup-center__group-heading"><h3>Requeridos</h3><span>{required.filter((item) => item.installed).length}/{required.length}</span></div>
+          <div className="setup-center__group-heading"><h3>{t('setup.requiredPlural')}</h3><span>{required.filter((item) => item.installed).length}/{required.length}</span></div>
           <div className="setup-center__items">
-            {required.map((item) => <EnvironmentItem key={item.id} item={item} checking={checking} />)}
-            {!required.length && checking && <EnvironmentItem checking />}
+            {required.map((item) => <EnvironmentItem key={item.id} item={item} checking={checking} t={t} />)}
+            {!required.length && checking && <EnvironmentItem checking t={t} />}
+            <article className={`setup-center__item setup-center__item--opencode ${openCode.status?.usable ? 'is-ready' : 'is-missing'}`} aria-labelledby="setup-opencode-title">
+              <StatusIcon installed={openCode.status?.usable} checking={openCode.loading} />
+              <div className="setup-center__item-copy">
+                <div className="setup-center__item-title">
+                  <strong id="setup-opencode-title">OpenCode</strong>
+                  <span className="setup-center__requirement is-required">{t('setup.required')}</span>
+                </div>
+                <p>{openCode.loading ? t('setup.checkingOfficialExecutable') : openCode.status?.usable ? `${t('setup.ready')} · ${openCode.status.version || t('setup.installed')}` : openCode.status?.installed ? t('setup.installationDetectedRepair') : t('setup.notInstalled')}</p>
+                <p>{openCode.loading ? t('setup.checking') : openCode.status?.authenticated ? t('setup.providers', { providers: openCode.status.providers.join(', ') }) : t('setup.connectProviders')}</p>
+                {openCode.progress && <p>{openCode.progress}</p>}
+                {openCode.error && <p className="setup-center__agent-error">{openCode.error}</p>}
+              </div>
+              {!openCode.loading && openCode.status && !openCode.status.installed && (
+                <div className="setup-center__agent-actions">
+                  <button className="setup-center__button is-primary" type="button" disabled={openCode.installing} onClick={installOpenCode}>{openCode.installing ? t('setup.installing') : t('setup.installOpenCode')}</button>
+                </div>
+              )}
+            </article>
           </div>
         </div>
         {optional.length > 0 && (
           <div className="setup-center__group">
-            <div className="setup-center__group-heading"><h3>Opcionales</h3><span>{optional.filter((item) => item.installed).length}/{optional.length}</span></div>
-            <div className="setup-center__items">{optional.map((item) => <EnvironmentItem key={item.id} item={item} checking={checking} />)}</div>
+            <div className="setup-center__group-heading"><h3>{t('setup.optionalPlural')}</h3><span>{optional.filter((item) => item.installed).length}/{optional.length}</span></div>
+            <div className="setup-center__items">{optional.map((item) => <EnvironmentItem key={item.id} item={item} checking={checking} t={t} />)}</div>
           </div>
         )}
       </div>
 
-      <section className="setup-center__agent-card" aria-labelledby="setup-opencode-title">
-        <div className="setup-center__agent-copy">
-          <span className="setup-center__eyebrow">Agente priorizado</span>
-          <h3 id="setup-opencode-title">OpenCode</h3>
-          <p>Debe quedar operativo desde el primer inicio. Se descarga solo si falta y no instala Claude Code ni Codex.</p>
-        </div>
-        <div className="setup-center__agent-status">
-          <strong>{openCode.loading ? 'Comprobando…' : openCode.status?.usable ? `Listo · ${openCode.status.version || 'instalado'}` : openCode.status?.installed ? 'Instalación detectada · requiere reparación' : 'No instalado'}</strong>
-          <span>{openCode.loading ? 'Verificando el ejecutable oficial.' : openCode.status?.authenticated ? `Proveedores: ${openCode.status.providers.join(', ')}` : 'Conecta proveedores dentro de OpenCode con /connect.'}</span>
-          {openCode.progress && <small>{openCode.progress}</small>}
-          {openCode.error && <small className="setup-center__agent-error">{openCode.error}</small>}
-        </div>
-        <div className="setup-center__agent-actions">
-          <button className="setup-center__button is-secondary" type="button" disabled={openCode.loading || openCode.installing} onClick={checkOpenCode}>Revisar</button>
-          <button className="setup-center__button is-primary" type="button" disabled={openCode.loading || openCode.installing} onClick={installOpenCode}>{openCode.installing ? 'Instalando…' : openCode.status?.usable ? 'Reinstalar' : 'Instalar OpenCode'}</button>
-        </div>
-      </section>
-
       {installing && (
         <div className="setup-center__progress" role="status" aria-live="polite">
-          <div className="setup-center__progress-copy"><strong>{progress?.label || 'Preparando instalación'}</strong><span>{progress?.message || 'Comprobando requisitos...'}</span></div>
+          <div className="setup-center__progress-copy"><strong>{progress?.label || t('setup.preparingInstallation')}</strong><span>{progress?.message || t('setup.checkingRequirements')}</span></div>
           <div className="setup-center__progress-track"><span style={{ width: `${percentage}%` }} /></div>
           {log.length > 0 && <div className="setup-center__log">{log.map((line, index) => <div key={`${index}-${line}`}>{line}</div>)}</div>}
         </div>
@@ -228,13 +216,13 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
 
       <footer className="setup-center__footer">
         <div>
-          <strong>{environment?.summary?.requiredMissing ? `${environment.summary.requiredMissing} requisitos pendientes` : 'Requisitos principales listos'}</strong>
-          <span>Vercel siempre se incluye. Las instalaciones se ejecutan una por una y se pueden cancelar.</span>
+          <strong>{environment?.summary?.requiredMissing ? t('setup.requirementsPending', { count: environment.summary.requiredMissing }) : t('setup.mainRequirementsReady')}</strong>
+          <span>{t('setup.installFooterCopy')}</span>
         </div>
         {installing ? (
-          <button className="setup-center__button is-danger" type="button" onClick={cancel}>Cancelar</button>
+          <button className="setup-center__button is-danger" type="button" onClick={cancel}>{t('setup.cancel')}</button>
         ) : (
-          <button className="setup-center__button is-primary" type="button" disabled={checking || !api?.install || environment?.supported === false} onClick={() => setConfirming(true)}>Instalar todo</button>
+          <button className="setup-center__button is-primary" type="button" disabled={checking || !api?.install || environment?.supported === false} onClick={() => setConfirming(true)}>{t('setup.installAll')}</button>
         )}
       </footer>
 
@@ -242,12 +230,12 @@ export default function SetupCenter({ compact = false, initialMobile = false, in
         <div className="setup-center__dialog-backdrop" role="presentation" onMouseDown={() => setConfirming(false)}>
           <div className="setup-center__dialog" role="dialog" aria-modal="true" aria-labelledby="setup-confirm-title" onMouseDown={(event) => event.stopPropagation()}>
             <span className="setup-center__dialog-mark" aria-hidden="true">→</span>
-            <h3 id="setup-confirm-title">Confirmar instalación conjunta</h3>
-            <p>Se instalarán secuencialmente todos los componentes seleccionados que falten. Windows puede solicitar permisos de administrador.</p>
-            <div className="setup-center__dialog-summary"><span>Backend: <strong>{BACKENDS.find((entry) => entry.value === backend)?.label}</strong></span><span>Móvil: <strong>{includeMobile ? 'Incluido' : 'No incluido'}</strong></span></div>
+            <h3 id="setup-confirm-title">{t('setup.confirmInstall')}</h3>
+            <p>{t('setup.confirmCopy')}</p>
+            <div className="setup-center__dialog-summary"><span>{t('setup.webMobileTools')} <strong>{t('setup.alwaysIncluded')}</strong></span></div>
             <div className="setup-center__dialog-actions">
-              <button className="setup-center__button is-secondary" type="button" onClick={() => setConfirming(false)}>Volver</button>
-              <button className="setup-center__button is-primary" type="button" onClick={install}>Confirmar e instalar</button>
+              <button className="setup-center__button is-secondary" type="button" onClick={() => setConfirming(false)}>{t('setup.back')}</button>
+              <button className="setup-center__button is-primary" type="button" onClick={install}>{t('setup.confirmAndInstall')}</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { getSystemLocale, SUPPORTED_LOCALES } from '../i18n/locales';
 
 // Simple store that syncs with Electron local DB
 export const useAppStore = create((set, get) => ({
@@ -7,6 +8,7 @@ export const useAppStore = create((set, get) => ({
   currentProject: null,
   recentProjects: [],
   theme: 'dark', // for future use
+  language: getSystemLocale(),
 
   // Actions
   init: async () => {
@@ -16,7 +18,8 @@ export const useAppStore = create((set, get) => ({
         initialized: true,
         currentProject: config.currentProject || null,
         recentProjects: config.recentProjects || [],
-        theme: config.theme || 'dark'
+        theme: config.theme || 'dark',
+        language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
       });
       return;
     }
@@ -71,6 +74,14 @@ export const useAppStore = create((set, get) => ({
     set({ theme });
     if (window.electronAPI?.store) {
       await window.electronAPI.store.set('theme', theme);
+    }
+  },
+
+  setLanguage: async (language) => {
+    if (!SUPPORTED_LOCALES.includes(language)) return;
+    set({ language });
+    if (window.electronAPI?.store) {
+      await window.electronAPI.store.set('language', language);
     }
   }
 }));

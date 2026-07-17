@@ -1,4 +1,5 @@
 import { dragLog, getExtension, getFileMeta } from './explorerUtils';
+import { useI18n } from '../../i18n/I18nContext';
 
 function FileTypeIcon({ meta, extension }) {
   const ext = (extension || '').toLowerCase();
@@ -22,15 +23,16 @@ function FileTypeIcon({ meta, extension }) {
 }
 
 function SearchResults({ results, query, onOpen }) {
+  const { t } = useI18n();
   const hasResults = results.files.length > 0 || results.contentMatches.length > 0;
 
   return (
     <div className="file-search-results">
-      <div className="file-search-results__title">Results for "{query}"</div>
-      {!hasResults && <div className="file-tree-empty-root">No matches found</div>}
+      <div className="file-search-results__title">{t('explorer.resultsFor', { query })}</div>
+      {!hasResults && <div className="file-tree-empty-root">{t('explorer.noMatches')}</div>}
       {results.files.length > 0 && (
         <div className="file-search-results__group">
-          <div className="file-search-results__label">Files</div>
+          <div className="file-search-results__label">{t('explorer.files')}</div>
           {results.files.map((item) => (
             <button key={`file:${item.path}`} className="file-search-results__item" type="button" onClick={() => onOpen(item.path)}>
               <span className="file-search-results__name">{item.name}</span>
@@ -41,7 +43,7 @@ function SearchResults({ results, query, onOpen }) {
       )}
       {results.contentMatches.length > 0 && (
         <div className="file-search-results__group">
-          <div className="file-search-results__label">Content</div>
+          <div className="file-search-results__label">{t('explorer.content')}</div>
           {results.contentMatches.map((item) => (
             <button key={`content:${item.path}:${item.snippet}`} className="file-search-results__item" type="button" onClick={() => onOpen(item.path)}>
               <span className="file-search-results__name">{item.name}</span>
@@ -55,6 +57,7 @@ function SearchResults({ results, query, onOpen }) {
 }
 
 function TreeNode(props) {
+  const { t } = useI18n();
   const {
     node,
     depth,
@@ -126,7 +129,7 @@ function TreeNode(props) {
               dragLog('dragStart', { sourcePath: node.path, name: node.name, x: event.clientX, y: event.clientY });
               onDragStartNode(node, event.clientX, event.clientY);
             }}
-            title="Drag to move"
+            title={t('explorer.dragToMove')}
           >
             <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M5 3.25a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m8-9.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0m0 4.75a1 1 0 1 1-2 0 1 1 0 0 1 2 0"/></svg>
           </span>
@@ -203,6 +206,7 @@ export function ExplorerTree({
   handleDragStartNode,
   dragState,
 }) {
+  const { t } = useI18n();
   return (
     <div className="file-explorer__root" onContextMenu={handleRootContextMenu}>
       <button
@@ -223,11 +227,11 @@ export function ExplorerTree({
 
       <div className="file-explorer__tree">
         {showSearch ? (
-          isSearching ? <div className="file-tree-loading">Searching...</div> : <SearchResults results={searchResults} query={searchQuery} onOpen={openPreview} />
+          isSearching ? <div className="file-tree-loading">{t('explorer.searching')}</div> : <SearchResults results={searchResults} query={searchQuery} onOpen={openPreview} />
         ) : isLoading ? (
-          <div className="file-tree-loading">Loading files...</div>
+          <div className="file-tree-loading">{t('explorer.loadingFiles')}</div>
         ) : rootItems.length === 0 ? (
-          <div className="file-tree-empty-root">Empty project folder</div>
+          <div className="file-tree-empty-root">{t('explorer.emptyProjectFolder')}</div>
         ) : (
           <div className="file-tree-list">
             {rootItems.map((node) => (

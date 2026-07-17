@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { getName, makeTab } from './explorerUtils';
 
-export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatusMessage }) {
+export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatusMessage, t }) {
   const [tabs, setTabs] = useState([]);
   const [paneTabs, setPaneTabs] = useState({ primary: null, secondary: null });
   const [activePane, setActivePane] = useState('primary');
@@ -29,7 +29,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     setSelectedEntry?.({ path: filePath, name: getName(filePath), isDirectory: false });
     const result = await loadFile(filePath);
     if (!result.success) {
-      setStatusMessage(result.error || 'Could not open file.');
+      setStatusMessage(result.error || t('explorer.openFileFailed'));
       return;
     }
 
@@ -42,19 +42,19 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     });
     setPaneTabs((prev) => ({ ...prev, [activePane]: result.path }));
     setStatusMessage('');
-  }, [activePane, loadFile, setStatusMessage]);
+  }, [activePane, loadFile, setStatusMessage, t]);
 
   const saveActiveTab = useCallback(async () => {
     if (!activeTab || activeTab.type !== 'text') return;
     const result = await window.electronAPI.fs.writeFile(projectPath, activeTab.path, activeTab.draftContent ?? '');
     if (!result.success) {
-      setStatusMessage(result.error || 'Save failed.');
+      setStatusMessage(result.error || t('explorer.saveFailed'));
       return;
     }
     setTabs((prev) => prev.map((tab) => tab.id === activeTab.id ? { ...tab, savedContent: tab.draftContent, content: tab.draftContent } : tab));
-    setStatusMessage('Saved.');
+    setStatusMessage(t('explorer.savedStatus'));
     await loadGitStatus();
-  }, [activeTab, loadGitStatus, projectPath, setStatusMessage]);
+  }, [activeTab, loadGitStatus, projectPath, setStatusMessage, t]);
 
   const closeTabImmediate = useCallback((tabId) => {
     setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
@@ -69,7 +69,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     const dirty = target?.type === 'text' && target.draftContent !== target.savedContent;
     if (dirty) {
       setConfirmState({
-        message: `Close ${target.name} without saving?`,
+        message: t('explorer.closeWithoutSaving', target),
         onConfirm: () => {
           closeTabImmediate(tabId);
           setConfirmState(null);
@@ -78,7 +78,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
       return;
     }
     closeTabImmediate(tabId);
-  }, [closeTabImmediate, tabs]);
+  }, [closeTabImmediate, tabs, t]);
 
   const reorderTabs = useCallback((draggedId, targetId) => {
     if (!draggedId || !targetId || draggedId === targetId) return;

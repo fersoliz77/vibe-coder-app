@@ -6,6 +6,7 @@ const path = require('path');
 const { validateProjectCwd } = require('../ipc/fsGuards');
 const { isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
+const { resolveNpmInvocation } = require('./environmentManager');
 
 // Strip ANSI escape codes from terminal output
 function stripAnsi(str) {
@@ -157,6 +158,30 @@ async function getClaudeStatus() {
   return { installed: true, authenticated, path, version };
 }
 
+async function installClaudeCode(onProgress = () => {}) {
+  const npm = await resolveNpmInvocation();
+  if (!npm) return { success: false, error: 'Node.js and npm are required to install Claude Code.' };
+  const cleanEnv = { ...process.env };
+  delete cleanEnv.ELECTRON_RUN_AS_NODE;
+  delete cleanEnv.ELECTRON_NO_ASAR;
+
+  return new Promise((resolve) => {
+    const proc = trackBackgroundProcess(spawn(npm.file, [...npm.argsPrefix, 'install', '--global', '@anthropic-ai/claude-code'], {
+      env: cleanEnv,
+      shell: false,
+      stdio: 'pipe',
+      windowsHide: true,
+    }));
+    proc.stdout.on('data', (data) => onProgress({ type: 'stdout', text: data.toString() }));
+    proc.stderr.on('data', (data) => onProgress({ type: 'stderr', text: data.toString() }));
+    proc.on('close', async (code) => {
+      if (code !== 0) return resolve({ success: false, error: `npm exited with code ${code}` });
+      resolve({ success: true, status: await getClaudeStatus() });
+    });
+    proc.on('error', (error) => resolve({ success: false, error: error.message }));
+  });
+}
+
 // ─── IPC Handlers ───────────────────────────────────────────────────────────
 
 function setupClaudeHandlers(ipcMain, getMainWindow) {
@@ -174,36 +199,10 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
   // Install Claude Code CLI (streams progress back to renderer)
   ipcMain.handle('claude:install', async () => {
     const mainWindow = getMainWindow();
-    const cleanEnv = { ...process.env };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
-
-    return new Promise((resolve) => {
-      // shell:true is required on Windows to run .cmd wrappers
-      const proc = trackBackgroundProcess(spawn('npm', ['install', '-g', '@anthropic-ai/claude-code'], {
-        env: cleanEnv,
-        shell: true,
-        stdio: 'pipe',
-        windowsHide: true,
-      }));
-
-      const send = (type, text) => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('claude:install-progress', { type, text });
-        }
-      };
-
-      proc.stdout.on('data', (d) => send('stdout', d.toString()));
-      proc.stderr.on('data', (d) => send('stderr', d.toString()));
-      proc.on('close', async (code) => {
-        if (code === 0) {
-          const status = await getClaudeStatus();
-          resolve({ success: true, status });
-        } else {
-          resolve({ success: false, error: `npm exited with code ${code}` });
-        }
-      });
-      proc.on('error', (err) => resolve({ success: false, error: err.message }));
+    return installClaudeCode(({ type, text }) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('claude:install-progress', { type, text });
+      }
     });
   });
 
@@ -388,4 +387,4 @@ function terminateAllClaudeProcesses() {
   backgroundProcesses.clear();
 }
 
-module.exports = { setupClaudeHandlers, terminateAllClaudeProcesses };
+module.exports = { installClaudeCode, setupClaudeHandlers, terminateAllClaudeProcesses };

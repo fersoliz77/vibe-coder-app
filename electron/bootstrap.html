@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vibe IDE Code Setup</title>
+  <link rel="stylesheet" href="bootstrap.css">
+</head>
+<body>
+  <main class="shell" aria-labelledby="heading">
+    <header class="brand">
+      <div class="mark" aria-hidden="true">V</div>
+      <div><p class="eyebrow">VIBE IDE CODE</p><p id="product" class="product"></p></div>
+      <span id="state" class="state" aria-live="polite"></span>
+    </header>
+    <section class="hero" id="hero">
+      <p id="eyebrow" class="eyebrow"></p>
+      <h1 id="heading"></h1>
+      <p id="detail" class="detail" aria-live="polite"></p>
+    </section>
+    <section id="welcome" class="welcome" hidden>
+      <label id="language-label" for="language"></label>
+      <select id="language"><option value="es">Espanol</option><option value="en">English</option></select>
+      <div class="system"><strong id="system-title"></strong><span id="system-summary"></span></div>
+      <ul id="welcome-points"></ul>
+      <button id="start" class="primary" type="button"></button>
+    </section>
+    <section id="installation" hidden>
+      <section class="progress-panel" id="progress-panel">
+        <div class="progress-label"><span id="count"></span><span id="percent">0%</span></div>
+      <div class="track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-labelledby="count"><div id="bar" class="bar"></div></div>
+      </section>
+      <ol id="stages" class="stages"></ol>
+      <details class="technical">
+        <summary><span id="technical-heading"></span><span id="technical-state"></span></summary>
+        <div id="output" class="output" role="log" aria-live="polite"></div>
+      </details>
+      <section id="checklist" class="checklist" hidden><h2 id="checklist-title"></h2><ul id="checklist-items"></ul></section>
+    </section>
+    <div id="actions" class="actions" hidden><button id="open-app" class="primary" type="button"></button><button id="acknowledge" class="secondary" type="button"></button><button id="copy-details" class="secondary" type="button"></button></div>
+  </main>
+  <script src="bootstrap.js"></script>
+</body>
+</html>
