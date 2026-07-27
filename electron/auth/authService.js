@@ -99,6 +99,7 @@ class AuthService {
         : null,
       membership: this.record?.membership ? {
         status: this.record.membership.status,
+        role: this.record.membership.role || null,
         schoolId: this.record.membership.schoolId || null,
         schoolName: this.record.membership.schoolName || null,
         planId: this.record.membership.planId || null,
@@ -157,6 +158,7 @@ class AuthService {
     }
     return {
       status,
+      role: value.role || value.membership_role || null,
       schoolId: value.school_id || value.schoolId || null,
       schoolName: value.school_name || value.schoolName || null,
       planId: value.plan_id || value.planId || null,

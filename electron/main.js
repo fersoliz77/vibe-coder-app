@@ -18,7 +18,13 @@ const { setupPreviewHandlers, terminateAllPreviews } = require('./services/previ
 const { setupStoreHandlers } = require('./ipc/storeManager');
 const { AuthService, setupAuthHandlers } = require('./auth/authService');
 const { AuthRealtime } = require('./auth/authRealtime');
+const { AdminSignupAlerts } = require('./auth/adminSignupAlerts');
+const { StudentBroadcastAlerts } = require('./auth/studentBroadcastAlerts');
 const { installIpcAuthorization } = require('./auth/ipcGuard');
+
+// Required on Windows for Notification (native OS toast, used by admin signup
+// alerts) to show with the correct app identity and icon.
+app.setAppUserModelId('com.vibeidecoder.app');
 
 if (!app.isPackaged) {
   try {
@@ -90,7 +96,7 @@ function createWindow() {
   const isDev = !app.isPackaged;
   if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    if (process.env.VIBE_OPEN_DEVTOOLS === '1') mainWindow.webContents.openDevTools({ mode: 'detach' });
   } else {
     mainWindow.loadFile(path.join(__dirname, '..', 'dist', 'index.html'));
   }
@@ -297,6 +303,8 @@ if (isEnvironmentInstaller) {
   let leaseTimer = null;
   let notifyAuthState;
   let authRealtime;
+  let adminSignupAlerts;
+  let studentBroadcastAlerts;
   let projectProvisioner;
   const revalidateAndNotify = async () => {
     if (!authService.getState().authenticated) return;
@@ -322,9 +330,13 @@ if (isEnvironmentInstaller) {
       leaseTimer.unref();
     }
     authRealtime?.sync().catch(() => {});
+    adminSignupAlerts?.sync().catch(() => {});
+    studentBroadcastAlerts?.sync().catch(() => {});
   };
   notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState);
   authRealtime = new AuthRealtime(authService, revalidateAndNotify);
+  adminSignupAlerts = new AdminSignupAlerts(authService);
+  studentBroadcastAlerts = new StudentBroadcastAlerts(authService);
   handleAuthState(authService.getState());
   installIpcAuthorization(ipcMain, () => authService.getPolicy());
   const authRefreshTimer = setInterval(async () => {
@@ -336,6 +348,8 @@ if (isEnvironmentInstaller) {
     clearInterval(authRefreshTimer);
     if (leaseTimer) clearTimeout(leaseTimer);
     authRealtime.stop().catch(() => {});
+    adminSignupAlerts.stop().catch(() => {});
+    studentBroadcastAlerts.stop().catch(() => {});
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
     terminateAllOpenCodeProcesses();
