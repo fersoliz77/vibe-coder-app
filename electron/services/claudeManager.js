@@ -263,7 +263,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
   });
 
   // Send prompt — pipe prompt via stdin, strip ANSI from output
-  ipcMain.handle('claude:send', async (_, prompt, cwd, model) => {
+  ipcMain.handle('claude:send', async (_, prompt, cwd, model, history) => {
     let validatedCwd;
     let validatedModel;
     try {
@@ -322,8 +322,17 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
       });
       activeRun = { id: runId, process: proc };
 
+      // Rebuild the full transcript so Claude has memory of prior turns —
+      // each invocation is a fresh `--print` process with no session state.
+      let fullPrompt = '';
+      for (const message of Array.isArray(history) ? history : []) {
+        if (message.role === 'user') fullPrompt += `User: ${message.content}\n\n`;
+        if (message.role === 'assistant') fullPrompt += `Assistant: ${message.content}\n\n`;
+      }
+      fullPrompt += `User: ${String(prompt || '')}\n`;
+
       // Write the prompt to stdin and close it so claude doesn't wait
-      proc.stdin.write(String(prompt || ''), 'utf8');
+      proc.stdin.write(fullPrompt, 'utf8');
       proc.stdin.end();
 
       let fullOutput = '';

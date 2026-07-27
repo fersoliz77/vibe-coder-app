@@ -105,6 +105,7 @@ export function useClaude(projectPath) {
 
   const sendPrompt = useCallback(async (prompt, cwd, model) => {
     if (!window.electronAPI?.claude) return;
+    const history = messages.filter((m) => m.role === 'user' || m.role === 'assistant');
     const userMessage = { role: 'user', content: prompt, timestamp: Date.now() };
     setMessages((prev) => {
       const next = [...prev, userMessage];
@@ -114,8 +115,8 @@ export function useClaude(projectPath) {
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
-    await window.electronAPI.claude.sendPrompt(prompt, cwd || projectPath, model);
-  }, [projectPath, saveHistory]);
+    await window.electronAPI.claude.sendPrompt(prompt, cwd || projectPath, model, history);
+  }, [projectPath, saveHistory, messages]);
 
   const cancel = useCallback(() => {
     if (!window.electronAPI?.claude) return;

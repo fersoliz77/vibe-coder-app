@@ -112,7 +112,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     // Logout
     logout: () => ipcRenderer.invoke('claude:logout'),
     // Send a prompt
-    sendPrompt: (prompt, cwd, model) => ipcRenderer.invoke('claude:send', prompt, cwd, model),
+    sendPrompt: (prompt, cwd, model, history) => ipcRenderer.invoke('claude:send', prompt, cwd, model, history),
     cancel: () => ipcRenderer.invoke('claude:cancel'),
     // Event subscriptions
     onData: (callback) => subscribe('claude:data', callback),
@@ -153,6 +153,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       start: (cwd) => ipcRenderer.invoke('preview:web-start', cwd),
       stop: (cwd) => ipcRenderer.invoke('preview:web-stop', cwd),
       openExternal: (cwd) => ipcRenderer.invoke('preview:web-open-external', cwd),
+      audit: (cwd) => ipcRenderer.invoke('preview:web-audit', cwd),
+      clearIssues: (cwd) => ipcRenderer.invoke('preview:web-clear-issues', cwd),
+      copyDiagnosis: (cwd) => ipcRenderer.invoke('preview:web-copy-diagnosis', cwd),
+      snapshot: (cwd, bounds) => ipcRenderer.invoke('preview:web-snapshot', cwd, bounds),
       onStatus: (callback) => subscribe('preview:web-status', callback, (status) => [status]),
     },
     android: {
@@ -161,6 +165,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
       stopEmulator: (cwd) => ipcRenderer.invoke('preview:android-stop-emulator', cwd),
       runApp: (cwd) => ipcRenderer.invoke('preview:android-run-app', cwd),
       stopApp: (cwd) => ipcRenderer.invoke('preview:android-stop-app', cwd),
+      hotReload: (cwd) => ipcRenderer.invoke('preview:android-hot-reload', cwd),
+      hotRestart: (cwd) => ipcRenderer.invoke('preview:android-hot-restart', cwd),
+      rotate: (cwd, orientation) => ipcRenderer.invoke('preview:android-rotate', cwd, orientation),
+      screenshot: (cwd) => ipcRenderer.invoke('preview:android-screenshot', cwd),
       onStatus: (callback) => subscribe('preview:android-status', callback, (status) => [status]),
     },
     onLog: (callback) => subscribe('preview:log', callback, (entry) => [entry]),
