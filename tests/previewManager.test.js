@@ -6,14 +6,20 @@ const path = require('path');
 
 const {
   PREVIEW_URL,
+  buildAdbRotationArgs,
+  buildAdbScreenshotArgs,
   buildWebDevArgs,
   classifyWebScript,
   detectManagedEmulatorSerial,
   detectProjectTargets,
   isAndroidBootComplete,
   isConfiguredAvdNameOutput,
+  isIgnoredWatchPath,
   isTrustedPreviewUrl,
   parseAdbEmulatorSerials,
+  safeArtifactPath,
+  safeRelativeProjectPath,
+  sanitizeIssue,
   sanitizeLog,
 } = require('../electron/services/previewManager');
 
@@ -96,4 +102,43 @@ test('preview logs remove terminal controls, project paths, and excessive output
   const output = sanitizeLog(`\u001b[31mfailed\u001b[0m at ${project}\u0000`, project);
   assert.equal(output, 'failed at [project]');
   assert.equal(sanitizeLog('x'.repeat(9_000)).length, 8_000);
+});
+
+test('preview issues are classified, sanitized, and stripped to allowed metadata', () => {
+  const project = 'C:\\Users\\student\\project';
+  const issue = sanitizeIssue({
+    category: 'network', severity: 'warning', message: `token=bad failed at ${project}\u0000`,
+    metadata: { url: 'http://127.0.0.1:4173/api', arbitrary: 'not allowed', statusCode: 500 },
+  }, project);
+  assert.equal(issue.category, 'network');
+  assert.equal(issue.severity, 'warning');
+  assert.match(issue.message, /token=\[redacted\]/);
+  assert.match(issue.message, /\[project\]/);
+  assert.deepEqual(issue.metadata, { url: 'http://127.0.0.1:4173/api', statusCode: '500' });
+  assert.equal(sanitizeIssue({ category: 'unknown', severity: 'fatal', message: 'x' }).category, 'runtime');
+});
+
+test('watcher guards ignore generated trees and expose relative paths only', () => {
+  const root = path.resolve('C:\\workspace\\sample');
+  assert.equal(safeRelativeProjectPath(root, path.join(root, 'src', 'App.jsx')), 'src/App.jsx');
+  assert.equal(safeRelativeProjectPath(root, path.resolve(root, '..', 'secret.txt')), null);
+  assert.equal(isIgnoredWatchPath('src/App.jsx'), false);
+  for (const target of ['node_modules/pkg/a.js', '.git/index', 'web/dist/app.js', 'build/output']) assert.equal(isIgnoredWatchPath(target), true, target);
+});
+
+test('Android control builders accept only fixed actions and validated serials', () => {
+  assert.deepEqual(buildAdbRotationArgs('emulator-5554', 'portrait'), ['-s', 'emulator-5554', 'shell', 'settings', 'put', 'system', 'user_rotation', '0']);
+  assert.deepEqual(buildAdbRotationArgs('emulator-5554', 'landscape').slice(-1), ['1']);
+  assert.deepEqual(buildAdbScreenshotArgs('emulator-5554'), ['-s', 'emulator-5554', 'exec-out', 'screencap', '-p']);
+  assert.throws(() => buildAdbRotationArgs('device;calc', 'portrait'), /Invalid/);
+  assert.throws(() => buildAdbRotationArgs('emulator-5554', 'reverse'), /Invalid/);
+});
+
+test('artifact paths stay in project-local hidden directories', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-artifact-'));
+  try {
+    const target = safeArtifactPath(root, 'snapshots', 'web-preview', 'png', new Date('2026-01-02T03:04:05.000Z'));
+    assert.equal(safeRelativeProjectPath(root, target), '.vibe/snapshots/web-preview-2026-01-02T03-04-05-000Z.png');
+    assert.equal(fs.statSync(path.dirname(target)).isDirectory(), true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

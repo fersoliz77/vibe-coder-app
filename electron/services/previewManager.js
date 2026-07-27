@@ -22,6 +22,29 @@ const PREVIEW_URL = `http://${PREVIEW_HOST}:${PREVIEW_PORT}`;
 const MAX_LOG_LINES = 250;
 const READY_TIMEOUT_MS = 60_000;
 const ANDROID_BOOT_TIMEOUT_MS = 180_000;
+const MAX_ISSUES = 100;
+const MAX_HISTORY = 20;
+const WATCH_IGNORES = new Set(['node_modules', '.git', 'build', 'dist']);
+const AUDIT_SCRIPT = `(() => {
+  const text = (value) => String(value || '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 160);
+  const describe = (element) => ({ tag: element.tagName.toLowerCase(), id: text(element.id), name: text(element.getAttribute('name')), text: text(element.innerText || element.getAttribute('aria-label')) });
+  const issues = [];
+  const add = (kind, severity, message, element) => issues.push({ kind, severity, message, metadata: element ? describe(element) : {} });
+  if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) add('responsive', 'warning', 'Page content overflows horizontally.');
+  document.querySelectorAll('img:not([alt])').forEach((el) => add('accessibility', 'warning', 'Image is missing alt text.', el));
+  document.querySelectorAll('input,select,textarea').forEach((el) => {
+    const labelled = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) || el.closest('label');
+    if (!labelled) add('accessibility', 'warning', 'Form control has no accessible label.', el);
+  });
+  document.querySelectorAll('button,[role="button"]').forEach((el) => {
+    if (!text(el.innerText || el.getAttribute('aria-label')) && !el.getAttribute('aria-labelledby')) add('accessibility', 'warning', 'Button has no accessible name.', el);
+  });
+  document.querySelectorAll('a[href],button,input,select,textarea,[role="button"]').forEach((el) => {
+    const box = el.getBoundingClientRect();
+    if (box.width > 0 && box.height > 0 && (box.width < 24 || box.height < 24)) add('responsive', 'info', 'Interactive control is smaller than 24 by 24 pixels.', el);
+  });
+  return issues.slice(0, 100);
+})()`;
 
 let getMainWindow = () => null;
 let webRun = null;
@@ -29,6 +52,7 @@ let androidRun = null;
 let emulatorRun = null;
 let webGeneration = 0;
 let androidGeneration = 0;
+let browserListenersInstalled = false;
 
 function validateCwd(cwd) {
   return validateProjectCwd(cwd, isProjectRegistered);
@@ -36,6 +60,36 @@ function validateCwd(cwd) {
 
 function isTrustedPreviewUrl(url) {
   return url === PREVIEW_URL;
+}
+
+function isTrustedPreviewResourceUrl(value) {
+  try { return new URL(value).origin === PREVIEW_URL; } catch { return false; }
+}
+
+function isValidManagedSerial(serial) {
+  return /^emulator-\d+$/.test(String(serial || ''));
+}
+
+function buildAdbRotationArgs(serial, orientation) {
+  if (!isValidManagedSerial(serial)) throw new Error('Invalid managed emulator serial.');
+  if (!['portrait', 'landscape'].includes(orientation)) throw new Error('Invalid orientation.');
+  return ['-s', serial, 'shell', 'settings', 'put', 'system', 'user_rotation', orientation === 'portrait' ? '0' : '1'];
+}
+
+function buildAdbScreenshotArgs(serial) {
+  if (!isValidManagedSerial(serial)) throw new Error('Invalid managed emulator serial.');
+  return ['-s', serial, 'exec-out', 'screencap', '-p'];
+}
+
+function safeRelativeProjectPath(projectCwd, targetPath) {
+  const relative = path.relative(path.resolve(projectCwd), path.resolve(targetPath));
+  if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return relative.split(path.sep).join('/');
+}
+
+function isIgnoredWatchPath(relativePath) {
+  const parts = String(relativePath || '').replace(/\\/g, '/').split('/').filter(Boolean);
+  return !parts.length || parts.some((part) => WATCH_IGNORES.has(part));
 }
 
 function sanitizeLog(value, projectCwd = '') {
@@ -46,6 +100,45 @@ function sanitizeLog(value, projectCwd = '') {
   if (projectCwd) clean = clean.split(projectCwd).join('[project]');
   clean = clean.replace(/\b(token|password|secret|api[_-]?key)\s*[=:]\s*\S+/gi, '$1=[redacted]');
   return clean.slice(0, 8_000).trim();
+}
+
+function sanitizeIssue(input, projectCwd = '') {
+  const category = ['runtime', 'network', 'resource', 'responsive', 'accessibility'].includes(input?.category || input?.kind)
+    ? (input.category || input.kind) : 'runtime';
+  const severity = ['error', 'warning', 'info'].includes(input?.severity) ? input.severity : 'error';
+  const metadata = {};
+  for (const key of ['tag', 'id', 'name', 'text', 'url', 'method', 'resourceType', 'statusCode']) {
+    const value = input?.metadata?.[key];
+    if (typeof value === 'string' || typeof value === 'number') {
+      let clean = sanitizeLog(value, projectCwd).slice(0, 240);
+      if (key === 'url') {
+        try { const parsed = new URL(clean); clean = `${parsed.origin}${parsed.pathname}`.slice(0, 240); } catch {}
+      }
+      metadata[key] = clean;
+    }
+  }
+  return {
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+    category, severity,
+    message: sanitizeLog(input?.message || 'Preview issue', projectCwd).slice(0, 1_000),
+    metadata,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function addIssue(run, issue) {
+  if (!run || webRun !== run || !['starting', 'ready'].includes(run.state)) return;
+  const clean = sanitizeIssue(issue, run.projectCwd);
+  if (!clean.message) return;
+  run.issues.push(clean);
+  if (run.issues.length > MAX_ISSUES) run.issues.splice(0, run.issues.length - MAX_ISSUES);
+  publishWeb();
+}
+
+function addActivity(run, type, metadata = {}) {
+  if (!Array.isArray(run.activity)) run.activity = [];
+  run.activity.push({ type, timestamp: new Date().toISOString(), ...metadata });
+  if (run.activity.length > MAX_HISTORY) run.activity.splice(0, run.activity.length - MAX_HISTORY);
 }
 
 function readJson(filePath) {
@@ -97,6 +190,16 @@ function appendLog(run, target, stream, chunk) {
     if (run.logs.length > MAX_LOG_LINES) run.logs.splice(0, run.logs.length - MAX_LOG_LINES);
     publish('preview:log', entry);
   }
+  if (target === 'web' && webRun === run && run.sync?.state === 'compiling') {
+    const output = String(chunk || '');
+    if (/(compiled|ready|built|hmr update|page reload)/i.test(output) && !/(error|failed)/i.test(output)) verifySynchronized(run);
+    if (/(failed to compile|build error|compilation failed)/i.test(output)) {
+      run.sync.state = 'error';
+      run.sync.error = 'Compilation failed. Review runtime logs.';
+      addActivity(run, 'sync-error');
+      publishWeb();
+    }
+  }
 }
 
 function publicWebStatus(projectCwd, targets) {
@@ -107,6 +210,10 @@ function publicWebStatus(projectCwd, targets) {
     url: ownsRun && webRun.state === 'ready' ? PREVIEW_URL : null,
     error: ownsRun ? webRun.error : null,
     logs: ownsRun ? webRun.logs : [],
+    issues: ownsRun ? webRun.issues : [],
+    diagnostics: ownsRun ? { status: webRun.issues.some((issue) => issue.severity === 'error') ? 'error' : webRun.issues.length ? 'issues' : 'clean' } : { status: 'idle' },
+    sync: ownsRun ? webRun.sync : { state: 'waiting', lastSyncAt: null, changedFiles: [], changedCount: 0, compileDurationMs: null, error: null, history: [] },
+    activity: ownsRun ? webRun.activity : [],
   };
 }
 
@@ -119,9 +226,88 @@ function publicAndroidStatus(projectCwd, targets) {
     serial: emulatorRun?.serial || null,
     appState: ownsApp ? androidRun.state : 'stopped',
     appError: ownsApp ? androidRun.error : null,
+    errors: [emulatorRun?.error && { category: 'emulator', message: emulatorRun.error }, ownsApp && androidRun.error && { category: 'flutter', message: androidRun.error }].filter(Boolean),
+    activity: ownsApp ? androidRun.activity : (emulatorRun?.projectCwd === projectCwd ? emulatorRun.activity || [] : []),
     logs: ownsApp ? androidRun.logs : (emulatorRun?.logs || []),
     avdName: ANDROID_AVD_NAME,
   };
+}
+
+function healthCheck() {
+  return new Promise((resolve) => {
+    const request = http.get(PREVIEW_URL, { timeout: 1_500 }, (response) => {
+      response.resume();
+      resolve(Boolean(response.statusCode && response.statusCode < 500));
+    });
+    request.once('timeout', () => { request.destroy(); resolve(false); });
+    request.once('error', () => resolve(false));
+  });
+}
+
+async function verifySynchronized(run) {
+  if (webRun !== run || run.sync.state !== 'compiling' || run.sync.verifying) return;
+  run.sync.verifying = true;
+  const healthy = await healthCheck();
+  if (webRun !== run || run.sync.state !== 'compiling') return;
+  run.sync.verifying = false;
+  if (!healthy) {
+    run.sync.state = 'error';
+    run.sync.error = 'The preview did not respond after the source change.';
+    addActivity(run, 'sync-error');
+  } else {
+    const now = Date.now();
+    run.sync.state = 'synchronized';
+    run.sync.lastSyncAt = new Date(now).toISOString();
+    run.sync.compileDurationMs = run.sync.compileStartedAt ? now - run.sync.compileStartedAt : null;
+    run.sync.error = null;
+    const historyEntry = { timestamp: run.sync.lastSyncAt, files: run.sync.changedFiles, count: run.sync.changedCount, durationMs: run.sync.compileDurationMs };
+    run.sync.history = [...run.sync.history, historyEntry].slice(-MAX_HISTORY);
+    addActivity(run, 'synchronized', { count: run.sync.changedCount });
+  }
+  publishWeb();
+}
+
+function startSourceWatcher(run, webCwd) {
+  const changed = new Set();
+  try {
+    run.watcher = fs.watch(webCwd, { recursive: process.platform === 'win32' }, (_eventType, filename) => {
+      if (webRun !== run || !filename) return;
+      const absolute = path.resolve(webCwd, String(filename));
+      const relative = safeRelativeProjectPath(run.projectCwd, absolute);
+      if (!relative || isIgnoredWatchPath(relative)) return;
+      changed.add(relative);
+      run.sync.state = 'change-detected';
+      run.sync.changedFiles = [...changed].slice(-20);
+      run.sync.changedCount = changed.size;
+      run.sync.error = null;
+      publishWeb();
+      clearTimeout(run.watchTimer);
+      run.watchTimer = setTimeout(() => {
+        if (webRun !== run || !['ready', 'starting'].includes(run.state)) return;
+        run.sync.state = 'compiling';
+        run.sync.compileStartedAt = Date.now();
+        run.sync.verifying = false;
+        addActivity(run, 'change-detected', { count: changed.size });
+        changed.clear();
+        publishWeb();
+        run.healthTimer = setTimeout(() => verifySynchronized(run), 1_200);
+        run.healthTimer.unref?.();
+      }, 250);
+      run.watchTimer.unref?.();
+    });
+    run.watcher.once('error', (error) => {
+      if (webRun !== run) return;
+      run.sync.state = 'error'; run.sync.error = sanitizeLog(error.message, run.projectCwd); publishWeb();
+    });
+  } catch (error) {
+    run.sync.state = 'error'; run.sync.error = sanitizeLog(error.message, run.projectCwd);
+  }
+}
+
+function closeSourceWatcher(run) {
+  clearTimeout(run?.watchTimer); clearTimeout(run?.healthTimer);
+  try { run?.watcher?.close(); } catch {}
+  if (run) run.watcher = null;
 }
 
 function publishWeb() {
@@ -177,7 +363,10 @@ async function startWeb(cwd) {
   const npm = await resolveNpmInvocation();
   if (!npm) throw new Error('A trusted npm installation could not be resolved.');
 
-  const run = { projectCwd, state: 'starting', error: null, logs: [], process: null };
+  const run = {
+    projectCwd, webCwd: targets.webCwd, state: 'starting', error: null, logs: [], issues: [], activity: [], process: null, watcher: null,
+    sync: { state: 'waiting', lastSyncAt: null, changedFiles: [], changedCount: 0, compileDurationMs: null, error: null, history: [] },
+  };
   webRun = run;
   const args = [...npm.argsPrefix, ...buildWebDevArgs(kind)];
   const child = spawn(npm.file, args, {
@@ -198,6 +387,7 @@ async function startWeb(cwd) {
   });
   child.once('close', (code) => {
     if (webRun !== run) return;
+    closeSourceWatcher(run);
     run.process = null;
     if (run.state !== 'stopping') {
       run.state = code === 0 ? 'stopped' : 'error';
@@ -206,6 +396,7 @@ async function startWeb(cwd) {
     publishWeb();
   });
   webGeneration += 1;
+  startSourceWatcher(run, targets.webCwd);
   publishWeb();
   waitForWebReady(webGeneration);
   return publicWebStatus(projectCwd, targets);
@@ -216,6 +407,7 @@ function stopWeb(cwd) {
   if (webRun?.projectCwd !== projectCwd) return publicWebStatus(projectCwd, detectProjectTargets(projectCwd));
   webGeneration += 1;
   webRun.state = 'stopping';
+  closeSourceWatcher(webRun);
   if (webRun.process) killProcessTree(webRun.process);
   else webRun.state = 'stopped';
   publishWeb();
@@ -227,6 +419,13 @@ function getAndroidTools() {
   const emulator = path.join(sdk, 'emulator', process.platform === 'win32' ? 'emulator.exe' : 'emulator');
   const adb = path.join(sdk, 'platform-tools', process.platform === 'win32' ? 'adb.exe' : 'adb');
   return { sdk, emulator, adb };
+}
+
+async function requireManagedSerial() {
+  const tools = getAndroidTools();
+  const serial = await detectManagedEmulatorSerial(tools.adb);
+  if (!serial || !isValidManagedSerial(serial) || !await isAndroidBootComplete(tools.adb, serial)) throw new Error('The managed Android device is not ready.');
+  return { tools, serial };
 }
 
 function assertAvdExists() {
@@ -247,7 +446,7 @@ function isConfiguredAvdNameOutput(output) {
 }
 
 async function queryConfiguredAvdName(adb, serial, execute = execFileAsync) {
-  if (!/^emulator-\d+$/.test(serial)) return false;
+  if (!isValidManagedSerial(serial)) return false;
   try {
     const { stdout } = await execute(adb, ['-s', serial, 'emu', 'avd', 'name'], {
       env: getProcessEnv(), timeout: 5_000, windowsHide: true,
@@ -268,7 +467,7 @@ async function detectManagedEmulatorSerial(adb, execute = execFileAsync, fileExi
 }
 
 async function isAndroidBootComplete(adb, serial, execute = execFileAsync) {
-  if (!/^emulator-\d+$/.test(serial)) return false;
+  if (!isValidManagedSerial(serial)) return false;
   try {
     const { stdout } = await execute(adb, ['-s', serial, 'shell', 'getprop', 'sys.boot_completed'], {
       env: getProcessEnv(), timeout: 5_000, windowsHide: true,
@@ -324,7 +523,7 @@ async function getAndroidStatus(cwd) {
         emulatorRun.error = null;
       }
     } else {
-      const run = { projectCwd, state: booted ? 'running' : 'starting', error: null, serial, logs: [], process: null };
+      const run = { projectCwd, state: booted ? 'running' : 'starting', error: null, serial, logs: [], activity: [], process: null };
       emulatorRun = run;
       androidGeneration += 1;
       if (!booted) waitForAndroidBoot(run, tools.adb, androidGeneration);
@@ -351,7 +550,7 @@ async function startEmulator(cwd) {
     const processIsActive = emulatorRun?.process && !emulatorRun.process.killed;
     const run = processIsActive
       ? emulatorRun
-      : { projectCwd, state: 'starting', error: null, serial: existingSerial, logs: [], process: null };
+      : { projectCwd, state: 'starting', error: null, serial: existingSerial, logs: [], activity: [], process: null };
     run.projectCwd = projectCwd;
     run.serial = existingSerial;
     run.state = booted ? 'running' : 'starting';
@@ -364,13 +563,13 @@ async function startEmulator(cwd) {
   }
   if (emulatorRun?.process && !emulatorRun.process.killed) return publicAndroidStatus(projectCwd, targets);
 
-  const run = { projectCwd, state: 'starting', error: null, serial: null, logs: [], process: null };
+  const run = { projectCwd, state: 'starting', error: null, serial: null, logs: [], activity: [], process: null };
   emulatorRun = run;
   androidGeneration += 1;
   const generation = androidGeneration;
   const child = spawn(tools.emulator, ['-avd', ANDROID_AVD_NAME, '-no-snapshot-save'], {
     env: getProcessEnv({ ANDROID_SDK_ROOT: tools.sdk, ANDROID_HOME: tools.sdk }),
-    shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
+    shell: false, windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'],
   });
   run.process = child;
   child.stdout.on('data', (data) => appendLog(run, 'android', 'stdout', data));
@@ -392,6 +591,51 @@ async function startEmulator(cwd) {
   return publicAndroidStatus(projectCwd, targets);
 }
 
+function sendFlutterControl(cwd, control) {
+  const projectCwd = validateCwd(cwd);
+  if (!['reload', 'restart'].includes(control)) throw new Error('Invalid Flutter control.');
+  if (androidRun?.projectCwd !== projectCwd || androidRun.state !== 'running' || !androidRun.process?.stdin?.writable) throw new Error('The Flutter application is not running.');
+  androidRun.process.stdin.write(control === 'reload' ? 'r\n' : 'R\n');
+  addActivity(androidRun, control === 'reload' ? 'hot-reload' : 'hot-restart');
+  return publicAndroidStatus(projectCwd, detectProjectTargets(projectCwd));
+}
+
+async function rotateAndroid(cwd, orientation) {
+  const projectCwd = validateCwd(cwd);
+  const { tools, serial } = await requireManagedSerial();
+  await execFileAsync(tools.adb, buildAdbRotationArgs(serial, orientation), { env: getProcessEnv(), timeout: 5_000, windowsHide: true });
+  if (emulatorRun?.projectCwd === projectCwd) addActivity(emulatorRun, 'rotation', { orientation });
+  publishAndroid(projectCwd);
+  return { orientation };
+}
+
+function safeArtifactPath(projectCwd, folder, prefix, extension, now = new Date()) {
+  const root = path.resolve(projectCwd);
+  const directory = path.join(root, '.vibe', folder);
+  const stamp = now.toISOString().replace(/[:.]/g, '-');
+  const target = path.join(directory, `${prefix}-${stamp}.${extension}`);
+  if (!safeRelativeProjectPath(root, target)) throw new Error('Unsafe artifact path.');
+  assertNoLinkedPath(root, directory);
+  fs.mkdirSync(directory, { recursive: true });
+  assertNoLinkedPath(root, target);
+  return target;
+}
+
+async function captureAndroidScreenshot(cwd) {
+  const projectCwd = validateCwd(cwd);
+  const { tools, serial } = await requireManagedSerial();
+  const args = buildAdbScreenshotArgs(serial);
+  const { stdout } = await execFileAsync(tools.adb, args, { env: getProcessEnv(), timeout: 15_000, windowsHide: true, encoding: 'buffer', maxBuffer: 20 * 1024 * 1024 });
+  const image = Buffer.isBuffer(stdout) ? stdout : Buffer.from(stdout || '');
+  if (image.length < 8 || image.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') throw new Error('Android did not return a valid PNG screenshot.');
+  const target = safeArtifactPath(projectCwd, 'screenshots', 'android', 'png');
+  fs.writeFileSync(target, image, { mode: 0o600 });
+  const metadata = { path: safeRelativeProjectPath(projectCwd, target), size: image.length, createdAt: new Date().toISOString() };
+  if (emulatorRun?.projectCwd === projectCwd) addActivity(emulatorRun, 'screenshot', metadata);
+  publishAndroid(projectCwd);
+  return metadata;
+}
+
 async function runAndroidApp(cwd) {
   const projectCwd = validateCwd(cwd);
   const targets = detectProjectTargets(projectCwd);
@@ -407,7 +651,7 @@ async function runAndroidApp(cwd) {
   if (!serial || !await isAndroidBootComplete(tools.adb, serial)) {
     throw new Error(`Start ${ANDROID_AVD_NAME} and wait until Android finishes booting.`);
   }
-  const run = { projectCwd, state: 'starting', error: null, logs: [], process: null };
+  const run = { projectCwd, state: 'starting', error: null, logs: [], activity: [], process: null };
   androidRun = run;
   const child = spawn(flutter.file, [...flutter.argsPrefix, 'run', '-d', serial], {
     cwd: targets.mobileCwd,
@@ -440,6 +684,96 @@ function stopAndroidApp(cwd) {
   return publicAndroidStatus(projectCwd, detectProjectTargets(projectCwd));
 }
 
+function getTrustedPreviewFrame() {
+  const window = getMainWindow?.();
+  if (!window || window.isDestroyed() || webRun?.state !== 'ready') throw new Error('The trusted preview is not ready.');
+  const frame = window.webContents.mainFrame.frames.find((candidate) => isTrustedPreviewResourceUrl(candidate.url));
+  if (!frame) throw new Error('The trusted preview frame has not finished loading.');
+  return { window, frame };
+}
+
+async function runWebAudit(cwd) {
+  const projectCwd = validateCwd(cwd);
+  if (webRun?.projectCwd !== projectCwd) throw new Error('The trusted preview is not active for this project.');
+  const { frame } = getTrustedPreviewFrame();
+  const results = await frame.executeJavaScript(AUDIT_SCRIPT, true);
+  if (!Array.isArray(results)) throw new Error('The preview audit returned an invalid result.');
+  const auditIssues = results.slice(0, MAX_ISSUES).map((issue) => sanitizeIssue(issue, projectCwd));
+  webRun.issues = [...webRun.issues.filter((issue) => !['responsive', 'accessibility'].includes(issue.category)), ...auditIssues].slice(-MAX_ISSUES);
+  addActivity(webRun, 'audit', { count: auditIssues.length });
+  publishWeb();
+  return publicWebStatus(projectCwd, detectProjectTargets(projectCwd));
+}
+
+function clearWebIssues(cwd) {
+  const projectCwd = validateCwd(cwd);
+  if (webRun?.projectCwd === projectCwd) { webRun.issues = []; addActivity(webRun, 'issues-cleared'); publishWeb(); }
+  return publicWebStatus(projectCwd, detectProjectTargets(projectCwd));
+}
+
+function copyWebDiagnosis(cwd) {
+  const projectCwd = validateCwd(cwd);
+  if (webRun?.projectCwd !== projectCwd) throw new Error('The trusted preview is not active for this project.');
+  const lines = webRun.issues.map((issue) => `[${issue.severity.toUpperCase()}] ${issue.category}: ${issue.message}`);
+  const { clipboard } = require('electron');
+  clipboard.writeText(lines.length ? lines.join('\n') : 'Preview diagnostics: no issues detected.');
+  return true;
+}
+
+function validateCaptureBounds(bounds, window) {
+  const values = ['x', 'y', 'width', 'height'].map((key) => Number(bounds?.[key]));
+  if (!values.every(Number.isFinite)) throw new Error('Invalid preview capture bounds.');
+  const [x, y, width, height] = values.map(Math.round);
+  const content = window.getContentBounds();
+  if (x < 0 || y < 0 || width < 64 || height < 64 || width > 4096 || height > 4096 || x + width > content.width || y + height > content.height) throw new Error('Preview capture bounds are outside the application window.');
+  return { x, y, width, height };
+}
+
+async function captureWebSnapshot(cwd, bounds) {
+  const projectCwd = validateCwd(cwd);
+  if (webRun?.projectCwd !== projectCwd) throw new Error('The trusted preview is not active for this project.');
+  const { window } = getTrustedPreviewFrame();
+  const rect = validateCaptureBounds(bounds, window);
+  const actual = await window.webContents.mainFrame.executeJavaScript(`(() => { const frame = document.querySelector('iframe[src="${PREVIEW_URL}"]'); if (!frame) return null; const box = frame.getBoundingClientRect(); return { x: box.x, y: box.y, width: box.width, height: box.height }; })()`, true);
+  const trustedRect = validateCaptureBounds(actual, window);
+  if (['x', 'y', 'width', 'height'].some((key) => Math.abs(rect[key] - trustedRect[key]) > 2)) throw new Error('Preview capture bounds did not match the trusted frame.');
+  const image = await window.webContents.capturePage(rect);
+  const size = image.getSize();
+  if (image.isEmpty() || size.width < 64 || size.height < 64 || size.width > 8192 || size.height > 8192) throw new Error('The preview snapshot dimensions were invalid.');
+  const target = safeArtifactPath(projectCwd, 'snapshots', 'web-preview', 'png');
+  const png = image.toPNG();
+  fs.writeFileSync(target, png, { mode: 0o600 });
+  const metadata = { path: safeRelativeProjectPath(projectCwd, target), width: size.width, height: size.height, size: png.length, createdAt: new Date().toISOString() };
+  addActivity(webRun, 'snapshot', metadata);
+  publishWeb();
+  return metadata;
+}
+
+function installBrowserDiagnosticsListeners() {
+  if (browserListenersInstalled) return;
+  const window = getMainWindow?.();
+  if (!window || window.isDestroyed()) return;
+  browserListenersInstalled = true;
+  window.webContents.on('console-message', (details) => {
+    const severity = details.level === 'error' ? 'error' : details.level === 'warning' ? 'warning' : null;
+    if (!severity || !webRun || !isTrustedPreviewResourceUrl(details.sourceId)) return;
+    addIssue(webRun, { category: 'runtime', severity, message: details.message, metadata: { url: details.sourceId } });
+  });
+  const filter = { urls: [`${PREVIEW_URL}/*`] };
+  const handleRequestFailure = (details, failed) => {
+    if (!webRun || !['starting', 'ready'].includes(webRun.state) || !isTrustedPreviewResourceUrl(details.url)) return;
+    if (!failed && details.statusCode < 400) return;
+    const networkTypes = new Set(['xhr', 'fetch', 'mainFrame', 'subFrame']);
+    addIssue(webRun, {
+      category: networkTypes.has(details.resourceType) ? 'network' : 'resource', severity: 'error',
+      message: failed ? `Request failed: ${details.error || 'network error'}` : `Request returned HTTP ${details.statusCode}.`,
+      metadata: { url: details.url, method: details.method, resourceType: details.resourceType, statusCode: details.statusCode },
+    });
+  };
+  window.webContents.session.webRequest.onCompleted(filter, (details) => handleRequestFailure(details, false));
+  window.webContents.session.webRequest.onErrorOccurred(filter, (details) => handleRequestFailure(details, true));
+}
+
 async function stopEmulator(cwd) {
   const projectCwd = validateCwd(cwd);
   stopAndroidApp(projectCwd);
@@ -467,6 +801,7 @@ async function stopEmulator(cwd) {
 function terminateAllPreviews() {
   webGeneration += 1;
   androidGeneration += 1;
+  closeSourceWatcher(webRun);
   if (webRun?.process) killProcessTree(webRun.process);
   if (androidRun?.process) killProcessTree(androidRun.process);
   const emulatorProcess = emulatorRun?.process;
@@ -490,6 +825,7 @@ function terminateAllPreviews() {
 
 function setupPreviewHandlers(ipcMain, mainWindowProvider) {
   getMainWindow = mainWindowProvider;
+  installBrowserDiagnosticsListeners();
   ipcMain.handle('preview:web-status', (_event, cwd) => getWebStatus(cwd));
   ipcMain.handle('preview:web-start', (_event, cwd) => startWeb(cwd));
   ipcMain.handle('preview:web-stop', (_event, cwd) => stopWeb(cwd));
@@ -500,16 +836,25 @@ function setupPreviewHandlers(ipcMain, mainWindowProvider) {
     await shell.openExternal(PREVIEW_URL);
     return true;
   });
+  ipcMain.handle('preview:web-audit', (_event, cwd) => runWebAudit(cwd));
+  ipcMain.handle('preview:web-clear-issues', (_event, cwd) => clearWebIssues(cwd));
+  ipcMain.handle('preview:web-copy-diagnosis', (_event, cwd) => copyWebDiagnosis(cwd));
+  ipcMain.handle('preview:web-snapshot', (_event, cwd, bounds) => captureWebSnapshot(cwd, bounds));
   ipcMain.handle('preview:android-status', (_event, cwd) => getAndroidStatus(cwd));
   ipcMain.handle('preview:android-start-emulator', (_event, cwd) => startEmulator(cwd));
   ipcMain.handle('preview:android-stop-emulator', (_event, cwd) => stopEmulator(cwd));
   ipcMain.handle('preview:android-run-app', (_event, cwd) => runAndroidApp(cwd));
   ipcMain.handle('preview:android-stop-app', (_event, cwd) => stopAndroidApp(cwd));
+  ipcMain.handle('preview:android-hot-reload', (_event, cwd) => sendFlutterControl(cwd, 'reload'));
+  ipcMain.handle('preview:android-hot-restart', (_event, cwd) => sendFlutterControl(cwd, 'restart'));
+  ipcMain.handle('preview:android-rotate', (_event, cwd, orientation) => rotateAndroid(cwd, orientation));
+  ipcMain.handle('preview:android-screenshot', (_event, cwd) => captureAndroidScreenshot(cwd));
 }
 
 module.exports = {
   PREVIEW_HOST, PREVIEW_PORT, PREVIEW_URL,
-  buildWebDevArgs, classifyWebScript, detectManagedEmulatorSerial, detectProjectTargets,
-  isAndroidBootComplete, isConfiguredAvdNameOutput, isTrustedPreviewUrl, parseAdbEmulatorSerials, sanitizeLog,
+  buildAdbRotationArgs, buildAdbScreenshotArgs, buildWebDevArgs, classifyWebScript, detectManagedEmulatorSerial, detectProjectTargets,
+  isAndroidBootComplete, isConfiguredAvdNameOutput, isIgnoredWatchPath, isTrustedPreviewResourceUrl, isTrustedPreviewUrl, isValidManagedSerial,
+  parseAdbEmulatorSerials, safeArtifactPath, safeRelativeProjectPath, sanitizeIssue, sanitizeLog, validateCaptureBounds,
   setupPreviewHandlers, terminateAllPreviews,
 };

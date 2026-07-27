@@ -320,6 +320,8 @@ function Workspace() {
             onOpenTerminal={handleOpenTerminal}
             onOpenClaude={handleOpenClaude}
             onOpenCode={handleOpenCode}
+            onOpenPreview={() => setActiveView(VIEWS.PREVIEW)}
+            onOpenFiles={() => setActiveView(VIEWS.FILES)}
             onOpenProjects={() => setActiveView(VIEWS.PROJECTS)}
           />
         );

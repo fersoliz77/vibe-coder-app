@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
 import './PreviewCenter.css';
 
-const INITIAL_WEB = { available: false, state: 'loading', url: null, error: null, logs: [] };
+const INITIAL_WEB = { available: false, state: 'loading', url: null, error: null, logs: [], issues: [], diagnostics: { status: 'idle' }, sync: { state: 'waiting', history: [], changedFiles: [] }, activity: [] };
 const INITIAL_ANDROID = { available: false, emulatorState: 'loading', appState: 'stopped', logs: [] };
 const VIEWPORTS = { desktop: 1440, tablet: 820, mobile: 390 };
 
@@ -32,9 +32,11 @@ export default function PreviewCenter({ project }) {
   const [android, setAndroid] = useState(INITIAL_ANDROID);
   const [logs, setLogs] = useState([]);
   const [logsOpen, setLogsOpen] = useState(false);
+  const [issuesOpen, setIssuesOpen] = useState(false);
   const [frameKey, setFrameKey] = useState(0);
   const [actionError, setActionError] = useState('');
   const logsEnd = useRef(null);
+  const frameRef = useRef(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +67,14 @@ export default function PreviewCenter({ project }) {
   const emulatorBusy = ['starting', 'stopping'].includes(android.emulatorState);
   const appBusy = ['starting', 'stopping'].includes(android.appState);
   const visibleLogs = logs.filter((entry) => entry.target === tab);
+  const issues = web.issues || [];
+  const errorCount = issues.filter((issue) => issue.severity === 'error').length;
+  const formatTime = (value) => value ? new Intl.DateTimeFormat(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' }).format(new Date(value)) : t('preview.never');
+  const snapshot = () => {
+    const rect = frameRef.current?.getBoundingClientRect();
+    if (!rect) throw new Error(t('preview.frameUnavailable'));
+    return api.web.snapshot(project.path, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+  };
 
   return (
     <section className="preview-center">
@@ -90,6 +100,8 @@ export default function PreviewCenter({ project }) {
               {Object.keys(VIEWPORTS).map((name) => <button key={name} className={viewport === name ? 'is-active' : ''} onClick={() => setViewport(name)} title={t(`preview.${name}`)}>{t(`preview.${name}`)}</button>)}
             </div>
             <div className="preview-actions">
+              <button className="preview-button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.audit(project.path))}>{t('preview.runAudit')}</button>
+              <button className="preview-button" disabled={web.state !== 'ready'} onClick={() => act(snapshot)}>{t('preview.snapshot')}</button>
               <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => setFrameKey((key) => key + 1)} title={t('preview.reload')}><Icon name="reload" /></button>
               <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.openExternal(project.path))} title={t('preview.openBrowser')}><Icon name="external" /></button>
               {['starting', 'ready', 'stopping'].includes(web.state)
@@ -97,13 +109,29 @@ export default function PreviewCenter({ project }) {
                 : <button className="preview-button is-primary" disabled={webBusy || web.state === 'loading' || !web.available} onClick={() => act(() => api.web.start(project.path))}><Icon name="play" />{t('preview.startWeb')}</button>}
             </div>
           </div>
+          <div className={`preview-sync is-${web.sync?.state || 'waiting'}`}>
+            <span><StateDot state={web.sync?.state === 'synchronized' ? 'ready' : web.sync?.state === 'error' ? 'error' : 'starting'} />{t(`preview.syncStates.${web.sync?.state || 'waiting'}`)}</span>
+            <span>{web.sync?.changedCount || 0} {t('preview.changedFiles')}</span>
+            <span>{t('preview.lastSync')}: {formatTime(web.sync?.lastSyncAt)}</span>
+            {Number.isFinite(web.sync?.compileDurationMs) && <span>{new Intl.NumberFormat(language).format(web.sync.compileDurationMs)} ms</span>}
+            {(web.sync?.changedFiles || []).length > 0 && <code title={web.sync.changedFiles.join('\n')}>{web.sync.changedFiles.slice(0, 3).join(', ')}</code>}
+          </div>
           <div className="preview-stage">
             {web.state === 'ready' && web.url === 'http://127.0.0.1:4173' ? (
               <div className="preview-browser" style={{ '--preview-width': `${VIEWPORTS[viewport]}px` }}>
                 <div className="preview-browser-bar"><i/><i/><i/><span>127.0.0.1:4173</span></div>
-                <iframe key={frameKey} src="http://127.0.0.1:4173" title={t('preview.webFrameTitle')} sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts" />
+                <iframe ref={frameRef} key={frameKey} src="http://127.0.0.1:4173" title={t('preview.webFrameTitle')} sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts" />
               </div>
             ) : <EmptyState icon="external" busy={['loading', 'starting', 'stopping'].includes(web.state)} title={!web.available && web.state !== 'loading' ? t('preview.noWeb') : web.error || t(`preview.webEmpty.${web.state}`)} copy={!web.available && web.state !== 'loading' ? t('preview.noWebCopy') : t(`preview.webEmptyCopy.${web.state}`)} />}
+          </div>
+          <div className={`preview-issues ${issuesOpen ? 'is-open' : ''}`}>
+            <button className="preview-issues-toggle" onClick={() => setIssuesOpen((open) => !open)} aria-expanded={issuesOpen}>
+              <span>{t('preview.diagnostics')}</span><b className={errorCount ? 'has-errors' : ''}>{issues.length}</b><span>{t(`preview.diagnosticStates.${web.diagnostics?.status || 'idle'}`)}</span>
+            </button>
+            {issuesOpen && <div className="preview-issues-body">
+              <div className="preview-issue-actions"><button disabled={!issues.length} onClick={() => act(() => api.web.copyDiagnosis(project.path))}>{t('preview.copyDiagnosis')}</button><button disabled={!issues.length} onClick={() => act(() => api.web.clearIssues(project.path))}>{t('preview.clearIssues')}</button></div>
+              {issues.length ? issues.map((issue) => <article key={issue.id} className={`is-${issue.severity}`}><span>{t(`preview.issueCategories.${issue.category}`)}</span><strong>{issue.message}</strong><time>{formatTime(issue.timestamp)}</time></article>) : <p>{t('preview.noIssues')}</p>}
+            </div>}
           </div>
         </div>
       ) : (
@@ -126,18 +154,25 @@ export default function PreviewCenter({ project }) {
             <div><span className="preview-step">02</span><h3>{t('preview.runFlutter')}</h3><p>{android.available ? t('preview.runFlutterCopy') : t('preview.noMobile')}</p></div>
             <div className="android-run-side">
               <div className="preview-status"><StateDot state={android.appState} />{t(`preview.appStates.${android.appState}`)}</div>
+              <div className="android-premium-controls">
+                <button className="preview-button" disabled={android.appState !== 'running'} onClick={() => act(() => api.android.hotReload(project.path))}>{t('preview.hotReload')}</button>
+                <button className="preview-button" disabled={android.appState !== 'running'} onClick={() => act(() => api.android.hotRestart(project.path))}>{t('preview.hotRestart')}</button>
+                <button className="preview-button" disabled={android.emulatorState !== 'running'} onClick={() => act(() => api.android.rotate(project.path, 'portrait'))}>{t('preview.portrait')}</button>
+                <button className="preview-button" disabled={android.emulatorState !== 'running'} onClick={() => act(() => api.android.rotate(project.path, 'landscape'))}>{t('preview.landscape')}</button>
+                <button className="preview-button" disabled={android.emulatorState !== 'running'} onClick={() => act(() => api.android.screenshot(project.path))}>{t('preview.screenshot')}</button>
+              </div>
               {['starting', 'running', 'stopping'].includes(android.appState)
                 ? <button className="preview-button is-danger" disabled={appBusy} onClick={() => act(() => api.android.stopApp(project.path))}><Icon name="stop" />{t('preview.stopApp')}</button>
                 : <button className="preview-button is-primary" disabled={appBusy || android.emulatorState !== 'running' || !android.available} onClick={() => act(() => api.android.runApp(project.path))}><Icon name="play" />{t('preview.runApp')}</button>}
             </div>
           </div>
-          {(android.emulatorError || android.appError) && <div className="preview-inline-error">{android.appError || android.emulatorError}</div>}
+          {(android.errors || []).map((error, index) => <div className="preview-inline-error" key={`${error.category}-${index}`}><b>{t(`preview.androidErrorCategories.${error.category}`)}</b>: {error.message}</div>)}
         </div>
       )}
 
       <div className={`preview-logs ${logsOpen ? 'is-open' : ''}`}>
         <button className="preview-logs-toggle" onClick={() => setLogsOpen((open) => !open)} aria-expanded={logsOpen}><span>{t('preview.logs')}</span><span>{visibleLogs.length} {t('preview.lines')}</span><b>{logsOpen ? '−' : '+'}</b></button>
-        {logsOpen && <div className="preview-log-output">{visibleLogs.length ? visibleLogs.map((entry, index) => <div key={`${entry.timestamp}-${index}`} className={entry.stream === 'stderr' ? 'is-error' : ''}><time>{new Date(entry.timestamp).toLocaleTimeString(language, { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</time><span>{entry.line}</span></div>) : <p>{t('preview.noLogs')}</p>}<span ref={logsEnd} /></div>}
+        {logsOpen && <div className="preview-log-output">{visibleLogs.length ? visibleLogs.map((entry, index) => <div key={`${entry.timestamp}-${index}`} className={entry.stream === 'stderr' ? 'is-error' : ''}><time>{formatTime(entry.timestamp)}</time><span>{entry.line}</span></div>) : <p>{t('preview.noLogs')}</p>}<span ref={logsEnd} /></div>}
       </div>
     </section>
   );
