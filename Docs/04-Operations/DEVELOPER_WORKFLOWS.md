@@ -27,11 +27,7 @@ npm --offline run package
 
 For local manifest, relative checksum, PE structure, x64 unpacked-app, and non-installing smoke commands, see `OFFLINE_RELEASE_PREPARATION.md`.
 
-## Rebuild Native Modules
-
-```bash
-npm run rebuild
-```
+`node-pty` ships the audited Windows prebuilds used by Electron packaging. Do not rebuild it in CI; doing so introduces a Visual Studio/Spectre toolchain dependency without changing the packaged binary.
 
 ## Recommended Work Session Flow
 

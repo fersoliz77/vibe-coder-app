@@ -15,8 +15,7 @@
     "release:manifest": "node scripts/generate-release-manifest.js",
     "release:validate": "node scripts/validate-release-manifest.js",
     "release:verify-installer": "node scripts/verify-windows-installer.js",
-    "release:smoke": "node scripts/release-smoke.js",
-    "rebuild": "electron-rebuild"
+    "release:smoke": "node scripts/release-smoke.js"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -48,7 +47,6 @@
     "concurrently": "^9.1.0",
     "electron": "^35.7.5",
     "electron-builder": "^25.1.0",
-    "electron-rebuild": "^3.2.9",
     "playwright": "^1.61.1",
     "vite": "^6.3.0",
     "wait-on": "^8.0.0"
