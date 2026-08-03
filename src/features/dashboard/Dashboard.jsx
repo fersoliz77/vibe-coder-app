@@ -24,15 +24,15 @@ function ArrowIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
 }
 
-function AccountCard({ authState, membership, progress, completedLessons, totalLessons, t, formatDate, compact = false }) {
+function AccountCard({ authState, account, progress, completedLessons, totalLessons, t, formatDate, compact = false }) {
   return (
-    <section className={`identity-card glass-card ${compact ? 'identity-card--compact' : ''}`} aria-label={t('dashboard.accountProgress')}>
+    <section className={`identity-card glass-card ${compact ? 'identity-card--compact' : ''}`} aria-label={t('dashboard.accountAccess')}>
       <div className="identity-card__profile">
         <div className="identity-card__avatar">{authState.user?.email?.[0]?.toUpperCase() || 'V'}</div>
-        <div><span className="identity-card__eyebrow">{t('dashboard.schoolAccount')}</span><h2>{authState.user?.email || t('dashboard.activeAccount')}</h2><p>{membership.schoolName || membership.schoolId || t('dashboard.schoolUnassigned')} · {t('dashboard.plan', { plan: membership.planName || t('dashboard.unavailable') })}</p></div>
+        <div><span className="identity-card__eyebrow">{t('dashboard.platformAccount')}</span><h2>{authState.user?.email || t('dashboard.activeAccount')}</h2><p>{t('dashboard.role', { role: account.role ? t(`roles.${account.role}`) : t('dashboard.unavailable') })} · {t('dashboard.plan', { plan: account.planName || t('dashboard.unavailable') })}</p></div>
       </div>
       <div className="identity-card__access">
-        <span className={`identity-card__status identity-card__status--${authState.policy}`}>{membership.status || authState.policy}</span>
+        <span className={`identity-card__status identity-card__status--${authState.policy}`}>{account.status ? t(`accountStatuses.${account.status}`) : authState.policy}</span>
         <span>{t('dashboard.offlineLease', { date: authState.leaseExpiresAt ? formatDate(authState.leaseExpiresAt, { dateStyle: 'medium', timeStyle: 'short' }) : t('dashboard.unavailable') })}</span>
       </div>
       <div className="identity-card__progress">
@@ -52,11 +52,11 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const [android, setAndroid] = useState(INITIAL_ANDROID);
   const [git, setGit] = useState({ state: 'loading', entries: [] });
   const [chatActivity, setChatActivity] = useState([]);
-  const membership = authState.membership || {};
-  const completedLessons = Number(membership.completedLessons) || 0;
-  const totalLessons = Number(membership.totalLessons) || 0;
+  const account = authState.account || {};
+  const completedLessons = Number(account.completedLessons) || 0;
+  const totalLessons = Number(account.totalLessons) || 0;
   const calculatedProgress = totalLessons > 0 ? (completedLessons / totalLessons) * 100 : 0;
-  const progress = Math.min(100, Math.max(0, Number(membership.progressPercentage) || calculatedProgress));
+  const progress = Math.min(100, Math.max(0, Number(account.progressPercentage) || calculatedProgress));
 
   useEffect(() => {
     if (!currentProject?.path) return undefined;
@@ -141,7 +141,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
         <div className="dashboard__main">
           {!currentProject ? (
             <>
-              <AccountCard {...{ authState, membership, progress, completedLessons, totalLessons, t, formatDate }} />
+              <AccountCard {...{ authState, account, progress, completedLessons, totalLessons, t, formatDate }} />
               <section className="dashboard__section">
                 <div className="dashboard__section-header"><h2 className="dashboard__section-title">{t('dashboard.quickActions')}</h2></div>
                 <div className="dashboard__actions-grid">
@@ -193,7 +193,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                   return <button key={action.id} className="action-card glass-card" onClick={handleClick} type="button"><div className="action-card__icon">{action.icon}</div><div className="action-card__text"><span className="action-card__title">{action.titleKey ? t(action.titleKey) : action.title}</span><span className="action-card__desc text-secondary">{t(action.descriptionKey)}</span></div></button>;
                 })}</div>
               </section>
-              <AccountCard compact {...{ authState, membership, progress, completedLessons, totalLessons, t, formatDate }} />
+              <AccountCard compact {...{ authState, account, progress, completedLessons, totalLessons, t, formatDate }} />
             </>
           )}
         </div>

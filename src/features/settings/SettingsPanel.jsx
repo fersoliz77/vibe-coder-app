@@ -10,6 +10,7 @@ const SETTINGS_TABS = [
   { id: 'services', labelKey: 'settings.tabs.services', descriptionKey: 'settings.tabs.servicesCopy' },
   { id: 'preferences', labelKey: 'settings.tabs.preferences', descriptionKey: 'settings.tabs.preferencesCopy' },
   { id: 'account', labelKey: 'settings.tabs.account', descriptionKey: 'settings.tabs.accountCopy' },
+  { id: 'support', labelKey: 'settings.tabs.support', descriptionKey: 'settings.tabs.supportCopy' },
 ];
 
 function readAccessibility() {
@@ -41,6 +42,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding })
   const [accessibility, setAccessibility] = useState(readAccessibility);
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
   const [activeTab, setActiveTab] = useState('services');
+  const [exportState, setExportState] = useState({ busy: false, message: '' });
 
   const refreshProviders = async () => {
     setProviders((current) => ({ ...current, loading: true, error: '' }));
@@ -83,7 +85,17 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding })
     }
   };
 
-  const membership = state.membership || {};
+  const exportDiagnostics = async () => {
+    setExportState({ busy: true, message: '' });
+    try {
+      const result = await window.electronAPI.diagnostics.exportReport();
+      setExportState({ busy: false, message: result.exported ? t('settings.diagnosticsExported') : '' });
+    } catch {
+      setExportState({ busy: false, message: t('settings.diagnosticsFailed') });
+    }
+  };
+
+  const account = state.account || {};
   const lease = state.leaseExpiresAt ? new Date(state.leaseExpiresAt) : null;
 
   return (
@@ -146,19 +158,33 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding })
           {activeTab === 'account' && (
             <div id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account" className="settings-tab-panel">
               <section className="settings-card">
-                <div className="settings-card__heading"><div><span>{t('settings.identity')}</span><h2>{t('settings.schoolAccount')}</h2></div><span className={`settings-pill settings-pill--${state.policy}`}>{state.policy}</span></div>
+                <div className="settings-card__heading"><div><span>{t('settings.identity')}</span><h2>{t('settings.accountAccess')}</h2></div><span className={`settings-pill settings-pill--${state.policy}`}>{state.policy}</span></div>
                 <dl className="settings-details">
                   <div><dt>{t('auth.email')}</dt><dd>{state.user?.email || t('settings.unavailable')}</dd></div>
-                  <div><dt>{t('settings.school')}</dt><dd>{membership.schoolName || membership.schoolId || t('settings.schoolUnassigned')}</dd></div>
-                  <div><dt>{t('settings.membership')}</dt><dd>{membership.status || t('settings.noStatus')}</dd></div>
-                  <div><dt>{t('settings.plan')}</dt><dd>{membership.planName || t('settings.noPlan')}</dd></div>
-                  <div><dt>{t('settings.progress')}</dt><dd>{t('settings.lessons', { completed: membership.completedLessons || 0, total: membership.totalLessons || 0, percentage: Math.round(membership.progressPercentage || 0) })}</dd></div>
+                  <div><dt>{t('settings.role')}</dt><dd>{account.role ? t(`roles.${account.role}`) : t('settings.unavailable')}</dd></div>
+                  <div><dt>{t('settings.accountStatus')}</dt><dd>{account.status ? t(`accountStatuses.${account.status}`) : t('settings.noStatus')}</dd></div>
+                  <div><dt>{t('settings.plan')}</dt><dd>{account.planName || t('settings.noPlan')}</dd></div>
+                  <div><dt>{t('settings.progress')}</dt><dd>{t('settings.lessons', { completed: account.completedLessons || 0, total: account.totalLessons || 0, percentage: Math.round(account.progressPercentage || 0) })}</dd></div>
                   <div><dt>{t('settings.offlineLease')}</dt><dd>{lease ? formatDate(lease, { dateStyle: 'medium', timeStyle: 'short' }) : t('settings.unavailable')}</dd></div>
                 </dl>
                 <div className="settings-actions">
                   <button className="btn btn--primary" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('revalidate')}>{busy === 'revalidate' ? t('settings.revalidating') : t('settings.revalidate')}</button>
                   <button className="btn btn--danger" type="button" disabled={Boolean(busy)} onClick={() => runAccountAction('logout')}>{busy === 'logout' ? t('settings.loggingOut') : t('settings.logout')}</button>
                   {message && <span className="settings-message" role="status">{message}</span>}
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === 'support' && (
+            <div id="settings-panel-support" role="tabpanel" aria-labelledby="settings-tab-support" className="settings-tab-panel">
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.localDiagnostics')}</span><h2>{t('settings.supportReport')}</h2></div><span className="settings-saved">JSON</span></div>
+                <p className="settings-copy">{t('settings.diagnosticsCopy')}</p>
+                <div className="settings-privacy-note">{t('settings.diagnosticsPrivacy')}</div>
+                <div className="settings-actions">
+                  <button className="btn btn--primary" type="button" disabled={exportState.busy} onClick={exportDiagnostics}>{exportState.busy ? t('settings.exportingDiagnostics') : t('settings.exportDiagnostics')}</button>
+                  {exportState.message && <span className="settings-message" role="status">{exportState.message}</span>}
                 </div>
               </section>
             </div>

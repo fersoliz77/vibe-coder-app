@@ -5,6 +5,7 @@ const path = require('path');
 const util = require('util');
 const { killProcessTree } = require('./processUtils');
 const { resolveNpmInvocation } = require('./environmentManager');
+const { buildSubprocessEnv } = require('./subprocessEnv');
 
 const execFileAsync = util.promisify(execFile);
 const PACKAGE_NAME = 'opencode-ai';
@@ -28,16 +29,12 @@ function stripAnsi(value) {
 function getEnvironment(extra = {}) {
   const npmBin = path.join(process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming'), 'npm');
   const nodeBin = path.join(process.env.ProgramFiles || 'C:\\Program Files', 'nodejs');
-  const env = {
-    ...process.env,
+  return buildSubprocessEnv({ extra: {
     PATH: [npmBin, nodeBin, process.env.PATH].filter(Boolean).join(path.delimiter),
     FORCE_COLOR: '0',
     NO_COLOR: '1',
     ...extra,
-  };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_NO_ASAR;
-  return env;
+  } });
 }
 
 function getNativeCandidates() {

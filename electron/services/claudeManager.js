@@ -7,6 +7,8 @@ const { validateProjectCwd } = require('../ipc/fsGuards');
 const { isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
 const { resolveNpmInvocation } = require('./environmentManager');
+const { buildSubprocessEnv } = require('./subprocessEnv');
+const { MAX_AI_CHUNK_LENGTH, MAX_AI_INPUT_LENGTH, appendBounded, truncateText } = require('./aiStreamLimits');
 
 // Strip ANSI escape codes from terminal output
 function stripAnsi(str) {
@@ -54,7 +56,7 @@ async function findClaudePath() {
 
   for (const name of candidates) {
     try {
-      const { stdout } = await execFileAsync(isWin ? 'where.exe' : 'which', [name], { timeout: 5000, windowsHide: true });
+      const { stdout } = await execFileAsync(isWin ? 'where.exe' : 'which', [name], { env: buildSubprocessEnv(), timeout: 5000, windowsHide: true });
       const found = stdout.trim().split(/\r?\n/)[0];
       if (found) return found;
     } catch {
@@ -69,7 +71,7 @@ async function findClaudePath() {
       : null;
     if (npmBin) {
       try {
-        const { stdout } = await execFileAsync(npmBin, ['--version'], { timeout: 5000, windowsHide: true });
+        const { stdout } = await execFileAsync(npmBin, ['--version'], { env: buildSubprocessEnv({ provider: 'claude' }), timeout: 5000, windowsHide: true });
         if (stdout.trim()) return npmBin;
       } catch {}
     }
@@ -85,9 +87,7 @@ async function checkClaudeInstalled() {
 
 async function checkClaudeAuth(claudePath) {
   if (!claudePath) return { authenticated: false };
-  const cleanEnv = { ...process.env };
-  delete cleanEnv.ELECTRON_RUN_AS_NODE;
-  delete cleanEnv.ELECTRON_NO_ASAR;
+  const cleanEnv = buildSubprocessEnv({ provider: 'claude' });
 
   try {
     // In Claude CLI v2.1+, `claude config list` is no longer a direct command.
@@ -147,9 +147,7 @@ async function getClaudeStatus() {
   // Get version
   let version = null;
   try {
-    const cleanEnv = { ...process.env };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
+    const cleanEnv = buildSubprocessEnv({ provider: 'claude' });
     const { stdout } = await execFileAsync(path, ['--version'], { env: cleanEnv, timeout: 5000, windowsHide: true });
     version = stdout.trim();
   } catch {}
@@ -161,9 +159,7 @@ async function getClaudeStatus() {
 async function installClaudeCode(onProgress = () => {}) {
   const npm = await resolveNpmInvocation();
   if (!npm) return { success: false, error: 'Node.js and npm are required to install Claude Code.' };
-  const cleanEnv = { ...process.env };
-  delete cleanEnv.ELECTRON_RUN_AS_NODE;
-  delete cleanEnv.ELECTRON_NO_ASAR;
+  const cleanEnv = buildSubprocessEnv();
 
   return new Promise((resolve) => {
     const proc = trackBackgroundProcess(spawn(npm.file, [...npm.argsPrefix, 'install', '--global', '@anthropic-ai/claude-code'], {
@@ -184,7 +180,16 @@ async function installClaudeCode(onProgress = () => {}) {
 
 // ─── IPC Handlers ───────────────────────────────────────────────────────────
 
-function setupClaudeHandlers(ipcMain, getMainWindow) {
+function setupClaudeHandlers(ipcMain, getMainWindow, dependencies = {}) {
+  const getStatus = dependencies.getStatus || getClaudeStatus;
+  const spawnProcess = dependencies.spawn || spawn;
+  const killTree = dependencies.killProcessTree || killProcessTree;
+  const validateCwd = dependencies.validateProjectCwd || ((value) => validateProjectCwd(value, isProjectRegistered));
+  const diagnostics = dependencies.diagnostics;
+  const recordLifecycle = (event, runId, details = {}) => {
+    diagnostics?.log('ai', event, { provider: 'claude', runId, ...details });
+    diagnostics?.setState('ai-claude', { state: event === 'run-start' ? 'running' : event.replace('run-', ''), runId });
+  };
   // Full status (installed + auth check)
   ipcMain.handle('claude:status', async () => {
     return await getClaudeStatus();
@@ -201,7 +206,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     const mainWindow = getMainWindow();
     return installClaudeCode(({ type, text }) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('claude:install-progress', { type, text });
+        mainWindow.webContents.send('claude:install-progress', { type, text: truncateText(text, MAX_AI_CHUNK_LENGTH) });
       }
     });
   });
@@ -212,9 +217,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     if (!claudePath) return { success: false, error: 'Claude CLI not installed' };
 
     const mainWindow = getMainWindow();
-    const cleanEnv = { ...process.env };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
+    const cleanEnv = buildSubprocessEnv({ provider: 'claude' });
 
     return new Promise((resolve) => {
       // shell:true is required on Windows to execute .cmd files
@@ -227,7 +230,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
 
       const send = (type, text) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('claude:login-progress', { type, text });
+          mainWindow.webContents.send('claude:login-progress', { type, text: truncateText(text, MAX_AI_CHUNK_LENGTH) });
         }
       };
 
@@ -251,9 +254,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
   ipcMain.handle('claude:logout', async () => {
     const { path: claudePath } = await checkClaudeInstalled();
     if (!claudePath) return { success: false };
-    const cleanEnv = { ...process.env };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
+    const cleanEnv = buildSubprocessEnv({ provider: 'claude' });
     try {
       await execFileAsync(claudePath, ['logout'], { env: cleanEnv, timeout: 8000, windowsHide: true });
       return { success: true };
@@ -267,7 +268,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     let validatedCwd;
     let validatedModel;
     try {
-      validatedCwd = validateProjectCwd(cwd, isProjectRegistered);
+      validatedCwd = validateCwd(cwd);
       validatedModel = assertSafeModel(model);
     } catch (error) {
       return { success: false, error: error.message };
@@ -276,63 +277,68 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
     const runId = nextRunId++;
     currentRunId = runId;
     const previousRun = activeRun;
-    activeRun = null;
-    if (previousRun) {
-      killProcessTree(previousRun.process);
+    activeRun = { id: runId, projectPath: validatedCwd, process: null };
+    if (previousRun?.process) {
+      recordLifecycle('run-cancel', previousRun.id, { reason: 'superseded' });
+      killTree(previousRun.process);
     }
 
-    const status = await getClaudeStatus();
+    let status;
+    try {
+      status = await getStatus();
+    } catch (error) {
+      if (activeRun?.id === runId) activeRun = null;
+      return { success: false, error: error.message };
+    }
     const mainWindow = getMainWindow();
 
-    if (currentRunId !== runId) return { success: false, cancelled: true };
+    if (currentRunId !== runId || activeRun?.id !== runId) return { success: false, cancelled: true, runId, projectPath: validatedCwd };
 
     if (!status.installed) {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('claude:error', 'Claude CLI not installed.');
+        mainWindow.webContents.send('claude:error', { runId, projectPath: validatedCwd, error: 'Claude CLI not installed.' });
       }
+      if (activeRun?.id === runId) activeRun = null;
       return { success: false, error: 'Claude CLI not installed' };
     }
 
     if (!status.authenticated) {
       if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('claude:error', 'Not authenticated. Please log in first.');
+        mainWindow.webContents.send('claude:error', { runId, projectPath: validatedCwd, error: 'Not authenticated. Please log in first.' });
       }
+      if (activeRun?.id === runId) activeRun = null;
       return { success: false, error: 'Not authenticated' };
     }
 
-    const cleanEnv = {
-      ...process.env,
-      // Disable color output from Claude to avoid ANSI codes
-      NO_COLOR: '1',
-      TERM: 'dumb',
-    };
-    delete cleanEnv.ELECTRON_RUN_AS_NODE;
-    delete cleanEnv.ELECTRON_NO_ASAR;
+    const cleanEnv = buildSubprocessEnv({ provider: 'claude', extra: { NO_COLOR: '1', TERM: 'dumb' } });
 
     try {
       // Use --print flag; on Windows with shell:true we must build the full command string
       // to avoid argument mangling with .cmd wrappers.
       // Pipe the prompt via stdin using the '-p -' pattern so special chars don't break.
-      const proc = spawn(status.path, ['--print', '-', '--model', validatedModel], {
+      if (currentRunId !== runId || activeRun?.id !== runId) return { success: false, cancelled: true, runId, projectPath: validatedCwd };
+      const proc = spawnProcess(status.path, ['--print', '-', '--model', validatedModel], {
         cwd: validatedCwd,
         env: cleanEnv,
         stdio: 'pipe',
         shell: /\.cmd$/i.test(status.path),
         windowsHide: true,
       });
-      activeRun = { id: runId, process: proc };
+      activeRun.process = proc;
+      recordLifecycle('run-start', runId);
 
       // Rebuild the full transcript so Claude has memory of prior turns —
       // each invocation is a fresh `--print` process with no session state.
       let fullPrompt = '';
-      for (const message of Array.isArray(history) ? history : []) {
+      for (const message of (Array.isArray(history) ? history : []).slice(-50)) {
         if (message.role === 'user') fullPrompt += `User: ${message.content}\n\n`;
         if (message.role === 'assistant') fullPrompt += `Assistant: ${message.content}\n\n`;
+        fullPrompt = truncateText(fullPrompt, MAX_AI_INPUT_LENGTH);
       }
       fullPrompt += `User: ${String(prompt || '')}\n`;
 
       // Write the prompt to stdin and close it so claude doesn't wait
-      proc.stdin.write(fullPrompt, 'utf8');
+      proc.stdin.write(truncateText(fullPrompt, MAX_AI_INPUT_LENGTH), 'utf8');
       proc.stdin.end();
 
       let fullOutput = '';
@@ -340,49 +346,58 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
       proc.stdout.on('data', (data) => {
         if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
-        fullOutput += text;
+        const bounded = appendBounded(fullOutput, text);
+        fullOutput = bounded.value;
         const win = getMainWindow();
-        if (win && !win.isDestroyed()) win.webContents.send('claude:data', text);
+        if (bounded.delta && win && !win.isDestroyed()) win.webContents.send('claude:data', { runId, projectPath: validatedCwd, text: bounded.delta });
       });
 
       // Suppress stderr warnings (stdin warning, etc) but log to console for debugging
       proc.stderr.on('data', (data) => {
         if (currentRunId !== runId || activeRun?.id !== runId) return;
         const text = stripAnsi(data.toString());
-        console.log('[claude:stderr]', text);
+        diagnostics?.log('ai', 'provider-stderr', { provider: 'claude', runId, category: /warning/i.test(text) ? 'warning' : 'process-output' });
         // Only send errors that are real errors, not warnings
         if (!text.includes('Warning:') && !text.includes('no stdin')) {
+          const bounded = appendBounded(fullOutput, text);
+          fullOutput = bounded.value;
           const win = getMainWindow();
-          if (win && !win.isDestroyed()) win.webContents.send('claude:data', text);
+          if (bounded.delta && win && !win.isDestroyed()) win.webContents.send('claude:data', { runId, projectPath: validatedCwd, text: bounded.delta });
         }
       });
 
       proc.on('close', (code) => {
         if (currentRunId !== runId || activeRun?.id !== runId) return;
         activeRun = null;
+        recordLifecycle('run-finish', runId, { success: code === 0, exitCode: code });
         const win = getMainWindow();
-        if (win && !win.isDestroyed()) win.webContents.send('claude:complete', { code, success: code === 0, output: fullOutput });
+        if (win && !win.isDestroyed()) win.webContents.send('claude:complete', { runId, projectPath: validatedCwd, code, success: code === 0, output: fullOutput });
       });
 
       proc.on('error', (error) => {
         if (currentRunId !== runId || activeRun?.id !== runId) return;
         activeRun = null;
+        recordLifecycle('run-finish', runId, { success: false, category: 'process-error', errorName: error.name });
         const win = getMainWindow();
-        if (win && !win.isDestroyed()) win.webContents.send('claude:error', error.message);
+        if (win && !win.isDestroyed()) win.webContents.send('claude:error', { runId, projectPath: validatedCwd, error: truncateText(error.message, MAX_AI_CHUNK_LENGTH) });
       });
 
-      return { success: true };
+      return { success: true, runId, projectPath: validatedCwd };
     } catch (error) {
+      if (activeRun?.id === runId) activeRun = null;
       return { success: false, error: error.message };
     }
   });
 
-  ipcMain.handle('claude:cancel', () => {
+  ipcMain.handle('claude:cancel', (_, runId, projectPath) => {
+    if (runId != null && activeRun?.id !== runId) return { success: true, cancelled: false };
+    if (projectPath && activeRun?.projectPath !== path.resolve(projectPath)) return { success: true, cancelled: false };
     currentRunId = nextRunId++;
     if (activeRun) {
       const run = activeRun;
       activeRun = null;
-      killProcessTree(run.process);
+      recordLifecycle('run-cancel', run.id, { reason: 'user' });
+      if (run.process) killTree(run.process);
     }
     return { success: true };
   });
@@ -390,7 +405,7 @@ function setupClaudeHandlers(ipcMain, getMainWindow) {
 
 function terminateAllClaudeProcesses() {
   currentRunId = nextRunId++;
-  if (activeRun) killProcessTree(activeRun.process);
+  if (activeRun?.process) killProcessTree(activeRun.process);
   activeRun = null;
   for (const processHandle of backgroundProcesses) killProcessTree(processHandle);
   backgroundProcesses.clear();

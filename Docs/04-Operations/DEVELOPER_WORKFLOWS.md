@@ -22,8 +22,10 @@ npm run check
 ## Package the Application
 
 ```bash
-npm run package
+npm --offline run package
 ```
+
+For local manifest, relative checksum, PE structure, x64 unpacked-app, and non-installing smoke commands, see `OFFLINE_RELEASE_PREPARATION.md`.
 
 ## Rebuild Native Modules
 

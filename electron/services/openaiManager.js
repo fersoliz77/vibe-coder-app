@@ -5,6 +5,8 @@ const util = require('util');
 const { validateProjectCwd } = require('../ipc/fsGuards');
 const { isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
+const { buildSubprocessEnv } = require('./subprocessEnv');
+const { MAX_AI_CHUNK_LENGTH, MAX_AI_INPUT_LENGTH, appendBounded, truncateText } = require('./aiStreamLimits');
 
 const execFileAsync = util.promisify(execFile);
 
@@ -38,10 +40,7 @@ function invalidateOpenAIStatusCache() {
 }
 
 function cleanProviderEnv() {
-  const env = { ...process.env, NO_COLOR: '1', TERM: 'dumb' };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_NO_ASAR;
-  return env;
+  return buildSubprocessEnv({ provider: 'openai', extra: { NO_COLOR: '1', TERM: 'dumb' } });
 }
 
 function resolveCodexPath() {
@@ -158,7 +157,7 @@ async function getOpenAIStatus() {
 
 function sendLoginProgress(mainWindow, type, text) {
   if (text && mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('openai:login-progress', { type, text });
+    mainWindow.webContents.send('openai:login-progress', { type, text: truncateText(text, MAX_AI_CHUNK_LENGTH) });
   }
 }
 
@@ -218,81 +217,110 @@ async function logoutFromOpenAI() {
   }
 }
 
-function sendChatMessage(prompt, conversationHistory = [], model, reasoning, cwd, mainWindow) {
-  return new Promise((resolve) => {
+function sendChatMessage(prompt, conversationHistory = [], model, reasoning, cwd, mainWindow, dependencies = {}) {
+  const validateCwd = dependencies.validateProjectCwd || ((value) => validateProjectCwd(value, isProjectRegistered));
+  const resolveExecutable = dependencies.resolveCodexPath || resolveCodexPath;
+  const spawnProcess = dependencies.spawn || spawn;
+  const killTree = dependencies.killProcessTree || killProcessTree;
+  const diagnostics = dependencies.diagnostics;
+  const recordLifecycle = (event, runId, details = {}) => {
+    diagnostics?.log('ai', event, { provider: 'openai', runId, ...details });
+    diagnostics?.setState('ai-openai', { state: event === 'run-start' ? 'running' : event.replace('run-', ''), runId });
+  };
     let validatedCwd;
     let executable;
     let args;
     try {
-      validatedCwd = validateProjectCwd(cwd, isProjectRegistered);
-      executable = resolveCodexPath();
+      validatedCwd = validateCwd(cwd);
+      executable = resolveExecutable();
       args = buildCodexExecArgs(model, reasoning);
     } catch (error) {
-      resolve({ success: false, error: error.message });
-      return;
+      return { success: false, error: error.message };
     }
 
     const runId = nextRunId++;
     currentRunId = runId;
     const previousRun = activeRun;
     activeRun = null;
-    if (previousRun) killProcessTree(previousRun.process);
+    if (previousRun) {
+      recordLifecycle('run-cancel', previousRun.id, { reason: 'superseded' });
+      killTree(previousRun.process);
+    }
 
-    const child = spawn(executable, args, {
-      cwd: validatedCwd,
-      env: cleanProviderEnv(),
-      windowsHide: true,
-      stdio: 'pipe',
-    });
-    activeRun = { id: runId, process: child };
+    let child;
+    try {
+      child = spawnProcess(executable, args, {
+        cwd: validatedCwd,
+        env: cleanProviderEnv(),
+        windowsHide: true,
+        stdio: 'pipe',
+      });
+    } catch (error) {
+      activeRun = null;
+      return { success: false, error: error.message };
+    }
+    activeRun = { id: runId, projectPath: validatedCwd, process: child };
+    recordLifecycle('run-start', runId);
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:started', { runId, projectPath: validatedCwd });
 
     let fullPrompt = '';
-    for (const message of conversationHistory) {
+    for (const message of conversationHistory.slice(-50)) {
       if (message.role === 'user') fullPrompt += `User: ${message.content}\n\n`;
       if (message.role === 'assistant') fullPrompt += `Assistant: ${message.content}\n\n`;
+      fullPrompt = truncateText(fullPrompt, MAX_AI_INPUT_LENGTH);
     }
     fullPrompt += `User: ${String(prompt || '')}\n`;
-    child.stdin.end(fullPrompt, 'utf8');
+    child.stdin.end(truncateText(fullPrompt, MAX_AI_INPUT_LENGTH), 'utf8');
 
     let fullOutput = '';
     let errorOutput = '';
     child.stdout.on('data', (data) => {
       if (currentRunId !== runId || activeRun?.id !== runId) return;
       const text = data.toString();
-      fullOutput += text;
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:data', text);
+      const bounded = appendBounded(fullOutput, text);
+      fullOutput = bounded.value;
+      if (bounded.delta && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:data', { runId, projectPath: validatedCwd, text: bounded.delta });
     });
-    child.stderr.on('data', (data) => { errorOutput += data.toString(); });
+    child.stderr.on('data', (data) => { errorOutput = appendBounded(errorOutput, data.toString()).value; });
     child.on('error', (error) => {
-      if (currentRunId !== runId || activeRun?.id !== runId) return resolve({ success: false, cancelled: true });
+      if (currentRunId !== runId || activeRun?.id !== runId) return;
       activeRun = null;
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', error.message);
-      resolve({ success: false, error: error.message });
+      recordLifecycle('run-finish', runId, { success: false, category: 'process-error', errorName: error.name });
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', { runId, projectPath: validatedCwd, error: truncateText(error.message, MAX_AI_CHUNK_LENGTH) });
     });
     child.on('close', (code) => {
-      if (currentRunId !== runId || activeRun?.id !== runId) return resolve({ success: false, cancelled: true });
+      if (currentRunId !== runId || activeRun?.id !== runId) return;
       activeRun = null;
       if (code !== 0) {
+        recordLifecycle('run-finish', runId, { success: false, category: 'process-exit', exitCode: code });
         const error = errorOutput.trim() || `Codex exited with code ${code}.`;
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', error);
-        resolve({ success: false, code, error });
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:error', { runId, projectPath: validatedCwd, error: truncateText(error, MAX_AI_CHUNK_LENGTH) });
         return;
       }
-      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:complete', { code, success: true, output: fullOutput });
-      resolve({ success: true, code, output: fullOutput });
+      recordLifecycle('run-finish', runId, { success: true, exitCode: code });
+      if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('openai:complete', { runId, projectPath: validatedCwd, code, success: true, output: fullOutput });
     });
-  });
+    return { success: true, runId, projectPath: validatedCwd };
 }
 
-function setupOpenAIHandlers(ipcMain, getMainWindow) {
+function setupOpenAIHandlers(ipcMain, getMainWindow, dependencies = {}) {
+  const sendMessage = dependencies.sendChatMessage || sendChatMessage;
+  const killTree = dependencies.killProcessTree || killProcessTree;
+  const diagnostics = dependencies.diagnostics;
   ipcMain.handle('openai:status', () => getOpenAIStatus());
   ipcMain.handle('openai:models', () => getOpenAIModels());
   ipcMain.handle('openai:login', () => loginWithOpenAI(getMainWindow()));
   ipcMain.handle('openai:logout', () => logoutFromOpenAI());
-  ipcMain.handle('openai:send', (_, prompt, history, model, reasoning, cwd) => sendChatMessage(prompt, history || [], model, reasoning, cwd, getMainWindow()));
-  ipcMain.handle('openai:cancel', () => {
+  ipcMain.handle('openai:send', (_, prompt, history, model, reasoning, cwd) => sendMessage(prompt, history || [], model, reasoning, cwd, getMainWindow(), dependencies));
+  ipcMain.handle('openai:cancel', (_, runId, projectPath) => {
+    if (runId != null && activeRun?.id !== runId) return { success: true, cancelled: false };
+    if (projectPath && activeRun?.projectPath !== path.resolve(projectPath)) return { success: true, cancelled: false };
     currentRunId = nextRunId++;
-    if (activeRun) killProcessTree(activeRun.process);
+    if (activeRun) {
+      diagnostics?.log('ai', 'run-cancel', { provider: 'openai', runId: activeRun.id, reason: 'user' });
+      diagnostics?.setState('ai-openai', { state: 'cancel', runId: activeRun.id });
+      killTree(activeRun.process);
+    }
     activeRun = null;
     return { success: true };
   });
@@ -306,4 +334,4 @@ function terminateAllOpenAIProcesses() {
   activeLogin = null;
 }
 
-module.exports = { buildCodexExecArgs, getOpenAIModels, getOpenAIStatus, invalidateOpenAIStatusCache, normalizeModelCatalog, resolveCodexPath, setupOpenAIHandlers, terminateAllOpenAIProcesses };
+module.exports = { buildCodexExecArgs, getOpenAIModels, getOpenAIStatus, invalidateOpenAIStatusCache, normalizeModelCatalog, resolveCodexPath, sendChatMessage, setupOpenAIHandlers, terminateAllOpenAIProcesses };

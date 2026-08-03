@@ -25,6 +25,6 @@ const target = path.join(__dirname, '..', 'electron', 'auth', 'runtime-config.js
 fs.writeFileSync(target, JSON.stringify({
   supabaseUrl,
   anonKey,
-  membershipRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || 'get_desktop_access',
+  accessRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || 'get_desktop_access',
   helpUrl: process.env.VIBE_AUTH_HELP_URL || null,
 }, null, 2));

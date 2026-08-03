@@ -1,9 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 
 class AuthRealtime {
-  constructor(authService, onMembershipChange, options = {}) {
+  constructor(authService, onAccessChange, options = {}) {
     this.authService = authService;
-    this.onMembershipChange = onMembershipChange;
+    this.onAccessChange = onAccessChange;
     this.createClient = options.createClient || createClient;
     this.debounceMs = options.debounceMs ?? 150;
     this.client = null;
@@ -27,12 +27,12 @@ class AuthRealtime {
     });
     await client.realtime.setAuth(session.accessToken);
     const channel = client
-      .channel(`desktop-membership:${session.userId}`)
+      .channel(`desktop-access:${session.userId}`)
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
-        table: 'school_memberships',
-        filter: `profile_id=eq.${session.userId}`,
+        table: 'profiles',
+        filter: `id=eq.${session.userId}`,
       }, () => this.scheduleRevalidation())
       .subscribe();
 
@@ -50,7 +50,7 @@ class AuthRealtime {
     if (this.changeTimer) clearTimeout(this.changeTimer);
     this.changeTimer = setTimeout(() => {
       this.changeTimer = null;
-      this.onMembershipChange();
+      this.onAccessChange();
     }, this.debounceMs);
     this.changeTimer.unref?.();
   }

@@ -1,6 +1,6 @@
 # Vibe IDE Code Documentation
 
-This folder is the implementation reference for the Windows desktop application. Cross-product decisions are canonical in `../ecosystem/` at the workspace root.
+This folder is the implementation reference for the Windows desktop application. Cross-product decisions are canonical in `../../ecosystem/` at the workspace root.
 
 ## Goals
 
@@ -38,6 +38,7 @@ This folder is the implementation reference for the Windows desktop application.
 - `Docs/04-Operations/DEVELOPER_WORKFLOWS.md`
 - `Docs/04-Operations/TESTING_GUIDE.md`
 - `Docs/04-Operations/RELEASE_CHECKLIST.md`
+- `Docs/04-Operations/OFFLINE_RELEASE_PREPARATION.md`
 - `Docs/04-Operations/DEBUGGING_GUIDE.md`
 - `Docs/04-Operations/DOCS_AUDIT_2026-07-11.md`
 - `Docs/99-Governance/AI_HANDOFF_CHECKLIST.md`
@@ -63,4 +64,4 @@ This folder is the implementation reference for the Windows desktop application.
 
 ## Current Baseline
 
-This documentation set reflects the current Electron + React application structure, including school authentication, seven-day offline access, restricted mode, the hardened project-aware filesystem bridge, modular Explorer, terminal integration, user-connected AI providers, services dashboard, Windows environment setup, guided cloud project provisioning, and store-backed project persistence.
+This documentation set reflects the current Electron + React application structure, including global platform account authentication, seven-day offline access, restricted mode, the hardened project-aware filesystem bridge, modular Explorer, terminal integration, user-connected AI providers, services dashboard, Windows environment setup, guided cloud project provisioning, and store-backed project persistence. Desktop productive access remains limited to an active student with a valid lease; the web-only instructor role does not receive desktop access.

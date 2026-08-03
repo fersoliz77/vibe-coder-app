@@ -70,16 +70,40 @@ function Login({ state, onState }) {
   const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState('');
   const [error, setError] = useState(state.error);
+
+  useEffect(() => {
+    setError(state.error || null);
+  }, [state.error]);
 
   const submit = async (event) => {
     event.preventDefault();
-    setBusy(true);
-    const result = await window.electronAPI.auth.login(email.trim(), password);
-    setBusy(false);
-    setError(result.error || null);
-    onState(result.state);
+    setBusy('password');
+    setError(null);
+    try {
+      const result = await window.electronAPI.auth.login(email.trim(), password);
+      setError(result.error || null);
+      onState(result.state);
+    } catch {
+      setError({ code: 'AUTH_UNEXPECTED', message: t('auth.signInFailed') });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const google = async () => {
+    setBusy('google');
+    setError(null);
+    try {
+      const result = await window.electronAPI.auth.google();
+      setError(result.error || null);
+      onState(result.state);
+    } catch {
+      setError({ code: 'AUTH_UNEXPECTED', message: t('auth.signInFailed') });
+    } finally {
+      setBusy('');
+    }
   };
 
   return (
@@ -89,14 +113,19 @@ function Login({ state, onState }) {
       <main className="auth-card" aria-labelledby="login-title">
         <div className="auth-mark">V</div>
         <p className="auth-eyebrow">Vibe IDE Code</p>
-        <h1 id="login-title">{t('auth.schoolAccess')}</h1>
+        <h1 id="login-title">{t('auth.platformAccess')}</h1>
         <p className="auth-copy">{t('auth.signInCopy')}</p>
+        <button type="button" className="auth-button auth-button--google auth-button--wide" onClick={google} disabled={Boolean(busy) || !state.configurationReady}>
+          <span className="auth-google-mark" aria-hidden="true">G</span>
+          {busy === 'google' ? t('auth.openingGoogle') : t('auth.continueWithGoogle')}
+        </button>
+        <div className="auth-separator"><span>{t('auth.orEmail')}</span></div>
         <form onSubmit={submit}>
           <label>{t('auth.email')}<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
           <label>{t('auth.password')}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
           {error && <p className="auth-error" role="alert"><strong>{error.code}</strong><br />{error.message}</p>}
-          <button className="auth-button auth-button--primary auth-button--wide" disabled={busy || !state.configurationReady} type="submit">
-            {busy ? t('auth.signingIn') : t('auth.signIn')}
+          <button className="auth-button auth-button--primary auth-button--wide" disabled={Boolean(busy) || !state.configurationReady} type="submit">
+            {busy === 'password' ? t('auth.signingIn') : t('auth.signIn')}
           </button>
         </form>
         <button type="button" className="auth-help" onClick={() => window.electronAPI.auth.openHelp()}>{t('auth.needHelp')}</button>
@@ -114,7 +143,7 @@ function Denied({ state, onState }) {
       <AuthTitlebar />
       <main className="auth-card" aria-labelledby="denied-title">
         <div className="auth-mark">V</div>
-        <p className="auth-eyebrow">{state.membership?.status || t('auth.accessExpired')}</p>
+        <p className="auth-eyebrow">{state.account?.status ? t(`accountStatuses.${state.account.status}`) : t('auth.accessExpired')}</p>
         <h1 id="denied-title">{t('auth.accessUnavailable')}</h1>
         <p className="auth-copy">{t('auth.deniedCopy')}</p>
         <AuthActions state={state} onState={onState} busy={busy} setBusy={setBusy} />
@@ -126,15 +155,33 @@ function Denied({ state, onState }) {
 function RestrictedOverlay({ state, onState }) {
   const { t, formatDate } = useI18n();
   const [busy, setBusy] = useState('');
-  const status = state.membership?.status;
+  const [supportMessage, setSupportMessage] = useState('');
+  const status = state.account?.status;
+  const exportDiagnostics = async () => {
+    setBusy('diagnostics');
+    setSupportMessage('');
+    try {
+      const result = await window.electronAPI.diagnostics.exportReport();
+      if (result.exported) setSupportMessage(t('settings.diagnosticsExported'));
+    } catch {
+      setSupportMessage(t('settings.diagnosticsFailed'));
+    } finally {
+      setBusy('');
+    }
+  };
   return (
     <div className="restricted-overlay" role="dialog" aria-modal="true" aria-labelledby="restricted-title">
       <section className="restricted-card">
-        <span className="restricted-card__status">{state.restrictionReason === 'OFFLINE_LEASE_EXPIRED' ? t('auth.offlineValidationExpired') : (status || t('auth.restricted'))}</span>
+        <span className="restricted-card__status">{state.restrictionReason === 'OFFLINE_LEASE_EXPIRED' ? t('auth.offlineValidationExpired') : (status ? t(`accountStatuses.${status}`) : t('auth.restricted'))}</span>
         <h1 id="restricted-title">{t('auth.restrictedAccount')}</h1>
         <p>{t('auth.restrictedCopy')}</p>
         {state.leaseExpiresAt && <p className="restricted-card__lease">{t('auth.offlineAccessUntil', { date: formatDate(state.leaseExpiresAt, { dateStyle: 'medium', timeStyle: 'short' }) })}</p>}
         <AuthActions state={state} onState={onState} busy={busy} setBusy={setBusy} />
+        <div className="restricted-support">
+          <button type="button" className="auth-button" onClick={exportDiagnostics} disabled={Boolean(busy)}>{busy === 'diagnostics' ? t('settings.exportingDiagnostics') : t('settings.exportDiagnostics')}</button>
+          <small>{t('settings.restrictedSupportCopy')}</small>
+          {supportMessage && <span role="status">{supportMessage}</span>}
+        </div>
       </section>
     </div>
   );
@@ -161,7 +208,7 @@ export default function AuthGate({ children }) {
     };
   }, []);
 
-  if (!state) return <div className="auth-loading">{t('auth.checkingSchoolAccess')}</div>;
+  if (!state) return <div className="auth-loading">{t('auth.checkingAccountAccess')}</div>;
 
   const content = !state.authenticated
     ? <Login state={state} onState={setState} />

@@ -3,7 +3,7 @@ const path = require('path');
 const { fileURLToPath } = require('url');
 const os = require('os');
 const fs = require('fs');
-const { setupWindowHandlers } = require('./ipc/windowManager');
+const { installCloseGuard, setupWindowHandlers } = require('./ipc/windowManager');
 const { setupDialogHandlers } = require('./ipc/dialogManager');
 const { setupFileSystemHandlers } = require('./ipc/fileSystemManager');
 const { setupServiceHandlers } = require('./services/serviceManager');
@@ -21,9 +21,19 @@ const { AuthRealtime } = require('./auth/authRealtime');
 const { AdminSignupAlerts } = require('./auth/adminSignupAlerts');
 const { StudentBroadcastAlerts } = require('./auth/studentBroadcastAlerts');
 const { installIpcAuthorization } = require('./auth/ipcGuard');
+const { getLeaseTimerDelay } = require('./auth/policy');
+const { writeJsonAtomic } = require('./services/atomicJson');
+const { classifyError, diagnostics, recordUnhandledRejection } = require('./diagnostics/logger');
+const { setupDiagnosticsHandlers } = require('./diagnostics/reportManager');
 
-// Required on Windows for Notification (native OS toast, used by admin signup
-// alerts) to show with the correct app identity and icon.
+process.on('uncaughtExceptionMonitor', (error, origin) => {
+  diagnostics.log('main', 'uncaught-error', { ...classifyError(error, 'uncaught-exception'), origin });
+});
+process.on('unhandledRejection', (reason) => {
+  recordUnhandledRejection(diagnostics, reason);
+});
+
+// Required on Windows for native notifications to use the app identity.
 app.setAppUserModelId('com.vibeidecoder.app');
 
 if (!app.isPackaged) {
@@ -43,6 +53,60 @@ if (!app.isPackaged) {
 }
 
 let mainWindow;
+let authService;
+let notifyAuthState;
+const pendingAuthCallbacks = [];
+
+const isEnvironmentInstaller = process.argv.includes('--install-environment');
+const isSandboxSmokeTest = process.argv.includes('--sandbox-smoke-test');
+const isNormalExecution = !isEnvironmentInstaller && !isSandboxSmokeTest;
+let hasSingleInstanceLock = true;
+
+function focusMainWindow() {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function findAuthCallback(args) {
+  return args.find((value) => typeof value === 'string' && /^vibeidecode(?:-dev)?:\/\//i.test(value));
+}
+
+async function handleAuthCallback(callbackUrl) {
+  if (!callbackUrl) return;
+  if (!authService) {
+    pendingAuthCallbacks.push(callbackUrl);
+    return;
+  }
+  await authService.handleOAuthCallback(callbackUrl);
+  notifyAuthState?.();
+  focusMainWindow();
+}
+
+if (isNormalExecution) {
+  if (app.isPackaged) {
+    app.setAsDefaultProtocolClient('vibeidecode');
+  } else if (process.argv[1]) {
+    app.setAsDefaultProtocolClient('vibeidecode-dev', process.execPath, [path.resolve(process.argv[1])]);
+  }
+
+  hasSingleInstanceLock = app.requestSingleInstanceLock();
+  if (!hasSingleInstanceLock) {
+    app.quit();
+  } else {
+    app.on('second-instance', (_event, commandLine) => {
+      handleAuthCallback(findAuthCallback(commandLine)).catch(() => {});
+      focusMainWindow();
+    });
+    app.on('open-url', (event, callbackUrl) => {
+      event.preventDefault();
+      handleAuthCallback(callbackUrl).catch(() => {});
+    });
+    const initialCallback = findAuthCallback(process.argv);
+    if (initialCallback) pendingAuthCallbacks.push(initialCallback);
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -57,7 +121,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false, // Required for node-pty IPC
+      sandbox: true,
       webSecurity: true,
       allowRunningInsecureContent: false,
     },
@@ -65,6 +129,7 @@ function createWindow() {
       ? path.join(__dirname, '..', 'dist', 'icon.png')
       : path.join(__dirname, '..', 'public', 'icon.png'),
   });
+  installCloseGuard(mainWindow);
 
   mainWindow.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
     if (/^https:\/\//i.test(targetUrl)) shell.openExternal(targetUrl);
@@ -102,9 +167,30 @@ function createWindow() {
   }
 }
 
-const isEnvironmentInstaller = process.argv.includes('--install-environment');
-
-if (isEnvironmentInstaller) {
+if (isSandboxSmokeTest) {
+  app.whenReady().then(() => {
+    const smokeWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'preload.js'),
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+        webSecurity: true,
+      },
+    });
+    smokeWindow.webContents.once('did-finish-load', async () => {
+      try {
+        const passed = await smokeWindow.webContents.executeJavaScript("document.documentElement.dataset.smokeResult === 'pass'");
+        app.exit(passed ? 0 : 1);
+      } catch {
+        app.exit(1);
+      }
+    });
+    smokeWindow.webContents.once('did-fail-load', () => app.exit(1));
+    smokeWindow.loadFile(path.join(__dirname, 'sandbox-smoke.html'));
+  });
+} else if (isEnvironmentInstaller) {
   app.whenReady().then(async () => {
     let bootstrapWindow;
     const languagePath = path.join(app.getPath('userData'), 'installer-preferences.json');
@@ -113,12 +199,12 @@ if (isEnvironmentInstaller) {
     };
     const saveLanguage = (language) => {
       fs.mkdirSync(path.dirname(languagePath), { recursive: true });
-      fs.writeFileSync(languagePath, JSON.stringify({ language }), { encoding: 'utf8', mode: 0o600 });
+      writeJsonAtomic(languagePath, { language });
       // Keep the installer choice available to the renderer's existing config store.
       const configPath = path.join(app.getPath('userData'), 'config.json');
       let config = {};
       try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); } catch {}
-      fs.writeFileSync(configPath, JSON.stringify({ ...config, language }, null, 2), { encoding: 'utf8', mode: 0o600 });
+      writeJsonAtomic(configPath, { ...config, language });
     };
     const messages = {
       en: { title: 'Preparing your development environment', starting: 'Starting setup...', environment: 'Development environment', checking: 'Checking required tools', queuedOpenCode: 'Queued after environment setup', queuedClaude: 'Queued after OpenCode', environmentReady: 'Required tools and Android development files are prepared.', installOpenCode: 'Installing the OpenCode CLI', installingOpenCode: 'Installing OpenCode...', openCodeMissing: 'OpenCode could not be installed.', openCodeReady: 'Installed and ready.', openCodeAlready: 'Already installed and ready.', installClaude: 'Installing the Claude Code CLI', installingClaude: 'Installing Claude Code...', claudeMissing: 'Claude Code could not be installed.', ready: 'Environment ready', attention: 'Environment setup needs attention', failedEnvironment: 'One or more required tools could not be installed.', review: 'Review the details below, then close this window.', complete: 'Your tools are installed. The Android emulator was prepared but was not launched.', unexpected: 'Setup stopped unexpectedly' },
@@ -293,15 +379,17 @@ if (isEnvironmentInstaller) {
     });
     createBootstrapWindow();
   });
+} else if (!hasSingleInstanceLock) {
+  // The primary instance receives any protocol callback through second-instance.
 } else app.whenReady().then(() => {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   createWindow();
 
-  const authService = new AuthService();
+  authService = new AuthService();
   authService.initialize();
-  let previousPolicy = authService.getPolicy();
+  let previousPolicy = null;
+  let previousRestrictionReason = null;
   let leaseTimer = null;
-  let notifyAuthState;
   let authRealtime;
   let adminSignupAlerts;
   let studentBroadcastAlerts;
@@ -312,6 +400,19 @@ if (isEnvironmentInstaller) {
     notifyAuthState?.();
   };
   const handleAuthState = (state) => {
+    if (previousPolicy !== state.policy || previousRestrictionReason !== state.restrictionReason) {
+      diagnostics.log('auth', 'policy-transition', {
+        from: previousPolicy,
+        to: state.policy,
+        reason: state.restrictionReason || state.error?.code || 'policy-evaluation',
+      });
+    }
+    diagnostics.setState('auth', {
+      policy: state.policy,
+      reason: state.restrictionReason || state.error?.code || null,
+      authenticated: state.authenticated,
+      configurationReady: state.configurationReady,
+    });
     if (previousPolicy === 'active' && state.policy !== 'active') {
       terminateAllTerminals();
       terminateAllClaudeProcesses();
@@ -322,11 +423,12 @@ if (isEnvironmentInstaller) {
       terminateAllPreviews();
     }
     previousPolicy = state.policy;
+    previousRestrictionReason = state.restrictionReason;
     if (leaseTimer) clearTimeout(leaseTimer);
-    const expiresAt = Date.parse(state.leaseExpiresAt);
-    if (state.authenticated && Number.isFinite(expiresAt)) {
-      const delay = Math.max(0, expiresAt - Date.now());
-      leaseTimer = setTimeout(() => notifyAuthState?.(), Math.min(delay, 2_147_483_647));
+    leaseTimer = null;
+    const delay = getLeaseTimerDelay(state);
+    if (delay !== null) {
+      leaseTimer = setTimeout(() => notifyAuthState?.(), delay);
       leaseTimer.unref();
     }
     authRealtime?.sync().catch(() => {});
@@ -338,7 +440,11 @@ if (isEnvironmentInstaller) {
   adminSignupAlerts = new AdminSignupAlerts(authService);
   studentBroadcastAlerts = new StudentBroadcastAlerts(authService);
   handleAuthState(authService.getState());
+  for (const callbackUrl of pendingAuthCallbacks.splice(0)) {
+    handleAuthCallback(callbackUrl).catch(() => {});
+  }
   installIpcAuthorization(ipcMain, () => authService.getPolicy());
+  setupDiagnosticsHandlers(ipcMain, () => mainWindow, diagnostics, authService);
   const authRefreshTimer = setInterval(async () => {
     if (!authService.getState().authenticated) return;
     await revalidateAndNotify();
@@ -353,6 +459,8 @@ if (isEnvironmentInstaller) {
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
     terminateAllOpenCodeProcesses();
+    terminateAllClaudeProcesses();
+    terminateAllOpenAIProcesses();
     terminateAllTerminals();
     terminateAllPreviews();
   });
@@ -368,12 +476,12 @@ if (isEnvironmentInstaller) {
   setupProjectHandlers(ipcMain, () => mainWindow);
   setupEnvironmentHandlers(ipcMain, () => mainWindow);
   projectProvisioner = setupProjectProvisionerHandlers(ipcMain, () => mainWindow, registerProject);
-  setupServiceHandlers(ipcMain);
+  setupServiceHandlers(ipcMain, diagnostics);
   setupTerminalHandlers(ipcMain, () => mainWindow);
-  setupClaudeHandlers(ipcMain, () => mainWindow);
-  setupOpenAIHandlers(ipcMain, () => mainWindow);
+  setupClaudeHandlers(ipcMain, () => mainWindow, { diagnostics });
+  setupOpenAIHandlers(ipcMain, () => mainWindow, { diagnostics });
   setupOpenCodeHandlers(ipcMain, () => mainWindow);
-  setupPreviewHandlers(ipcMain, () => mainWindow);
+  setupPreviewHandlers(ipcMain, () => mainWindow, diagnostics);
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

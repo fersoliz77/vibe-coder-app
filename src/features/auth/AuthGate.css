@@ -72,6 +72,11 @@
 }
 .auth-button--primary { color: #051018; border-color: transparent; background: var(--accent-primary); font-weight: 800; }
 .auth-button--wide { width: 100%; padding: 12px; }
+.auth-button--google { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #202124; border-color: #dadce0; font-weight: 700; }
+.auth-button--google:hover:not(:disabled) { background: #f8faff; }
+.auth-google-mark { color: #4285f4; font-size: 16px; font-weight: 900; }
+.auth-separator { display: flex; align-items: center; gap: 12px; margin: 18px 0; color: var(--text-tertiary); font-size: 11px; text-transform: uppercase; }
+.auth-separator::before, .auth-separator::after { content: ''; flex: 1; height: 1px; background: var(--glass-border); }
 .auth-button:disabled { opacity: .5; cursor: not-allowed; }
 .auth-help { margin: 20px 0 6px; padding-left: 0; border: 0; color: var(--accent-primary); }
 .auth-error { margin: 12px 0; color: #ff8e8e; font-size: 12px; }
@@ -91,6 +96,8 @@
 }
 .restricted-card__status { display: inline-block; margin: 0; }
 .restricted-card__lease { font-family: var(--font-mono); font-size: 11px; }
+.restricted-support { display: grid; gap: 8px; margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--glass-border); }
+.restricted-support small, .restricted-support span { color: var(--text-tertiary); font-size: 11px; }
 
 .high-contrast { --text-secondary: hsl(220, 20%, 85%); --glass-border: rgba(255, 255, 255, .35); }
 .reduced-motion *, .reduced-motion *::before, .reduced-motion *::after { animation: none !important; transition: none !important; }

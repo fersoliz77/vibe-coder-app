@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { forwardRef, useState, useEffect, useCallback, useImperativeHandle, useMemo } from 'react';
 import './FileExplorer.css';
 import { ExplorerContextMenu } from './ExplorerContextMenu';
 import { ExplorerGitPanel } from './ExplorerGitPanel';
@@ -13,8 +13,9 @@ import { useExplorerActions } from './useExplorerActions';
 import { useExplorerTabs } from './useExplorerTabs';
 import { useExplorerTreeState } from './useExplorerTreeState';
 import { useI18n } from '../../i18n/I18nContext';
+import { resolveDirtyTabTransition } from './dirtyTabTransition.mjs';
 
-export default function FileExplorer({ project }) {
+const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
   const { t } = useI18n();
   const [rootItems, setRootItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -61,6 +62,14 @@ export default function FileExplorer({ project }) {
     setStatusMessage: setTabStatusMessage,
     t,
   });
+
+  useImperativeHandle(ref, () => ({
+    async prepareToLeave() {
+      if (!tabsState.hasDirtyTabs) return true;
+      const choice = await window.electronAPI.dialog.confirmDirtyTabs(tabsState.dirtyTabs.map((tab) => tab.name));
+      return resolveDirtyTabTransition(choice, { save: tabsState.saveDirtyTabs, discard: tabsState.discardDirtyTabs });
+    },
+  }), [tabsState.dirtyTabs, tabsState.discardDirtyTabs, tabsState.hasDirtyTabs, tabsState.saveDirtyTabs]);
 
   const remapPaths = useCallback((oldPath, nextPath) => {
     treeState.remapTreePaths(oldPath, nextPath);
@@ -166,16 +175,6 @@ export default function FileExplorer({ project }) {
 
     return () => clearTimeout(timeoutId);
   }, [project?.path, searchQuery]);
-
-  useEffect(() => {
-    const handleBeforeUnload = (event) => {
-      if (!tabsState.hasDirtyTabs) return;
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [tabsState.hasDirtyTabs]);
 
   useEffect(() => {
     if (!tabsState.activeTab || tabsState.activeTab.type !== 'text' || !tabsState.showDiff) {
@@ -348,4 +347,6 @@ export default function FileExplorer({ project }) {
       )}
     </div>
   );
-}
+});
+
+export default FileExplorer;

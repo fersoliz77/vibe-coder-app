@@ -6,13 +6,16 @@ This guide defines how to validate the application with a practical, repeatable 
 
 ## Current Testing Reality
 
-The project currently relies mainly on:
+The project currently relies on:
 
-- `npm test` for guarded filesystem rules
-- production build validation
-- manual Electron verification
+- `npm test` for filesystem boundaries, authentication and access policy, Electron security contracts, subprocess and AI lifecycle behavior, diagnostics, persistence, provisioning, release manifests, and related regressions
+- production renderer build validation
+- local packaging and bounded release-candidate checks when delivery behavior is affected
+- manual Electron verification for interactions that require the packaged shell or operating-system integration
 - targeted runtime debugging
 - Playwright-assisted checks when explicitly requested
+
+The suite size is intentionally not recorded here because it changes with implementation. A dated verification record may report the exact count observed in that session.
 
 ## Minimum Verification Standard
 
@@ -54,8 +57,20 @@ npm run check
 ### Package app
 
 ```bash
-npm run package
+npm --offline run package
 ```
+
+### Verify an offline release candidate
+
+Use the dependency-free commands documented in `OFFLINE_RELEASE_PREPARATION.md`:
+
+```bash
+npm run release:verify-installer -- <installer.exe> <win-unpacked/Vibe IDE Code.exe>
+npm run release:validate -- <release-manifest.json> <installer.exe> <installer.sha256>
+npm run release:smoke -- --manifest <release-manifest.json> --installer <installer.exe>
+```
+
+These checks do not install, sign, publish, or enable updates. Passing them establishes only local installer-byte integrity and basic PE structure; it does not validate installer format or Authenticode trust. External development tools are not part of the installer hash and are installed only from Setup Center after explicit consent.
 
 ## Manual Regression Checklist
 

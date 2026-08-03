@@ -132,10 +132,14 @@ export default function TerminalPanel({
       } catch (error) {
         console.error('Failed to initialize terminal:', error);
         // Fallback UI for browser mode
-        el.innerHTML = `<div style="padding: 20px; color: var(--text-tertiary); font-family: var(--font-mono); font-size: 13px;">
-          Terminal requires Electron runtime.<br/>
-          Run with: <span style="color: var(--accent-primary);">npm run dev:electron</span>
-        </div>`;
+        el.replaceChildren();
+        const fallback = document.createElement('div');
+        fallback.className = 'terminal-panel__fallback';
+        fallback.append('Terminal requires Electron runtime.', document.createElement('br'), 'Run with: ');
+        const command = document.createElement('span');
+        command.textContent = 'npm run dev:electron';
+        fallback.append(command);
+        el.append(fallback);
       }
     };
 

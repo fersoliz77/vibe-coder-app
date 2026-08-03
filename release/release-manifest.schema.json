@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vibeidecode.local/contracts/release-manifest.schema.json",
+  "title": "Vibe IDE Code local release manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "channel",
+    "url",
+    "sha256",
+    "size",
+    "compatibility",
+    "publishedAt"
+  ],
+  "properties": {
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" },
+    "channel": { "enum": ["internal", "pilot", "stable"] },
+    "url": { "type": "string", "format": "uri", "pattern": "^https://(?![^/?#]*@)[^/?#]+/[^?#]*\\.exe(?:[?#].*)?$", "description": "HTTPS executable URL. Runtime policy rejects local/private IPs and trailing-dot hosts; .invalid placeholders are allowed only for internal manifests." },
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "size": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["minimumBackendVersion", "minimumClientVersion"],
+      "properties": {
+        "minimumBackendVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" },
+        "minimumClientVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-((?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*)(?:\\.(?:0|[1-9][0-9]*|[A-Za-z-][0-9A-Za-z-]*))*))?(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" }
+      }
+    },
+    "publishedAt": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-([0-2][0-9]|3[01])T([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\\.[0-9]{1,9})?Z$",
+      "description": "Accepted RFC 3339 policy: UTC Z only, seconds required, optional 1-9 fractional digits, no leap seconds."
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "channel": { "const": "stable" } }, "required": ["channel"] },
+      "then": { "properties": { "version": { "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:\\+[0-9A-Za-z-]+(?:\\.[0-9A-Za-z-]+)*)?$" } } }
+    },
+    {
+      "if": { "properties": { "channel": { "enum": ["pilot", "stable"] } }, "required": ["channel"] },
+      "then": {
+        "properties": {
+          "url": { "not": { "pattern": "^https://(?:[Ii][Nn][Vv][Aa][Ll][Ii][Dd]|[^/?#]+\\.[Ii][Nn][Vv][Aa][Ll][Ii][Dd])(?::[0-9]+)?/" } }
+        }
+      }
+    }
+  ]
+}

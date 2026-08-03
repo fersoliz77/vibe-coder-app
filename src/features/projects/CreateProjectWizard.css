@@ -164,6 +164,15 @@
 .cpw-result-links span { display: grid; min-width: 0; padding: 9px 10px; border: 1px solid var(--glass-border); border-radius: 8px; background: var(--glass-bg); }
 .cpw-result-links small { color: var(--text-tertiary); font-size: 8px; text-transform: uppercase; }
 .cpw-result-links strong { overflow: hidden; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.cpw-cleanup-warning { display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; padding: 11px 12px; border: 1px solid color-mix(in srgb, var(--status-warning) 38%, transparent); border-radius: 10px; color: var(--status-warning); background: var(--status-warning-bg); }
+.cpw-cleanup-warning > svg { width: 17px; flex: 0 0 17px; }
+.cpw-cleanup-warning > div { min-width: 0; flex: 1; }
+.cpw-cleanup-warning strong { color: var(--text-primary); font-size: 10px; }
+.cpw-cleanup-warning p { margin-top: 2px; color: var(--text-secondary); font-size: 9px; }
+.cpw-cleanup-warning ul { display: grid; gap: 4px; margin-top: 8px; list-style: none; }
+.cpw-cleanup-warning li { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 7px; font-size: 8px; }
+.cpw-cleanup-warning code { overflow: hidden; color: var(--text-primary); font-family: var(--font-mono); text-overflow: ellipsis; white-space: nowrap; }
+.cpw-cleanup-warning em { color: var(--status-warning); font-style: normal; }
 
 .cpw-loading { display: grid; height: 100%; place-content: center; justify-items: center; gap: 12px; color: var(--text-secondary); font-size: 11px; }
 .cpw-loading svg { width: 25px; color: var(--accent-primary); }

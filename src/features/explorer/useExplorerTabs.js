@@ -56,6 +56,27 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     await loadGitStatus();
   }, [activeTab, loadGitStatus, projectPath, setStatusMessage, t]);
 
+  const saveDirtyTabs = useCallback(async () => {
+    for (const tab of dirtyTabs) {
+      const result = await window.electronAPI.fs.writeFile(projectPath, tab.path, tab.draftContent ?? '');
+      if (!result.success) {
+        setStatusMessage(result.error || t('explorer.saveFailed'));
+        return false;
+      }
+    }
+    setTabs((prev) => prev.map((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent
+      ? { ...tab, savedContent: tab.draftContent, content: tab.draftContent }
+      : tab));
+    await loadGitStatus();
+    return true;
+  }, [dirtyTabs, loadGitStatus, projectPath, setStatusMessage, t]);
+
+  const discardDirtyTabs = useCallback(() => {
+    setTabs((prev) => prev.map((tab) => tab.type === 'text' && tab.draftContent !== tab.savedContent
+      ? { ...tab, draftContent: tab.savedContent, content: tab.savedContent }
+      : tab));
+  }, []);
+
   const closeTabImmediate = useCallback((tabId) => {
     setTabs((prev) => prev.filter((tab) => tab.id !== tabId));
     setPaneTabs((prev) => ({
@@ -139,6 +160,8 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     resetTabsState,
     openPreview,
     saveActiveTab,
+    saveDirtyTabs,
+    discardDirtyTabs,
     closeTab,
     reorderTabs,
     removeTabsForPaths,

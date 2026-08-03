@@ -5,6 +5,7 @@ const path = require('path');
 const execFileAsync = util.promisify(execFile);
 const os = require('os');
 const { validateProjectCwd } = require('../ipc/fsGuards');
+const { buildSubprocessEnv } = require('./subprocessEnv');
 
 /**
  * Service Manager — Checks connection status for Vercel, Supabase, GitHub, Git, Firebase
@@ -43,13 +44,13 @@ const SUPABASE_NATIVE_ENTRY = path.join(
   'supabase.exe',
 );
 
-async function runCommand(file, args = [], cwd, extraEnv = {}) {
+async function runCommand(file, args = [], cwd, extraEnv = {}, provider = null) {
   try {
     const { stdout, stderr } = await execFileAsync(file, args, {
       timeout: 20000,
       cwd,
       windowsHide: true,
-      env: { ...process.env, PATH: extraPath, FORCE_COLOR: '0', ...extraEnv },
+      env: buildSubprocessEnv({ provider: provider === 'gh' ? 'github' : provider, extra: { PATH: extraPath, FORCE_COLOR: '0', ...extraEnv } }),
     });
     return { success: true, stdout: stdout.trim(), stderr: stderr.trim() };
   } catch (error) {
@@ -80,7 +81,7 @@ function resolveCliInvocation(name, pathExists = fs.existsSync) {
 function runCli(name, args = [], cwd) {
   const invocation = resolveCliInvocation(name);
   if (!invocation) return Promise.resolve({ success: false, stdout: '', stderr: 'Unknown CLI' });
-  return runCommand(invocation.file, [...invocation.argsPrefix, ...args], cwd, invocation.extraEnv);
+  return runCommand(invocation.file, [...invocation.argsPrefix, ...args], cwd, invocation.extraEnv, name);
 }
 
 async function checkVercel(projectPath, cliRunner = runCli) {
@@ -322,14 +323,16 @@ const checkers = {
   firebase: checkFirebase,
 };
 
-function setupServiceHandlers(ipcMain) {
+function setupServiceHandlers(ipcMain, diagnostics) {
   const { isProjectRegistered } = require('./projectManager');
+  const recordError = (service, operation, category) => diagnostics?.log('service', 'error', { service, operation, category });
   ipcMain.handle('services:check-all', async (_, projectPath) => {
     const EXPECTED_IDS = ['vercel', 'supabase', 'github', 'git', 'firebase'];
     if (projectPath) {
       try {
         projectPath = validateProjectCwd(projectPath, isProjectRegistered);
       } catch (error) {
+        recordError('all', 'check', 'invalid-project');
         return EXPECTED_IDS.map((id) => ({ id, name: id, connected: false, details: { error: error.message } }));
       }
     }
@@ -340,8 +343,12 @@ function setupServiceHandlers(ipcMain) {
       checkGit(projectPath),
       checkFirebase(projectPath),
     ]);
-    return results.map((r, i) => {
-      if (r.status === 'fulfilled') return r.value;
+    const statuses = results.map((r, i) => {
+      if (r.status === 'fulfilled') {
+        if (r.value?.details?.error) recordError(EXPECTED_IDS[i], 'check', 'provider-unavailable');
+        return r.value;
+      }
+      recordError(EXPECTED_IDS[i], 'check', 'unexpected');
       return {
         id: EXPECTED_IDS[i],
         name: EXPECTED_IDS[i],
@@ -351,6 +358,12 @@ function setupServiceHandlers(ipcMain) {
         details: { error: r.reason?.message },
       };
     });
+    diagnostics?.setState('services', {
+      checked: statuses.length,
+      connected: statuses.filter((status) => status.connected).length,
+      errors: statuses.filter((status) => status.details?.error).length,
+    });
+    return statuses;
   });
 
   ipcMain.handle('services:check', async (_, serviceName, projectPath) => {
@@ -358,11 +371,17 @@ function setupServiceHandlers(ipcMain) {
     try {
       projectPath = validateProjectCwd(projectPath, isProjectRegistered);
     } catch (error) {
+      recordError(serviceName, 'check', 'invalid-project');
       return { error: error.message };
     }
     const checker = checkers[serviceName];
-    if (!checker) return { error: `Unknown service: ${serviceName}` };
-    return await checker(projectPath);
+    if (!checker) {
+      recordError('unknown', 'check', 'unsupported-service');
+      return { error: `Unknown service: ${serviceName}` };
+    }
+    const status = await checker(projectPath);
+    if (status?.details?.error || status?.error) recordError(serviceName, 'check', 'provider-unavailable');
+    return status;
   });
 
   ipcMain.handle('services:connect', async (_, serviceName) => {
@@ -382,8 +401,12 @@ function setupServiceHandlers(ipcMain) {
       github: ['gh', ['auth', 'logout']],
     };
     const command = commands[serviceName];
-    if (!command) return { success: false, error: 'Unknown service' };
+    if (!command) {
+      recordError('unknown', 'disconnect', 'unsupported-service');
+      return { success: false, error: 'Unknown service' };
+    }
     const result = await runCli(command[0], command[1]);
+    if (!result.success) recordError(serviceName, 'disconnect', 'command-failed');
     return { success: result.success };
   });
 }

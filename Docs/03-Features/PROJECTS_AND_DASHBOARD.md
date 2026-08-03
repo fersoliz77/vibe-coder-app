@@ -42,6 +42,7 @@ These surfaces handle project entry, project registration, and the default contr
 
 - Detects Node.js, npm, Git, GitHub CLI, Vercel CLI, the selected backend CLI, Flutter, JDK 17, and Android SDK.
 - Installs missing allowlisted tools only after one explicit user confirmation.
+- The Windows application installer never starts tool installation; external tools are initiated only here after that confirmation.
 - Supabase CLI is bundled with the desktop application.
 - Flutter is installed from the official stable repository when needed.
 - The project list warns when required tools are missing, and Settings provides the permanent environment management surface.

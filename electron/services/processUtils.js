@@ -1,9 +1,11 @@
 const { spawn } = require('child_process');
+const { buildSubprocessEnv } = require('./subprocessEnv');
 
 function killProcessTree(processHandle) {
   if (!processHandle?.pid) return;
   if (process.platform === 'win32') {
     const killer = spawn('taskkill.exe', ['/pid', String(processHandle.pid), '/T', '/F'], {
+      env: buildSubprocessEnv(),
       windowsHide: true,
       stdio: 'ignore',
       shell: false,

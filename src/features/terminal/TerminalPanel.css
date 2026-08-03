@@ -126,3 +126,13 @@
   height: 100%;
   gap: var(--space-md);
 }
+.terminal-panel__fallback {
+  padding: 20px;
+  color: var(--text-tertiary);
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.terminal-panel__fallback span {
+  color: var(--accent-primary);
+}

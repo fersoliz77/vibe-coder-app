@@ -1,0 +1,80 @@
+{
+  "_snapshot": {
+    "notice": "GENERATED SNAPSHOT - edit the ecosystem source, then refresh both repository snapshots.",
+    "source": "ecosystem/02-architecture/contracts",
+    "version": "1.0.0",
+    "captured_at": "2026-08-02"
+  },
+  "contracts": {
+    "account-role-status.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://contracts.vibeidecode.local/1.0.0/account-role-status.schema.json",
+      "title": "AccountRoleStatus",
+      "description": "Role and lifecycle status attached to a Vibe IDE Code profile.",
+      "x-contract-version": "1.0.0",
+      "type": "object",
+      "required": ["role", "status"],
+      "properties": {
+        "role": { "type": "string", "enum": ["admin", "student", "instructor"] },
+        "status": { "type": "string", "enum": ["pending", "active", "restricted", "suspended", "archived"] }
+      },
+      "additionalProperties": false
+    },
+    "profile.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://contracts.vibeidecode.local/1.0.0/profile.schema.json",
+      "title": "Profile",
+      "description": "Complete platform profile. Partial database projections are not Profile values.",
+      "x-contract-version": "1.0.0",
+      "type": "object",
+      "required": ["id", "email", "role", "status", "language", "created_at", "updated_at"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "student", "instructor"] },
+        "status": { "type": "string", "enum": ["pending", "active", "restricted", "suspended", "archived"] },
+        "language": { "type": "string", "minLength": 2, "maxLength": 16 },
+        "whatsapp": { "type": ["string", "null"], "maxLength": 64 },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "desktop-access.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://contracts.vibeidecode.local/1.0.0/desktop-access.schema.json",
+      "title": "DesktopAccess",
+      "description": "Raw row returned by get_desktop_access. Plan and progress fields describe content only and never grant desktop access.",
+      "x-contract-version": "1.0.0",
+      "type": "object",
+      "required": ["status", "role", "plan_id", "plan_name", "completed_lessons", "total_lessons", "progress_percentage", "offline_lease_expires_at"],
+      "properties": {
+        "status": { "type": "string", "enum": ["pending", "active", "restricted", "suspended", "archived"] },
+        "role": { "type": "string", "enum": ["admin", "student", "instructor"] },
+        "plan_id": { "type": ["string", "null"], "format": "uuid" },
+        "plan_name": { "type": ["string", "null"] },
+        "completed_lessons": { "type": "integer", "minimum": 0 },
+        "total_lessons": { "type": "integer", "minimum": 0 },
+        "progress_percentage": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "offline_lease_expires_at": { "type": ["string", "null"], "format": "date-time" }
+      },
+      "additionalProperties": false
+    },
+    "domain-error.schema.json": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "$id": "https://contracts.vibeidecode.local/1.0.0/domain-error.schema.json",
+      "title": "DomainError",
+      "description": "Sanitized error safe to return across application boundaries.",
+      "x-contract-version": "1.0.0",
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]{1,63}$" },
+        "message": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "details": { "type": ["object", "null"] },
+        "retryable": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

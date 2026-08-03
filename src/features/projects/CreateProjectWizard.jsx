@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { getRemoteCleanupIdentifiers } from './remoteCleanup.mjs';
 import './CreateProjectWizard.css';
 
 const FALLBACK_LOCATION = 'Documents\\Vibe Projects';
@@ -132,7 +133,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
       if (!mountedRef.current) return;
 
       if (locationResult.status === 'fulfilled' && locationResult.value) {
-        setLocation(typeof locationResult.value === 'string' ? locationResult.value : locationResult.value.path || FALLBACK_LOCATION);
+        setLocation(FALLBACK_LOCATION);
         setLocationGrant(locationResult.value.token || locationResult.value.id || '');
       }
       if (optionsResult.status === 'fulfilled') {
@@ -220,10 +221,10 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
     setFieldError('');
     try {
       const selected = await api.chooseLocation();
-      const path = typeof selected === 'string' ? selected : selected?.path;
-      if (path) {
-        setLocation(path);
-        setLocationGrant(selected.token || selected.id || '');
+      const token = selected?.token || selected?.id;
+      if (token) {
+        setLocation(t('createProject.authorizedLocation'));
+        setLocationGrant(token);
       }
     } catch (error) {
       setFieldError(redact(error?.message, passwordRef.current) || t('createProject.selectLocationFailed'));
@@ -242,7 +243,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
       if (!locationGrant) return t('createProject.authorizeLocation');
     }
     if (step === 4 && backend === 'firebase') {
-      if (!/^[a-z][a-z0-9-]{4,29}$/.test(firebaseProjectId)) return t('createProject.invalidProjectId');
+      if (!/^[a-z](?:[a-z0-9-]{4,28}[a-z0-9])$/.test(firebaseProjectId)) return t('createProject.invalidProjectId');
       if (!firebaseLocation.trim()) return t('createProject.firebaseLocationRequired');
     }
     if (step === 4 && backend === 'supabase') {
@@ -370,7 +371,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
     if (step === 4 && backend === 'firebase') return (
       <section className="cpw-step" aria-labelledby="cpw-step-title">
         <div className="cpw-step__intro"><span>{t('createProject.step', { number: 5 })}</span><h2 id="cpw-step-title" ref={titleRef} tabIndex="-1">{t('createProject.configureFirebase')}</h2><p>{t('createProject.firebaseSetupCopy')}</p></div>
-        <div className="cpw-service-row"><FixedService icon="lock" title="Authentication" detail={t('createProject.enabled')} /><FixedService icon="cloud" title="Cloud Firestore" detail={t('createProject.enabled')} /></div>
+        <div className="cpw-service-row"><FixedService icon="lock" title="Authentication" detail={t('createProject.authManualStep')} /><FixedService icon="cloud" title="Cloud Firestore" detail={t('createProject.enabled')} /></div>
         <p className="cpw-service-note"><Icon name="alert" /> {t('createProject.firebaseExcludedServices')}</p>
         <div className="cpw-form cpw-form--columns">
           <label className="cpw-field"><span>{t('createProject.projectId')}</span><input value={firebaseProjectId} onChange={(event) => { setFirebaseIdEdited(true); setFirebaseProjectId(event.target.value.toLowerCase()); }} placeholder={t('createProject.projectIdPlaceholder')} autoComplete="off" /><small>{t('createProject.projectIdFixed')}</small></label>
@@ -404,7 +405,11 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
       </section>
     );
 
-    const responseSteps = Array.isArray(result?.steps)
+    const manualSteps = Array.isArray(result?.remotes?.firebase?.manualSteps) ? result.remotes.firebase.manualSteps : [];
+    const cleanupIdentifiers = result?.manualCleanupRequired ? getRemoteCleanupIdentifiers(result.remotes) : [];
+    const responseSteps = manualSteps.length
+      ? manualSteps.map((entry) => ({ ...entry, status: 'manual' }))
+      : Array.isArray(result?.steps)
       ? result.steps
       : Array.isArray(result?.results)
         ? result.results
@@ -423,6 +428,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
              return <div key={item.id || item.name || index} className={`cpw-progress-item cpw-progress-item--${item.status || 'complete'}`}><span><Icon name={item.status === 'error' || item.status === 'failed' ? 'alert' : (item.status === 'active' || item.status === 'running') && isRunning ? 'spinner' : 'check'} /></span><p><strong>{redact(item.name || item.label, passwordRef.current)}</strong>{redact(item.message || item.detail, passwordRef.current)}</p></div>;
           })}
         </div>
+        {result?.manualCleanupRequired && <div className="cpw-cleanup-warning" role="alert"><Icon name="alert" /><div><strong>{t('createProject.remoteCleanupTitle')}</strong><p>{t('createProject.remoteCleanupCopy')}</p>{cleanupIdentifiers.length > 0 && <ul>{cleanupIdentifiers.map((entry) => <li key={`${entry.provider}-${entry.identifier}`}><span>{entry.provider}</span><code>{entry.identifier}</code><em>{t(`createProject.remoteStatus.${entry.status}`)}</em></li>)}</ul>}</div></div>}
         {!isRunning && (result?.project?.path || result?.path || result?.repository?.url || result?.deployment?.url) && <div className="cpw-result-links">{(result.project?.path || result.path) && <span><small>{t('createProject.folder')}</small><strong>{result.project?.path || result.path}</strong></span>}{result.repository?.url && <span><small>{t('createProject.repository')}</small><strong>{result.repository.url}</strong></span>}{result.deployment?.url && <span><small>Vercel</small><strong>{result.deployment.url}</strong></span>}</div>}
       </section>
     );

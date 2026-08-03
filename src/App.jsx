@@ -43,6 +43,7 @@ function Workspace() {
   const [openCodeSetup, setOpenCodeSetup] = useState({ open: false, phase: 'idle', progress: '', error: '' });
   const [openAIAvailable, setOpenAIAvailable] = useState(false);
   const openCodeRequest = useRef(0);
+  const explorerRef = useRef(null);
 
   // Onboarding: null = not yet loaded from store, false = needs onboarding, true = done
   const [onboardingDone, setOnboardingDone] = useState(null);
@@ -63,7 +64,14 @@ function Workspace() {
   // Window controls
   const handleMinimize = () => window.electronAPI?.window?.minimize();
   const handleMaximize = () => window.electronAPI?.window?.maximize();
-  const handleClose = () => window.electronAPI?.window?.close();
+  const handleClose = async () => {
+    window.electronAPI?.window?.close();
+  };
+
+  useEffect(() => window.electronAPI?.window?.onCloseRequested?.(async () => {
+    if (await explorerRef.current?.prepareToLeave?.() === false) return;
+    window.electronAPI.window.confirmClose();
+  }), []);
   const handleOpenProjectParent = useCallback(async (event) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -241,7 +249,10 @@ function Workspace() {
     else setActiveView(view);
   }, [handleOpenCode]);
 
-  const handleProjectSelect = useCallback((project) => {
+  const handleProjectSelect = useCallback(async (project) => {
+    if (currentProject?.path && currentProject.path !== project.path && await explorerRef.current?.prepareToLeave?.() === false) return;
+    claudeHook.cancel();
+    window.electronAPI?.openai?.cancel();
     terminalHook.closeAllTerminals();
     closeOpenCodeSetup();
     if (currentProject?.path && currentProject.path !== project.path) {
@@ -252,7 +263,10 @@ function Workspace() {
     setActiveView(VIEWS.DASHBOARD);
   }, [terminalHook.closeAllTerminals, closeOpenCodeSetup, currentProject, setCurrentProject]);
 
-  const handleBackToProjects = useCallback(() => {
+  const handleBackToProjects = useCallback(async () => {
+    if (await explorerRef.current?.prepareToLeave?.() === false) return;
+    claudeHook.cancel();
+    window.electronAPI?.openai?.cancel();
     terminalHook.closeAllTerminals();
     closeOpenCodeSetup();
     if (currentProject?.path) {
@@ -306,7 +320,7 @@ function Workspace() {
       case VIEWS.OPENAI:
         return <OpenAIPanel cwd={currentProject?.path} />;
       case VIEWS.FILES:
-        return <FileExplorer project={currentProject} />;
+        return null;
       case VIEWS.PREVIEW:
         return currentProject ? <PreviewCenter project={currentProject} /> : null;
       case VIEWS.DASHBOARD:
@@ -396,6 +410,11 @@ function Workspace() {
           authState={authState}
         />
         <main className="main-content">
+          {currentProject && (
+            <div style={{ display: activeView === VIEWS.FILES ? 'block' : 'none', height: '100%', width: '100%' }}>
+              <FileExplorer ref={explorerRef} project={currentProject} />
+            </div>
+          )}
           {currentProject && (
             <div
               style={{

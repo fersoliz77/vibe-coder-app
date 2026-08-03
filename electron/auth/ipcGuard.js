@@ -7,8 +7,17 @@ const RESTRICTED_READ_CHANNELS = new Set([
   'openai:cancel',
 ]);
 
+const AUTH_CHANNELS = new Set([
+  'auth:get-state',
+  'auth:login',
+  'auth:google',
+  'auth:revalidate',
+  'auth:logout',
+  'auth:open-help',
+]);
+
 function canAccessChannel(policy, channel) {
-  if (channel.startsWith('auth:') || channel.startsWith('window:')) return true;
+  if (AUTH_CHANNELS.has(channel) || channel.startsWith('window:') || channel === 'diagnostics:export') return true;
   if (policy === 'active') return true;
   if (policy === 'restricted') return RESTRICTED_READ_CHANNELS.has(channel);
   return false;

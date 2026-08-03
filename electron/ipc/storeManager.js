@@ -1,6 +1,7 @@
 const { ipcMain, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
+const { writeJsonAtomic } = require('../services/atomicJson');
 
 class StoreManager {
   constructor() {
@@ -22,11 +23,7 @@ class StoreManager {
   }
 
   writeData(data) {
-    try {
-      fs.writeFileSync(this.storePath, JSON.stringify(data, null, 2), 'utf8');
-    } catch (error) {
-      console.error('Error writing config.json:', error);
-    }
+    writeJsonAtomic(this.storePath, data);
   }
 
   get(key, defaultValue = null) {
@@ -34,13 +31,16 @@ class StoreManager {
   }
 
   set(key, value) {
-    this.data[key] = value;
-    this.writeData(this.data);
+    const next = { ...this.data, [key]: value };
+    this.writeData(next);
+    this.data = next;
   }
 
   delete(key) {
-    delete this.data[key];
-    this.writeData(this.data);
+    const next = { ...this.data };
+    delete next[key];
+    this.writeData(next);
+    this.data = next;
   }
 
   getAll() {

@@ -4,6 +4,8 @@
 
 ### Added
 
+- Dependency-free strict release manifest, relative checksum, bounded PE inspection, and installer-safe smoke tooling.
+- Windows packaging no longer starts external development-tool installation; Setup Center retains explicit consent.
 - Optional OpenCode agent with explicit installation consent and project-terminal launch.
 - Independent OpenCode provider status for configured OAuth/API connections.
 - Guided project creation for Next.js, React Vite, and Flutter Android plus Next.js mobile suites.

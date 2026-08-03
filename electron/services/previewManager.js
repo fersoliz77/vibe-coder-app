@@ -14,37 +14,31 @@ const {
   resolveFlutterToolInvocation,
   resolveNpmInvocation,
 } = require('./environmentManager');
+const {
+  PREVIEW_HOST,
+  PREVIEW_PORT,
+  PREVIEW_URL,
+  buildAdbRotationArgs,
+  buildAdbRotationCommands,
+  buildAdbScreenshotArgs,
+  buildFlutterControlInput,
+  buildFlutterRunSpawnOptions,
+  buildWebDevArgs,
+  classifyWebScript,
+  isConfiguredAvdNameOutput,
+  isValidManagedSerial,
+  parseAdbEmulatorSerials,
+} = require('./previewCommands');
+const { AUDIT_SCRIPT, classifyPreviewError, formatDiagnosis } = require('./previewDiagnostics');
+const { sanitizeIssue, sanitizeLog } = require('./previewSanitization');
 
 const execFileAsync = util.promisify(execFile);
-const PREVIEW_HOST = '127.0.0.1';
-const PREVIEW_PORT = 4173;
-const PREVIEW_URL = `http://${PREVIEW_HOST}:${PREVIEW_PORT}`;
 const MAX_LOG_LINES = 250;
 const READY_TIMEOUT_MS = 60_000;
 const ANDROID_BOOT_TIMEOUT_MS = 180_000;
 const MAX_ISSUES = 100;
 const MAX_HISTORY = 20;
 const WATCH_IGNORES = new Set(['node_modules', '.git', 'build', 'dist']);
-const AUDIT_SCRIPT = `(() => {
-  const text = (value) => String(value || '').replace(/[\\u0000-\\u001f\\u007f]/g, ' ').replace(/\\s+/g, ' ').trim().slice(0, 160);
-  const describe = (element) => ({ tag: element.tagName.toLowerCase(), id: text(element.id), name: text(element.getAttribute('name')), text: text(element.innerText || element.getAttribute('aria-label')) });
-  const issues = [];
-  const add = (kind, severity, message, element) => issues.push({ kind, severity, message, metadata: element ? describe(element) : {} });
-  if (document.documentElement.scrollWidth > document.documentElement.clientWidth + 1) add('responsive', 'warning', 'Page content overflows horizontally.');
-  document.querySelectorAll('img:not([alt])').forEach((el) => add('accessibility', 'warning', 'Image is missing alt text.', el));
-  document.querySelectorAll('input,select,textarea').forEach((el) => {
-    const labelled = el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || (el.id && document.querySelector('label[for="' + CSS.escape(el.id) + '"]')) || el.closest('label');
-    if (!labelled) add('accessibility', 'warning', 'Form control has no accessible label.', el);
-  });
-  document.querySelectorAll('button,[role="button"]').forEach((el) => {
-    if (!text(el.innerText || el.getAttribute('aria-label')) && !el.getAttribute('aria-labelledby')) add('accessibility', 'warning', 'Button has no accessible name.', el);
-  });
-  document.querySelectorAll('a[href],button,input,select,textarea,[role="button"]').forEach((el) => {
-    const box = el.getBoundingClientRect();
-    if (box.width > 0 && box.height > 0 && (box.width < 24 || box.height < 24)) add('responsive', 'info', 'Interactive control is smaller than 24 by 24 pixels.', el);
-  });
-  return issues.slice(0, 100);
-})()`;
 
 let getMainWindow = () => null;
 let webRun = null;
@@ -53,6 +47,11 @@ let emulatorRun = null;
 let webGeneration = 0;
 let androidGeneration = 0;
 let browserListenersInstalled = false;
+let diagnosticsLogger = null;
+
+function recordPreviewError(target, operation, error, category = classifyPreviewError(error)) {
+  diagnosticsLogger?.log('preview', 'error', { target, operation, category, errorName: error?.name || 'Error' });
+}
 
 function validateCwd(cwd) {
   return validateProjectCwd(cwd, isProjectRegistered);
@@ -66,21 +65,6 @@ function isTrustedPreviewResourceUrl(value) {
   try { return new URL(value).origin === PREVIEW_URL; } catch { return false; }
 }
 
-function isValidManagedSerial(serial) {
-  return /^emulator-\d+$/.test(String(serial || ''));
-}
-
-function buildAdbRotationArgs(serial, orientation) {
-  if (!isValidManagedSerial(serial)) throw new Error('Invalid managed emulator serial.');
-  if (!['portrait', 'landscape'].includes(orientation)) throw new Error('Invalid orientation.');
-  return ['-s', serial, 'shell', 'settings', 'put', 'system', 'user_rotation', orientation === 'portrait' ? '0' : '1'];
-}
-
-function buildAdbScreenshotArgs(serial) {
-  if (!isValidManagedSerial(serial)) throw new Error('Invalid managed emulator serial.');
-  return ['-s', serial, 'exec-out', 'screencap', '-p'];
-}
-
 function safeRelativeProjectPath(projectCwd, targetPath) {
   const relative = path.relative(path.resolve(projectCwd), path.resolve(targetPath));
   if (!relative || relative.startsWith('..') || path.isAbsolute(relative)) return null;
@@ -92,45 +76,12 @@ function isIgnoredWatchPath(relativePath) {
   return !parts.length || parts.some((part) => WATCH_IGNORES.has(part));
 }
 
-function sanitizeLog(value, projectCwd = '') {
-  let clean = String(value || '')
-    .replace(/\x1B(?:\][^\x07]*(?:\x07|\x1B\\)|\[[0-?]*[ -/]*[@-~]|[@-_])/g, '')
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    .replace(/\r/g, '');
-  if (projectCwd) clean = clean.split(projectCwd).join('[project]');
-  clean = clean.replace(/\b(token|password|secret|api[_-]?key)\s*[=:]\s*\S+/gi, '$1=[redacted]');
-  return clean.slice(0, 8_000).trim();
-}
-
-function sanitizeIssue(input, projectCwd = '') {
-  const category = ['runtime', 'network', 'resource', 'responsive', 'accessibility'].includes(input?.category || input?.kind)
-    ? (input.category || input.kind) : 'runtime';
-  const severity = ['error', 'warning', 'info'].includes(input?.severity) ? input.severity : 'error';
-  const metadata = {};
-  for (const key of ['tag', 'id', 'name', 'text', 'url', 'method', 'resourceType', 'statusCode']) {
-    const value = input?.metadata?.[key];
-    if (typeof value === 'string' || typeof value === 'number') {
-      let clean = sanitizeLog(value, projectCwd).slice(0, 240);
-      if (key === 'url') {
-        try { const parsed = new URL(clean); clean = `${parsed.origin}${parsed.pathname}`.slice(0, 240); } catch {}
-      }
-      metadata[key] = clean;
-    }
-  }
-  return {
-    id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-    category, severity,
-    message: sanitizeLog(input?.message || 'Preview issue', projectCwd).slice(0, 1_000),
-    metadata,
-    timestamp: new Date().toISOString(),
-  };
-}
-
 function addIssue(run, issue) {
   if (!run || webRun !== run || !['starting', 'ready'].includes(run.state)) return;
   const clean = sanitizeIssue(issue, run.projectCwd);
   if (!clean.message) return;
   run.issues.push(clean);
+  if (clean.severity === 'error') recordPreviewError('web', 'diagnostic', null, clean.category);
   if (run.issues.length > MAX_ISSUES) run.issues.splice(0, run.issues.length - MAX_ISSUES);
   publishWeb();
 }
@@ -159,20 +110,6 @@ function detectProjectTargets(projectCwd) {
     webCwd,
     mobileCwd: fs.existsSync(path.join(mobile, 'pubspec.yaml')) ? mobile : null,
   };
-}
-
-function classifyWebScript(packageJson) {
-  const script = String(packageJson?.scripts?.dev || '').trim().toLowerCase();
-  if (!script) return null;
-  if (/^next(?:\.cmd)?\s+dev$/.test(script)) return 'next';
-  if (/^vite(?:\.cmd)?$/.test(script)) return 'vite';
-  return null;
-}
-
-function buildWebDevArgs(kind) {
-  if (kind === 'next') return ['run', 'dev', '--', '-H', PREVIEW_HOST, '-p', String(PREVIEW_PORT)];
-  if (kind === 'vite') return ['run', 'dev', '--', '--host', PREVIEW_HOST, '--port', String(PREVIEW_PORT), '--strictPort'];
-  throw new Error('Unsupported web development server. Only exact Vite and Next.js dev scripts are supported.');
 }
 
 function publish(channel, payload) {
@@ -312,11 +249,13 @@ function closeSourceWatcher(run) {
 
 function publishWeb() {
   if (!webRun) return;
+  diagnosticsLogger?.setState('preview-web', { state: webRun.state, issueCount: webRun.issues.length, syncState: webRun.sync.state });
   publish('preview:web-status', publicWebStatus(webRun.projectCwd, detectProjectTargets(webRun.projectCwd)));
 }
 
 function publishAndroid(projectCwd = androidRun?.projectCwd || emulatorRun?.projectCwd) {
   if (!projectCwd) return;
+  diagnosticsLogger?.setState('preview-android', { emulatorState: emulatorRun?.state || 'stopped', appState: androidRun?.state || 'stopped' });
   publish('preview:android-status', publicAndroidStatus(projectCwd, detectProjectTargets(projectCwd)));
 }
 
@@ -340,6 +279,7 @@ function waitForWebReady(generation) {
     if (Date.now() >= deadline) {
       webRun.state = 'error';
       webRun.error = 'The development server did not become ready in time.';
+      recordPreviewError('web', 'start', null, 'timeout');
       publishWeb();
       return;
     }
@@ -383,6 +323,7 @@ async function startWeb(cwd) {
     if (webRun !== run) return;
     run.state = 'error';
     run.error = sanitizeLog(error.message, projectCwd);
+    recordPreviewError('web', 'start', error, 'process');
     publishWeb();
   });
   child.once('close', (code) => {
@@ -392,6 +333,7 @@ async function startWeb(cwd) {
     if (run.state !== 'stopping') {
       run.state = code === 0 ? 'stopped' : 'error';
       run.error = code === 0 ? null : `Development server exited with code ${code}.`;
+      if (code !== 0) recordPreviewError('web', 'run', null, 'process');
     } else run.state = 'stopped';
     publishWeb();
   });
@@ -432,17 +374,6 @@ function assertAvdExists() {
   if (!fs.existsSync(path.join(getAndroidAvdPath(), 'config.ini'))) {
     throw new Error(`Android virtual device ${ANDROID_AVD_NAME} is not installed.`);
   }
-}
-
-function parseAdbEmulatorSerials(output) {
-  return String(output || '').split(/\r?\n/)
-    .map((line) => line.match(/^(emulator-\d+)\s+device$/)?.[1])
-    .filter(Boolean);
-}
-
-function isConfiguredAvdNameOutput(output) {
-  const lines = String(output || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  return lines[0] === ANDROID_AVD_NAME;
 }
 
 async function queryConfiguredAvdName(adb, serial, execute = execFileAsync) {
@@ -495,6 +426,7 @@ function waitForAndroidBoot(run, adb, generation) {
     if (Date.now() >= deadline) {
       run.state = 'error';
       run.error = `Android virtual device ${ANDROID_AVD_NAME} did not finish booting within 180 seconds.`;
+      recordPreviewError('android-emulator', 'start', null, 'timeout');
       publishAndroid(run.projectCwd);
       if (run.process) killProcessTree(run.process);
       return;
@@ -576,13 +508,13 @@ async function startEmulator(cwd) {
   child.stderr.on('data', (data) => appendLog(run, 'android', 'stderr', data));
   child.once('error', (error) => {
     if (emulatorRun !== run) return;
-    run.state = 'error'; run.error = sanitizeLog(error.message); publishAndroid(projectCwd);
+    run.state = 'error'; run.error = sanitizeLog(error.message); recordPreviewError('android-emulator', 'start', error, 'process'); publishAndroid(projectCwd);
   });
   child.once('close', (code) => {
     if (emulatorRun !== run) return;
     run.process = null;
     if (run.state === 'stopping' || run.state === 'stopped') { run.state = 'stopped'; run.error = null; }
-    else if (run.state !== 'error') { run.state = code === 0 ? 'stopped' : 'error'; run.error = code ? `Emulator exited with code ${code}.` : null; }
+    else if (run.state !== 'error') { run.state = code === 0 ? 'stopped' : 'error'; run.error = code ? `Emulator exited with code ${code}.` : null; if (code) recordPreviewError('android-emulator', 'run', null, 'process'); }
     run.serial = null;
     publishAndroid(projectCwd);
   });
@@ -593,9 +525,9 @@ async function startEmulator(cwd) {
 
 function sendFlutterControl(cwd, control) {
   const projectCwd = validateCwd(cwd);
-  if (!['reload', 'restart'].includes(control)) throw new Error('Invalid Flutter control.');
+  const input = buildFlutterControlInput(control);
   if (androidRun?.projectCwd !== projectCwd || androidRun.state !== 'running' || !androidRun.process?.stdin?.writable) throw new Error('The Flutter application is not running.');
-  androidRun.process.stdin.write(control === 'reload' ? 'r\n' : 'R\n');
+  androidRun.process.stdin.write(input);
   addActivity(androidRun, control === 'reload' ? 'hot-reload' : 'hot-restart');
   return publicAndroidStatus(projectCwd, detectProjectTargets(projectCwd));
 }
@@ -603,7 +535,9 @@ function sendFlutterControl(cwd, control) {
 async function rotateAndroid(cwd, orientation) {
   const projectCwd = validateCwd(cwd);
   const { tools, serial } = await requireManagedSerial();
-  await execFileAsync(tools.adb, buildAdbRotationArgs(serial, orientation), { env: getProcessEnv(), timeout: 5_000, windowsHide: true });
+  for (const args of buildAdbRotationCommands(serial, orientation)) {
+    await execFileAsync(tools.adb, args, { env: getProcessEnv(), timeout: 5_000, windowsHide: true });
+  }
   if (emulatorRun?.projectCwd === projectCwd) addActivity(emulatorRun, 'rotation', { orientation });
   publishAndroid(projectCwd);
   return { orientation };
@@ -653,19 +587,19 @@ async function runAndroidApp(cwd) {
   }
   const run = { projectCwd, state: 'starting', error: null, logs: [], activity: [], process: null };
   androidRun = run;
-  const child = spawn(flutter.file, [...flutter.argsPrefix, 'run', '-d', serial], {
-    cwd: targets.mobileCwd,
-    env: getProcessEnv({ ANDROID_SDK_ROOT: tools.sdk, ANDROID_HOME: tools.sdk }),
-    shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
-  });
+  const child = spawn(
+    flutter.file,
+    [...flutter.argsPrefix, 'run', '-d', serial],
+    buildFlutterRunSpawnOptions(targets.mobileCwd, getProcessEnv({ ANDROID_SDK_ROOT: tools.sdk, ANDROID_HOME: tools.sdk })),
+  );
   run.process = child;
   child.stdout.on('data', (data) => { if (run.state === 'starting') run.state = 'running'; appendLog(run, 'android', 'stdout', data); publishAndroid(projectCwd); });
   child.stderr.on('data', (data) => appendLog(run, 'android', 'stderr', data));
-  child.once('error', (error) => { if (androidRun === run) { run.state = 'error'; run.error = sanitizeLog(error.message, projectCwd); publishAndroid(projectCwd); } });
+  child.once('error', (error) => { if (androidRun === run) { run.state = 'error'; run.error = sanitizeLog(error.message, projectCwd); recordPreviewError('android-app', 'run', error, 'process'); publishAndroid(projectCwd); } });
   child.once('close', (code) => {
     if (androidRun !== run) return;
     run.process = null;
-    if (run.state !== 'stopping') { run.state = code === 0 ? 'stopped' : 'error'; run.error = code ? `Flutter exited with code ${code}.` : null; }
+    if (run.state !== 'stopping') { run.state = code === 0 ? 'stopped' : 'error'; run.error = code ? `Flutter exited with code ${code}.` : null; if (code) recordPreviewError('android-app', 'run', null, 'process'); }
     else run.state = 'stopped';
     publishAndroid(projectCwd);
   });
@@ -714,9 +648,8 @@ function clearWebIssues(cwd) {
 function copyWebDiagnosis(cwd) {
   const projectCwd = validateCwd(cwd);
   if (webRun?.projectCwd !== projectCwd) throw new Error('The trusted preview is not active for this project.');
-  const lines = webRun.issues.map((issue) => `[${issue.severity.toUpperCase()}] ${issue.category}: ${issue.message}`);
   const { clipboard } = require('electron');
-  clipboard.writeText(lines.length ? lines.join('\n') : 'Preview diagnostics: no issues detected.');
+  clipboard.writeText(formatDiagnosis(webRun.issues));
   return true;
 }
 
@@ -823,32 +756,41 @@ function terminateAllPreviews() {
   webRun = null; androidRun = null; emulatorRun = null;
 }
 
-function setupPreviewHandlers(ipcMain, mainWindowProvider) {
+function setupPreviewHandlers(ipcMain, mainWindowProvider, diagnostics) {
   getMainWindow = mainWindowProvider;
+  diagnosticsLogger = diagnostics || null;
   installBrowserDiagnosticsListeners();
-  ipcMain.handle('preview:web-status', (_event, cwd) => getWebStatus(cwd));
-  ipcMain.handle('preview:web-start', (_event, cwd) => startWeb(cwd));
-  ipcMain.handle('preview:web-stop', (_event, cwd) => stopWeb(cwd));
-  ipcMain.handle('preview:web-open-external', async (_event, cwd) => {
+  const handle = (channel, target, operation, handler) => ipcMain.handle(channel, async (...args) => {
+    try {
+      return await handler(...args);
+    } catch (error) {
+      recordPreviewError(target, operation, error);
+      throw error;
+    }
+  });
+  handle('preview:web-status', 'web', 'status', (_event, cwd) => getWebStatus(cwd));
+  handle('preview:web-start', 'web', 'start', (_event, cwd) => startWeb(cwd));
+  handle('preview:web-stop', 'web', 'stop', (_event, cwd) => stopWeb(cwd));
+  handle('preview:web-open-external', 'web', 'open-external', async (_event, cwd) => {
     const status = await getWebStatus(cwd);
     if (status.state !== 'ready' || !isTrustedPreviewUrl(status.url)) throw new Error('The trusted preview is not ready.');
     const { shell } = require('electron');
     await shell.openExternal(PREVIEW_URL);
     return true;
   });
-  ipcMain.handle('preview:web-audit', (_event, cwd) => runWebAudit(cwd));
-  ipcMain.handle('preview:web-clear-issues', (_event, cwd) => clearWebIssues(cwd));
-  ipcMain.handle('preview:web-copy-diagnosis', (_event, cwd) => copyWebDiagnosis(cwd));
-  ipcMain.handle('preview:web-snapshot', (_event, cwd, bounds) => captureWebSnapshot(cwd, bounds));
-  ipcMain.handle('preview:android-status', (_event, cwd) => getAndroidStatus(cwd));
-  ipcMain.handle('preview:android-start-emulator', (_event, cwd) => startEmulator(cwd));
-  ipcMain.handle('preview:android-stop-emulator', (_event, cwd) => stopEmulator(cwd));
-  ipcMain.handle('preview:android-run-app', (_event, cwd) => runAndroidApp(cwd));
-  ipcMain.handle('preview:android-stop-app', (_event, cwd) => stopAndroidApp(cwd));
-  ipcMain.handle('preview:android-hot-reload', (_event, cwd) => sendFlutterControl(cwd, 'reload'));
-  ipcMain.handle('preview:android-hot-restart', (_event, cwd) => sendFlutterControl(cwd, 'restart'));
-  ipcMain.handle('preview:android-rotate', (_event, cwd, orientation) => rotateAndroid(cwd, orientation));
-  ipcMain.handle('preview:android-screenshot', (_event, cwd) => captureAndroidScreenshot(cwd));
+  handle('preview:web-audit', 'web', 'audit', (_event, cwd) => runWebAudit(cwd));
+  handle('preview:web-clear-issues', 'web', 'clear-issues', (_event, cwd) => clearWebIssues(cwd));
+  handle('preview:web-copy-diagnosis', 'web', 'copy-diagnosis', (_event, cwd) => copyWebDiagnosis(cwd));
+  handle('preview:web-snapshot', 'web', 'snapshot', (_event, cwd, bounds) => captureWebSnapshot(cwd, bounds));
+  handle('preview:android-status', 'android', 'status', (_event, cwd) => getAndroidStatus(cwd));
+  handle('preview:android-start-emulator', 'android-emulator', 'start', (_event, cwd) => startEmulator(cwd));
+  handle('preview:android-stop-emulator', 'android-emulator', 'stop', (_event, cwd) => stopEmulator(cwd));
+  handle('preview:android-run-app', 'android-app', 'start', (_event, cwd) => runAndroidApp(cwd));
+  handle('preview:android-stop-app', 'android-app', 'stop', (_event, cwd) => stopAndroidApp(cwd));
+  handle('preview:android-hot-reload', 'android-app', 'hot-reload', (_event, cwd) => sendFlutterControl(cwd, 'reload'));
+  handle('preview:android-hot-restart', 'android-app', 'hot-restart', (_event, cwd) => sendFlutterControl(cwd, 'restart'));
+  handle('preview:android-rotate', 'android-emulator', 'rotate', (_event, cwd, orientation) => rotateAndroid(cwd, orientation));
+  handle('preview:android-screenshot', 'android-emulator', 'screenshot', (_event, cwd) => captureAndroidScreenshot(cwd));
 }
 
 module.exports = {

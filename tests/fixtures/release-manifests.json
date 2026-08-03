@@ -1,0 +1,25 @@
+{
+  "valid": {
+    "version": "1.2.3",
+    "channel": "pilot",
+    "url": "https://releases.example.test/Vibe-IDE-Code-Setup-1.2.3.exe",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "size": 123456,
+    "compatibility": {
+      "minimumBackendVersion": "1.1.0",
+      "minimumClientVersion": "1.0.0"
+    },
+    "publishedAt": "2026-08-02T12:00:00.000Z"
+  },
+  "invalid": [
+    { "field": "channel", "value": "public" },
+    { "field": "url", "value": "http://releases.example.test/setup.exe" },
+    { "field": "sha256", "value": "ABC123" },
+    { "field": "size", "value": 0 },
+    { "field": "publishedAt", "value": "2026-08-02" },
+    { "field": "version", "value": "v1" },
+    { "field": "size", "value": 9007199254740992 },
+    { "field": "url", "value": "https://localhost/setup.exe" },
+    { "field": "url", "value": "https://releases.example.test/setup.zip" }
+  ]
+}

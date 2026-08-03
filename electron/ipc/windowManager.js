@@ -2,6 +2,16 @@ const { ipcMain } = require('electron');
 
 let windowHandlersRegistered = false;
 
+function installCloseGuard(mainWindow) {
+  if (!mainWindow || mainWindow.__vibeCloseGuardInstalled) return;
+  mainWindow.__vibeCloseGuardInstalled = true;
+  mainWindow.on('close', (event) => {
+    if (mainWindow.__vibeCloseApproved) return;
+    event.preventDefault();
+    mainWindow.webContents.send('window:close-requested');
+  });
+}
+
 function setupWindowHandlers(getMainWindow) {
   if (windowHandlersRegistered) return;
 
@@ -30,6 +40,13 @@ function setupWindowHandlers(getMainWindow) {
     }
   });
 
+  ipcMain.on('window:close-confirmed', () => {
+    const mainWindow = getMainWindow();
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    mainWindow.__vibeCloseApproved = true;
+    mainWindow.close();
+  });
+
   ipcMain.handle('window:isMaximized', () => {
     const mainWindow = getMainWindow();
     return Boolean(mainWindow && !mainWindow.isDestroyed() && mainWindow.isMaximized());
@@ -38,4 +55,4 @@ function setupWindowHandlers(getMainWindow) {
   windowHandlersRegistered = true;
 }
 
-module.exports = { setupWindowHandlers };
+module.exports = { installCloseGuard, setupWindowHandlers };

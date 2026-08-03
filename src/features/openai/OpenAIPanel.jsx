@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { appendProgress, appendRendererStream, limitChatMessages } from '../../utils/chatLimits.mjs';
 import './OpenAIPanel.css';
 
 function OpenAIAvatar({ size = 20 }) {
@@ -187,6 +188,8 @@ export default function OpenAIPanel({ cwd }) {
   const [model, setModel] = useState('gpt-5.4');
   const [reasoning, setReasoning] = useState('medium');
   const streamRef = useRef('');
+  const activeRunRef = useRef(null);
+  const projectPathRef = useRef(cwd);
   const inputRef = useRef(null);
   const saveTimerRef = useRef(null);
 
@@ -197,8 +200,7 @@ export default function OpenAIPanel({ cwd }) {
     if (!window.electronAPI?.store) return;
     clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(() => {
-      // Keep only last 50 messages to avoid unbounded growth
-      const toSave = msgs.slice(-50);
+      const toSave = limitChatMessages(msgs);
       window.electronAPI.store.set(storageKey, toSave);
     }, 1000);
   }, [storageKey]);
@@ -212,12 +214,27 @@ export default function OpenAIPanel({ cwd }) {
   // ── Load persisted history on mount / project change ────────────────────
   useEffect(() => {
     if (!window.electronAPI?.store) return;
+    let cancelled = false;
+    setMessages([]);
     window.electronAPI.store.get(storageKey, []).then((saved) => {
-      if (Array.isArray(saved) && saved.length > 0) {
-        setMessages(saved);
+      if (!cancelled && Array.isArray(saved) && saved.length > 0) {
+        setMessages(limitChatMessages(saved));
       }
     });
+    return () => { cancelled = true; };
   }, [storageKey]);
+
+  useEffect(() => {
+    const previous = projectPathRef.current;
+    projectPathRef.current = cwd;
+    if (previous && previous !== cwd) {
+      window.electronAPI?.openai?.cancel(activeRunRef.current, previous);
+      activeRunRef.current = null;
+      streamRef.current = '';
+      setCurrentResponse('');
+      setIsRunning(false);
+    }
+  }, [cwd]);
 
   // ── Auth: optimistic load then background verify ─────────────────────────
   const refreshStatus = useCallback(async () => {
@@ -258,16 +275,24 @@ export default function OpenAIPanel({ cwd }) {
   useEffect(() => {
     if (!window.electronAPI?.openai) return;
     const unsubs = [
-      window.electronAPI.openai.onData(data => {
-        streamRef.current += data;
+      window.electronAPI.openai.onStarted(event => {
+        if (event?.projectPath === projectPathRef.current) activeRunRef.current = event.runId;
+      }),
+      window.electronAPI.openai.onData(event => {
+        if (event?.projectPath !== projectPathRef.current) return;
+        if (activeRunRef.current != null && event.runId !== activeRunRef.current) return;
+        activeRunRef.current = event.runId;
+        streamRef.current = appendRendererStream(streamRef.current, event.text);
         setCurrentResponse(streamRef.current);
       }),
-      window.electronAPI.openai.onComplete(({ output } = {}) => {
+      window.electronAPI.openai.onComplete(({ runId, projectPath, output } = {}) => {
+        if (projectPath !== projectPathRef.current || (activeRunRef.current != null && runId !== activeRunRef.current)) return;
+        activeRunRef.current = null;
         setIsRunning(false);
         const finalContent = streamRef.current || output || '';
         if (finalContent) {
           setMessages(prev => {
-            const next = [...prev, { role: 'assistant', content: finalContent, timestamp: Date.now() }];
+            const next = limitChatMessages([...prev, { role: 'assistant', content: finalContent, timestamp: Date.now() }]);
             saveHistory(next);
             return next;
           });
@@ -275,14 +300,16 @@ export default function OpenAIPanel({ cwd }) {
         setCurrentResponse('');
         streamRef.current = '';
       }),
-      window.electronAPI.openai.onError(error => {
+      window.electronAPI.openai.onError(({ runId, projectPath, error } = {}) => {
+        if (projectPath !== projectPathRef.current || (activeRunRef.current != null && runId !== activeRunRef.current)) return;
+        activeRunRef.current = null;
         setIsRunning(false);
-        setMessages(prev => [...prev, { role: 'error', content: error, timestamp: Date.now() }]);
+        setMessages(prev => limitChatMessages([...prev, { role: 'error', content: error, timestamp: Date.now() }]));
         setCurrentResponse('');
         streamRef.current = '';
       }),
       window.electronAPI.openai.onLoginProgress(({ type, text }) => {
-        setLoginLog(prev => [...prev, { type, text }]);
+        setLoginLog(prev => appendProgress(prev, { type, text }));
       }),
     ];
     return () => unsubs.forEach(u => u?.());
@@ -294,10 +321,10 @@ export default function OpenAIPanel({ cwd }) {
     const result = await window.electronAPI.openai.login();
     setIsLoggingIn(false);
     if (result.success) {
-        setLoginLog([{ type: 'info', text: t('ai.loginSuccess') }]);
+        setLoginLog(appendProgress([], { type: 'info', text: t('ai.loginSuccess') }));
       await refreshStatus();
     } else {
-      setLoginLog([{ type: 'error', text: result.error }]);
+      setLoginLog(appendProgress([], { type: 'error', text: result.error }));
     }
   };
 
@@ -315,22 +342,25 @@ export default function OpenAIPanel({ cwd }) {
     const trimmed = input.trim();
     if (!trimmed || isRunning) return;
     const history = messages.filter(m => m.role !== 'error').map(m => ({ role: m.role, content: m.content }));
-    const newMessages = [...messages, { role: 'user', content: trimmed, timestamp: Date.now() }];
+    const newMessages = limitChatMessages([...messages, { role: 'user', content: trimmed, timestamp: Date.now() }]);
     setMessages(newMessages);
     saveHistory(newMessages);
     setInput('');
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
-    await window.electronAPI.openai.sendPrompt(trimmed, history, model, reasoning, cwd);
+    const run = await window.electronAPI.openai.sendPrompt(trimmed, history, model, reasoning, cwd);
+    if (run?.success && run.projectPath === projectPathRef.current) activeRunRef.current = run.runId;
+    else if (!run?.cancelled) setIsRunning(false);
   };
 
   const handleCancel = () => {
-    window.electronAPI.openai.cancel();
+    window.electronAPI.openai.cancel(activeRunRef.current, projectPathRef.current);
+    activeRunRef.current = null;
     setIsRunning(false);
     if (streamRef.current) {
       setMessages(prev => {
-        const next = [...prev, { role: 'assistant', content: `${streamRef.current}\n\n*[${t('ai.cancelledResponse')}]*`, timestamp: Date.now() }];
+        const next = limitChatMessages([...prev, { role: 'assistant', content: `${streamRef.current}\n\n*[${t('ai.cancelledResponse')}]*`, timestamp: Date.now() }]);
         saveHistory(next);
         return next;
       });
@@ -345,6 +375,11 @@ export default function OpenAIPanel({ cwd }) {
     streamRef.current = '';
     clearHistory();
   };
+
+  useEffect(() => () => {
+    clearTimeout(saveTimerRef.current);
+    window.electronAPI?.openai?.cancel(activeRunRef.current, projectPathRef.current);
+  }, []);
 
   return (
     <div className="openai-panel">

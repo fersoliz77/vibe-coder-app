@@ -1,12 +1,12 @@
 const { createClient } = require('@supabase/supabase-js');
 const { Notification, shell } = require('electron');
 
-const ADMIN_ROLES = new Set(['owner', 'school_admin']);
-
 class AdminSignupAlerts {
   constructor(authService, options = {}) {
     this.authService = authService;
     this.createClient = options.createClient || createClient;
+    this.Notification = options.Notification || Notification;
+    this.shell = options.shell || shell;
     this.client = null;
     this.channel = null;
     this.identity = null;
@@ -16,12 +16,9 @@ class AdminSignupAlerts {
   async sync() {
     const generation = ++this.syncGeneration;
     const session = this.authService.getRealtimeSession();
-    const membership = this.authService.getState().membership;
-    const eligible = session
-      && membership?.status === 'active'
-      && membership?.schoolId
-      && ADMIN_ROLES.has(membership.role);
-    const identity = eligible ? `${session.userId}:${session.accessToken}:${membership.schoolId}` : null;
+    const account = this.authService.getState().account;
+    const eligible = session && account?.role === 'admin' && account?.status === 'active';
+    const identity = eligible ? `${session.userId}:${session.accessToken}` : null;
     if (identity === this.identity && this.channel) return;
 
     await this.disconnect();
@@ -32,12 +29,12 @@ class AdminSignupAlerts {
     });
     await client.realtime.setAuth(session.accessToken);
     const channel = client
-      .channel(`admin-signups:${membership.schoolId}`)
+      .channel(`admin-signups:${session.userId}`)
       .on('postgres_changes', {
         event: 'INSERT',
         schema: 'public',
-        table: 'school_memberships',
-        filter: `school_id=eq.${membership.schoolId}`,
+        table: 'profiles',
+        filter: 'role=eq.student',
       }, (payload) => this.handleInsert(payload, session))
       .subscribe();
 
@@ -53,29 +50,30 @@ class AdminSignupAlerts {
 
   async handleInsert(payload, session) {
     const row = payload?.new;
-    if (!row || row.role !== 'student' || row.status !== 'pending') return;
-    let email = 'Un nuevo vibe coder';
+    if (!row?.id || row.role !== 'student' || row.status !== 'pending') return;
+
+    let email = 'Nueva cuenta pendiente';
     let whatsapp = '';
     try {
       const profiles = await this.authService.request(
-        `/rest/v1/profiles?id=eq.${encodeURIComponent(row.profile_id)}&select=email,whatsapp`,
+        `/rest/v1/profiles?id=eq.${encodeURIComponent(row.id)}&select=email,whatsapp`,
         { headers: { Authorization: `Bearer ${session.accessToken}` } },
       );
       const profile = Array.isArray(profiles) ? profiles[0] : null;
       if (profile?.email) email = profile.email;
       if (profile?.whatsapp) whatsapp = profile.whatsapp;
     } catch {
-      // Notify anyway with the generic copy above.
+      // RLS may hide contact data; the signup event can still be reported generically.
     }
 
-    if (!Notification.isSupported()) return;
-    const notification = new Notification({
-      title: 'Nuevo vibe coder registrado',
-      body: whatsapp ? `${email} · WhatsApp: ${whatsapp}` : email,
+    if (!this.Notification.isSupported()) return;
+    const notification = new this.Notification({
+      title: 'Nueva cuenta registrada',
+      body: whatsapp ? `${email} - WhatsApp: ${whatsapp}` : email,
     });
     if (whatsapp) {
       notification.on('click', () => {
-        shell.openExternal(`https://wa.me/${whatsapp.replace(/[^\d]/g, '')}`).catch(() => {});
+        this.shell.openExternal(`https://wa.me/${whatsapp.replace(/[^\d]/g, '')}`).catch(() => {});
       });
     }
     notification.show();

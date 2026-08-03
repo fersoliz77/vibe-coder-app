@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const { itemMetadata } = require('../electron/services/environmentCatalog');
+const { stripAnsi } = require('../electron/services/environmentVersion');
 
 const {
   ANDROID_AVD_NAME,
@@ -10,10 +12,27 @@ const {
   INSTALL_ALLOWLIST,
   SUPABASE_INSTRUCTION,
   buildInstallationPlan,
+  cancelEnvironmentInstallation,
   getAvdHardwareConfig,
+  installAllEnvironment,
   normalizeOptions,
   parseVersionOutput,
 } = require('../electron/services/environmentManager');
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
+function environment(items) {
+  const missing = items.filter((item) => !item.installed);
+  return {
+    items,
+    summary: { installed: items.length - missing.length, missing: missing.length, requiredMissing: missing.length },
+    instructions: [],
+  };
+}
 
 test('Android provisioning uses pinned Google packages and conservative adaptive AVD settings', () => {
   assert.equal(ANDROID_AVD_NAME, 'Vibe_API_35');
@@ -70,6 +89,13 @@ test('Supabase is diagnosis-only and cannot add a command to the plan', () => {
   assert.throws(() => normalizeOptions({ backend: 'supabase & calc.exe' }), /Backend no soportado/);
 });
 
+test('environment catalog derives backend requirements without mutating shared metadata', () => {
+  assert.equal(itemMetadata('firebase', { backend: 'firebase' }).required, true);
+  assert.equal(itemMetadata('firebase', { backend: 'supabase' }).required, false);
+  assert.equal(itemMetadata('supabase', { backend: 'supabase' }).installable, false);
+  assert.deepEqual(normalizeOptions({ includeMobile: 1, backend: 'SUPABASE' }), { includeMobile: false, backend: 'supabase' });
+});
+
 test('parses versions from supported CLI output formats', () => {
   const samples = [
     ['node', 'v22.14.0\r\n', '22.14.0'],
@@ -85,4 +111,122 @@ test('parses versions from supported CLI output formats', () => {
   ];
   for (const [tool, output, expected] of samples) assert.equal(parseVersionOutput(tool, output), expected, tool);
   assert.equal(parseVersionOutput('node', ''), null);
+  assert.equal(parseVersionOutput('unknown', '\u001b[32mv1.2.3-beta.1\u001b[0m'), '1.2.3-beta.1');
+  assert.equal(parseVersionOutput('node', 'Node release 22.14.0'), null);
+  assert.equal(stripAnsi('\u001b[31mfailed\u001b[0m'), 'failed');
+});
+
+test('cancellation after a tracked step prevents subsequent processes and complete progress', async () => {
+  const tracked = deferred();
+  const events = [];
+  let trackCalls = 0;
+  let checkCalls = 0;
+  const install = installAllEnvironment({ backend: 'supabase' }, (event) => events.push(event), {
+    checkEnvironment: async () => { checkCalls += 1; return environment([]); },
+    resolveInstallationInvocation: async (step) => ({ file: step.file, args: [...step.args] }),
+    runTracked: async () => { trackCalls += 1; return tracked.promise; },
+  });
+  while (trackCalls === 0) await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(cancelEnvironmentInstallation(), { success: true, cancelled: true });
+  tracked.resolve({ success: false, code: null, error: 'cancelled' });
+  const result = await install;
+  assert.equal(result.cancelled, true);
+  assert.equal(trackCalls, 1);
+  assert.equal(checkCalls, 1);
+  assert.equal(events.some((event) => event.type === 'complete'), false);
+});
+
+test('cancellation during mobile probes never starts Android provisioning', async () => {
+  const probes = deferred();
+  const events = [];
+  let probeCalls = 0;
+  let provisionCalls = 0;
+  const installed = ['node', 'npm', 'git', 'gh', 'vercel', 'java', 'flutter'].map((id) => ({ id, installed: true }));
+  installed.push({ id: 'android-sdk', installed: false });
+  const install = installAllEnvironment({ backend: 'supabase', includeMobile: true }, (event) => events.push(event), {
+    checkEnvironment: async () => environment(installed),
+    resolveInstallationInvocation: async (step) => ({ file: step.file, args: [...step.args] }),
+    runTracked: async () => ({ success: true, code: 0 }),
+    probeEnvironmentItem: async () => { probeCalls += 1; return probes.promise; },
+    provisionAndroidSdk: async () => { provisionCalls += 1; return { success: true }; },
+  });
+  while (probeCalls < 2) await new Promise((resolve) => setImmediate(resolve));
+  cancelEnvironmentInstallation();
+  probes.resolve({ installed: true });
+  const result = await install;
+  assert.equal(result.cancelled, true);
+  assert.equal(provisionCalls, 0);
+  assert.equal(events.some((event) => event.type === 'complete'), false);
+});
+
+test('cancellation during the final environment check returns cancelled without complete', async () => {
+  const finalCheckStarted = deferred();
+  const events = [];
+  let checks = 0;
+  let finalSignal;
+  const ready = environment(['node', 'npm', 'git', 'gh', 'vercel'].map((id) => ({ id, installed: true })));
+  const install = installAllEnvironment({ backend: 'supabase' }, (event) => events.push(event), {
+    checkEnvironment: async (_options, { signal }) => {
+      checks += 1;
+      if (checks === 1) return ready;
+      finalSignal = signal;
+      finalCheckStarted.resolve();
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      return ready;
+    },
+  });
+  await finalCheckStarted.promise;
+  cancelEnvironmentInstallation();
+  const result = await install;
+  assert.equal(finalSignal.aborted, true);
+  assert.equal(result.cancelled, true);
+  assert.equal(events.at(-1).type, 'cancelled');
+  assert.equal(events.some((event) => event.type === 'complete'), false);
+});
+
+test('cancellation aborts the initial environment probe signal immediately', async () => {
+  const probeStarted = deferred();
+  let receivedSignal;
+  const events = [];
+  const install = installAllEnvironment({ backend: 'supabase' }, (event) => events.push(event), {
+    checkEnvironment: async (_options, { signal }) => {
+      receivedSignal = signal;
+      probeStarted.resolve();
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      return environment([]);
+    },
+  });
+  await probeStarted.promise;
+  assert.equal(receivedSignal.aborted, false);
+  cancelEnvironmentInstallation();
+  const result = await install;
+  assert.equal(receivedSignal.aborted, true);
+  assert.equal(result.cancelled, true);
+  assert.equal(events.at(-1).type, 'cancelled');
+});
+
+test('cancellation aborts both mobile probe signals without starting Android provisioning', async () => {
+  const probesStarted = deferred();
+  const signals = [];
+  let provisionCalls = 0;
+  const installed = ['node', 'npm', 'git', 'gh', 'vercel', 'java', 'flutter'].map((id) => ({ id, installed: true }));
+  installed.push({ id: 'android-sdk', installed: false });
+  const install = installAllEnvironment({ backend: 'supabase', includeMobile: true }, null, {
+    checkEnvironment: async () => environment(installed),
+    resolveInstallationInvocation: async (step) => ({ file: step.file, args: [...step.args] }),
+    runTracked: async () => ({ success: true, code: 0 }),
+    probeEnvironmentItem: async (_id, signal) => {
+      signals.push(signal);
+      if (signals.length === 2) probesStarted.resolve();
+      await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+      return { installed: false };
+    },
+    provisionAndroidSdk: async () => { provisionCalls += 1; return { success: true }; },
+  });
+  await probesStarted.promise;
+  cancelEnvironmentInstallation();
+  const result = await install;
+  assert.equal(signals.every((signal) => signal.aborted), true);
+  assert.equal(result.cancelled, true);
+  assert.equal(provisionCalls, 0);
 });

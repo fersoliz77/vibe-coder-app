@@ -3,6 +3,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { app } = require('electron');
 const { validateProjectCwd } = require('../ipc/fsGuards');
+const { writeJsonAtomic } = require('./atomicJson');
 
 let projectsFilePath;
 
@@ -11,7 +12,7 @@ function initProjectManager() {
   projectsFilePath = path.join(userDataPath, 'projects.json');
   
   if (!fs.existsSync(projectsFilePath)) {
-    fs.writeFileSync(projectsFilePath, JSON.stringify([]));
+    writeJsonAtomic(projectsFilePath, []);
   }
 }
 
@@ -36,7 +37,7 @@ function isProjectRegistered(projectPath) {
 }
 
 function saveProjects(projects) {
-  fs.writeFileSync(projectsFilePath, JSON.stringify(projects, null, 2));
+  writeJsonAtomic(projectsFilePath, projects);
 }
 
 function registerProject(projectPath, metadata = {}) {

@@ -15,7 +15,7 @@ concurrency:
 jobs:
   build:
     runs-on: windows-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     env:
       npm_config_msvs_version: "2022"
       VIBE_SUPABASE_URL: https://ci-placeholder.supabase.co
@@ -24,6 +24,20 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Record non-deployable artifact metadata
+        shell: pwsh
+        run: |
+          @(
+            "classification=ci-smoke-non-deployable"
+            "repository=$env:GITHUB_REPOSITORY"
+            "commit=$env:GITHUB_SHA"
+            "run_id=$env:GITHUB_RUN_ID"
+            "configuration=ci-placeholders"
+            "release=false"
+          ) | Set-Content -Path ci-smoke-artifact-metadata.txt -Encoding utf8
 
       - name: Set up Python for node-gyp
         uses: actions/setup-python@v5
@@ -36,7 +50,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies
@@ -45,11 +59,35 @@ jobs:
       - name: Rebuild node-pty for Electron
         run: npm run rebuild -- -w node-pty
 
-      - name: Run tests when configured
-        run: npm test --if-present
+      - name: Run tests
+        run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results.xml "tests/**/*.test.js"
+
+      - name: Upload test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-smoke-non-deployable-desktop-test-results
+          path: |
+            test-results.xml
+            ci-smoke-artifact-metadata.txt
+            scripts/CI_SMOKE_NON_DEPLOYABLE_README.txt
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build
         run: npm run build
 
-      - name: Verify unpacked Windows package
+      - name: Build unpacked non-deployable Windows CI smoke artifact
         run: npm run package:dir
+
+      - name: Upload non-deployable Windows smoke build
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-smoke-non-deployable-desktop-windows-unpacked
+          path: |
+            dist/
+            dist-electron/
+            ci-smoke-artifact-metadata.txt
+            scripts/CI_SMOKE_NON_DEPLOYABLE_README.txt
+          if-no-files-found: error
+          retention-days: 7

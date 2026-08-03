@@ -36,7 +36,7 @@ test('options expose only supported stacks and the Documents default root', () =
   assert.equal(getDefaultProjectsRoot(), path.join(os.homedir(), 'Documents', 'Vibe Projects'));
 });
 
-test('location grants are opaque, single-use, and do not disclose the parent path', async (t) => {
+test('location grants are opaque, single-use, and do not disclose any path', async (t) => {
   if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
   const parent = makeTempParent();
   const calls = [];
@@ -44,6 +44,8 @@ test('location grants are opaque, single-use, and do not disclose the parent pat
     const provisioner = createProjectProvisioner({ runner: successfulRunner(calls) });
     const grant = provisioner.createLocationGrant(parent);
     assert.equal(Object.hasOwn(grant, 'parentPath'), false);
+    assert.equal(Object.hasOwn(grant, 'path'), false);
+    assert.deepEqual(Object.keys(grant).sort(), ['expiresAt', 'id', 'token']);
     const result = await provisioner.provisionProject({ name: 'Safe Demo', type: 'vite-react-ts', backend: 'none' }, grant);
     assert.equal(result.status, 'completed');
     await assert.rejects(
@@ -69,6 +71,48 @@ test('expired grants and drive roots are rejected', async (t) => {
     );
     assert.throws(() => provisioner.createLocationGrant(path.parse(parent).root), /drive root/i);
   } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test('only one provisioning job can run and a rejected second job keeps its grant', async (t) => {
+  if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
+  const parent = makeTempParent();
+  const calls = [];
+  let releaseFirst;
+  let markStarted;
+  const firstStarted = new Promise((resolve) => { markStarted = resolve; });
+  const firstBlocked = new Promise((resolve) => { releaseFirst = resolve; });
+  const baseRunner = successfulRunner(calls);
+  let shouldBlock = true;
+  const runner = async (...args) => {
+    if (shouldBlock) {
+      shouldBlock = false;
+      markStarted();
+      await firstBlocked;
+    }
+    return baseRunner(...args);
+  };
+  try {
+    const provisioner = createProjectProvisioner({ runner });
+    const first = provisioner.provisionProject(
+      { name: 'First Demo', type: 'vite-react-ts', backend: 'none' },
+      provisioner.createLocationGrant(parent),
+    );
+    await firstStarted;
+    const secondGrant = provisioner.createLocationGrant(parent);
+    await assert.rejects(
+      provisioner.provisionProject({ name: 'Second Demo', type: 'vite-react-ts', backend: 'none' }, secondGrant),
+      (error) => error.code === 'PROVISIONING_ACTIVE',
+    );
+    releaseFirst();
+    assert.equal((await first).status, 'completed');
+    assert.equal((await provisioner.provisionProject(
+      { name: 'Second Demo', type: 'vite-react-ts', backend: 'none' },
+      secondGrant,
+    )).status, 'completed');
+  } finally {
+    releaseFirst?.();
     fs.rmSync(parent, { recursive: true, force: true });
   }
 });
@@ -111,8 +155,13 @@ test('mobile provisioning uses web as the Vercel cwd and Flutter Android Kotlin 
     assert.ok(flutter.args.includes('--android-language=kotlin'));
     const vercel = calls.find(({ command, args }) => command === 'vercel' && args[0] === 'link');
     assert.equal(vercel.cwd, path.join(result.projectPath, 'web'));
+    assert.equal(result.remotes.vercel.status, 'created');
+    assert.equal(result.remotes.vercel.gitConnection.status, 'created');
+    assert.equal(result.remotes.vercel.deployment.status, 'created');
+    assert.equal(Object.hasOwn(result.remotes.vercel, 'cwd'), false);
     const github = calls.find(({ command, args }) => command === 'gh' && args[0] === 'repo');
     assert.ok(github.args.includes('--private'));
+    assert.equal(result.remotes.github.status, 'created');
     assert.ok(calls.some(({ command, args }) => command === 'git' && args[0] === 'push'));
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
@@ -144,6 +193,9 @@ test('Supabase quota failures preserve local work, return alternatives, and neve
     assert.equal(result.error.code, 'SUPABASE_QUOTA');
     assert.deepEqual(result.error.alternatives, ['firebase', 'supabase-upgrade']);
     assert.equal(result.localRolledBack, false);
+    assert.equal(result.retryable, false);
+    assert.equal(result.partial, true);
+    assert.equal(result.manualCleanupRequired, true);
     assert.equal(fs.existsSync(result.projectPath), true);
     assert.equal(registered, true);
     assert.equal(result.project.provisioningStatus, 'partial');
@@ -153,7 +205,7 @@ test('Supabase quota failures preserve local work, return alternatives, and neve
   }
 });
 
-test('local failures roll back before any remote resource creation', async (t) => {
+test('local failures preserve and register partial work before any remote resource creation', async (t) => {
   if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
   const parent = makeTempParent();
   try {
@@ -167,15 +219,19 @@ test('local failures roll back before any remote resource creation', async (t) =
       provisioner.createLocationGrant(parent),
     );
     assert.equal(result.status, 'failed');
-    assert.equal(result.localRolledBack, true);
-    assert.equal(fs.existsSync(result.projectPath), false);
+    assert.equal(result.localRolledBack, false);
+    assert.equal(result.retryable, true);
+    assert.equal(result.partial, true);
+    assert.equal(result.manualCleanupRequired, false);
+    assert.equal(fs.existsSync(result.projectPath), true);
+    assert.equal(result.project.provisioningStatus, 'partial');
     assert.deepEqual(result.remotes, {});
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
 });
 
-test('Firebase configures Spark web and Android apps plus Auth and Firestore, but not Storage or Hosting', async (t) => {
+test('Firebase configures Spark web and Android apps plus Firestore, and reports Auth as a manual step', async (t) => {
   if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
   const parent = makeTempParent();
   const calls = [];
@@ -215,11 +271,19 @@ test('Firebase configures Spark web and Android apps plus Auth and Firestore, bu
     }, provisioner.createLocationGrant(parent));
     assert.equal(result.status, 'completed', JSON.stringify(result));
     assert.equal(result.remotes.firebase.plan, 'spark');
-    assert.equal(result.remotes.firebase.authConfigured, true);
+    assert.equal(result.remotes.firebase.authConfigured, false);
+    assert.deepEqual(result.remotes.firebase.manualSteps, [{
+      code: 'ENABLE_EMAIL_PASSWORD_AUTH',
+      message: 'Enable Email/Password sign-in in the Firebase console before using authentication.',
+    }]);
     assert.equal(result.remotes.firebase.firestoreConfigured, true);
     assert.equal(result.remotes.firebase.androidAppCreated, true);
+    assert.equal(result.remotes.firebase.status, 'created');
+    assert.equal(result.remotes.firebase.resources.webApp.status, 'created');
+    assert.equal(result.remotes.firebase.resources.firestore.status, 'created');
+    assert.equal(result.remotes.firebase.resources.androidApp.status, 'created');
     const firebaseConfig = JSON.parse(fs.readFileSync(path.join(result.projectPath, 'firebase.json'), 'utf8'));
-    assert.deepEqual(Object.keys(firebaseConfig), ['auth', 'firestore']);
+    assert.deepEqual(Object.keys(firebaseConfig), ['firestore']);
     const env = fs.readFileSync(path.join(result.projectPath, 'web', '.env.local'), 'utf8');
     assert.match(env, /NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=/);
     assert.doesNotMatch(env, /STORAGE/);
@@ -227,6 +291,8 @@ test('Firebase configures Spark web and Android apps plus Auth and Firestore, bu
     assert.equal(googleServices.project_info.project_id, 'demo');
     const commandText = calls.flatMap(({ args }) => args).join(' ');
     assert.doesNotMatch(commandText, /(?:^|\s)(storage|hosting)(?:$|\s|:)/i);
+    const deploy = calls.find(({ command, args }) => command === 'firebase' && args[0] === 'deploy');
+    assert.equal(deploy.args[deploy.args.indexOf('--only') + 1], 'firestore');
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
@@ -274,6 +340,7 @@ test('Supabase uses only a publishable client key and initializes and links the 
     assert.equal(result.status, 'completed');
     assert.equal(result.remotes.supabase.size, 'nano');
     assert.equal(result.remotes.supabase.clientKeyType, 'publishable');
+    assert.equal(result.remotes.supabase.status, 'created');
     assert.ok(calls.some(({ command, args }) => command === 'supabase' && args[0] === 'init'));
     assert.ok(calls.some(({ command, args }) => command === 'supabase' && args[0] === 'link'));
     assert.equal(calls.some(({ args }) => args.includes('safe-password-123')), false);
@@ -282,6 +349,39 @@ test('Supabase uses only a publishable client key and initializes and links the 
     assert.equal(env.includes(serviceSecret), false);
     assert.equal(JSON.stringify(result).includes(serviceSecret), false);
     assert.equal(JSON.stringify(progress).includes(serviceSecret), false);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test('cancellation after GitHub creation records an unknown deterministic remote', async (t) => {
+  if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
+  const parent = makeTempParent();
+  let provisioner;
+  const calls = [];
+  const baseRunner = successfulRunner(calls);
+  const runner = async (command, args, options) => {
+    const result = await baseRunner(command, args, options);
+    if (command === 'gh' && args[0] === 'repo') provisioner.cancelProvisioning();
+    return result;
+  };
+  try {
+    provisioner = createProjectProvisioner({ runner });
+    const result = await provisioner.provisionProject(
+      { name: 'Ambiguous Remote', type: 'vite-react-ts', backend: 'none' },
+      provisioner.createLocationGrant(parent),
+    );
+    assert.equal(result.status, 'cancelled');
+    assert.equal(result.manualCleanupRequired, true);
+    assert.deepEqual(result.remotes.github, {
+      owner: 'active-user',
+      repository: 'ambiguous-remote',
+      private: true,
+      url: 'https://github.com/active-user/ambiguous-remote',
+      status: 'unknown',
+      created: null,
+    });
+    assert.equal(JSON.stringify(result.remotes).includes(parent), false);
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }
@@ -311,7 +411,75 @@ test('Supabase Management API keeps the database password out of the URL and pro
   }
 });
 
-test('cancellation aborts the tracked provision and rolls back before remote creation', async (t) => {
+test('Supabase Management API forwards cancellation to fetch', async () => {
+  const previousToken = process.env.SUPABASE_ACCESS_TOKEN;
+  process.env.SUPABASE_ACCESS_TOKEN = 'sbp_test_token';
+  const controller = new AbortController();
+  let receivedSignal;
+  try {
+    const pending = createSupabaseProjectViaApi({
+      name: 'cancel-demo',
+      organizationId: 'org_123',
+      region: 'us-east-1',
+      password: 'safe-password-123',
+      signal: controller.signal,
+    }, async (_url, options) => {
+      receivedSignal = options.signal;
+      return new Promise((_resolve, reject) => {
+        options.signal.addEventListener('abort', () => {
+          reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+        }, { once: true });
+      });
+    });
+    assert.equal(receivedSignal, controller.signal);
+    controller.abort();
+    await assert.rejects(pending, (error) => error.name === 'AbortError');
+  } finally {
+    if (previousToken == null) delete process.env.SUPABASE_ACCESS_TOKEN;
+    else process.env.SUPABASE_ACCESS_TOKEN = previousToken;
+  }
+});
+
+test('cancelling Supabase provisioning aborts Management API creation and preserves partial local work', async (t) => {
+  if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
+  const parent = makeTempParent();
+  const calls = [];
+  let markStarted;
+  const creationStarted = new Promise((resolve) => { markStarted = resolve; });
+  try {
+    const provisioner = createProjectProvisioner({
+      runner: successfulRunner(calls, {
+        'supabase orgs list': async () => ({ success: true, stdout: '[{"id":"org_123"}]' }),
+      }),
+      supabaseProjectCreator: async ({ signal }) => {
+        markStarted();
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+        });
+      },
+    });
+    const pending = provisioner.provisionProject({
+      name: 'Abort API Demo',
+      type: 'next-ts',
+      backend: 'supabase',
+      supabase: { organizationId: 'org_123', region: 'us-east-1', password: 'safe-password-123' },
+    }, provisioner.createLocationGrant(parent));
+    await creationStarted;
+    assert.deepEqual(provisioner.cancelProvisioning(), { success: true, cancelled: 1 });
+    const result = await pending;
+    assert.equal(result.status, 'cancelled');
+    assert.equal(result.error.code, 'CANCELLED');
+    assert.equal(result.retryable, false);
+    assert.equal(result.partial, true);
+    assert.equal(result.manualCleanupRequired, true);
+    assert.equal(result.localRolledBack, false);
+    assert.equal(fs.existsSync(result.projectPath), true);
+  } finally {
+    fs.rmSync(parent, { recursive: true, force: true });
+  }
+});
+
+test('cancellation aborts the tracked provision and preserves local work before remote creation', async (t) => {
   if (process.platform !== 'win32') return t.skip('Windows-only provisioner');
   const parent = makeTempParent();
   let started;
@@ -332,8 +500,12 @@ test('cancellation aborts the tracked provision and rolls back before remote cre
     const result = await pending;
     assert.equal(result.status, 'cancelled');
     assert.equal(result.error.code, 'CANCELLED');
-    assert.equal(result.localRolledBack, true);
-    assert.equal(fs.existsSync(result.projectPath), false);
+    assert.equal(result.localRolledBack, false);
+    assert.equal(result.retryable, true);
+    assert.equal(result.partial, true);
+    assert.equal(result.manualCleanupRequired, false);
+    assert.equal(fs.existsSync(result.projectPath), true);
+    assert.equal(result.project.provisioningStatus, 'partial');
   } finally {
     fs.rmSync(parent, { recursive: true, force: true });
   }

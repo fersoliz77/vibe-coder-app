@@ -1,9 +1,11 @@
 node_modules/
 dist/
 dist-electron/
+dist-electron-verify/
 playwright-report/
 .playwright-cli/
 test-results/
+temp/build/
 .vite/
 npm-debug.log*
 electron/auth/runtime-config.json

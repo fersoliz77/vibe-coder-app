@@ -14,8 +14,8 @@ class StudentBroadcastAlerts {
   async sync() {
     const generation = ++this.syncGeneration;
     const session = this.authService.getRealtimeSession();
-    const membership = this.authService.getState().membership;
-    const eligible = session && membership?.status === 'active';
+    const account = this.authService.getState().account;
+    const eligible = session && account?.role === 'student' && account?.status === 'active';
     const identity = eligible ? `${session.userId}:${session.accessToken}` : null;
     if (identity === this.identity && this.channel) return;
 

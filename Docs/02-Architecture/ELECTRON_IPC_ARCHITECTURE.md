@@ -73,4 +73,14 @@
 - Preload acts as the only renderer bridge.
 - Filesystem IPC now requires a registered project path and rejects out-of-project access.
 - `electron/main.js` now explicitly enables `webSecurity` and disables insecure content loading.
-- The app still runs with `sandbox: false` because of current desktop runtime constraints and should be reviewed again before a hardened production release.
+- Chromium sandboxing is enabled for the main renderer.
+
+## Renderer Sandbox And Process Isolation
+
+The main renderer runs with `contextIsolation: true`, `nodeIntegration: false`, and Chromium `sandbox: true`. Native modules such as `node-pty` stay in the main process and are reached only through the narrow API exposed by `electron/preload.js`, so sandboxing is compatible with terminal support.
+
+Non-interactive subprocesses use `electron/services/subprocessEnv.js`. It starts from an allowlist of operating-system path and profile variables, adds only the selected provider's official authentication variables, and accepts command-specific values explicitly. The interactive terminal is intentionally separate and retains the user's shell environment.
+
+Proxy, custom CA, SSH agent socket, and passive Git configuration variables are preserved. `GIT_SSH_COMMAND`, `GIT_ASKPASS`, and `SSH_ASKPASS` are deliberately excluded because Git executes their values as commands or programs; provider credential stores and `SSH_AUTH_SOCK` remain available without that execution surface.
+
+Claude and Codex stream events include both `runId` and `projectPath`. Renderer consumers reject events that do not match the active run and project; project transitions cancel active runs before changing workspace state.

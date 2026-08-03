@@ -3,6 +3,8 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const { classifyPreviewError, formatDiagnosis } = require('../electron/services/previewDiagnostics');
+const previewCommands = require('../electron/services/previewCommands');
 
 const {
   PREVIEW_URL,
@@ -47,6 +49,26 @@ test('web commands use fixed Vite and Next argument conventions', () => {
   assert.deepEqual(buildWebDevArgs('next'), ['run', 'dev', '--', '-H', '127.0.0.1', '-p', '4173']);
   assert.equal(buildWebDevArgs('vite').some((value) => /[;&|]/.test(value)), false);
   assert.throws(() => buildWebDevArgs('generic'), /Unsupported/);
+});
+
+test('extracted preview command helpers retain the manager command contract', () => {
+  assert.equal(previewCommands.PREVIEW_URL, PREVIEW_URL);
+  assert.equal(previewCommands.classifyWebScript({ scripts: { dev: ' VITE.CMD ' } }), 'vite');
+  assert.deepEqual(previewCommands.buildWebDevArgs('next'), buildWebDevArgs('next'));
+  assert.throws(() => previewCommands.buildAdbScreenshotArgs('emulator-5554 & calc'), /Invalid/);
+  assert.deepEqual(previewCommands.buildFlutterRunSpawnOptions('mobile', { SAFE: '1' }).stdio, ['pipe', 'pipe', 'pipe']);
+  assert.equal(previewCommands.buildFlutterControlInput('reload'), 'r\n');
+  assert.equal(previewCommands.buildFlutterControlInput('restart'), 'R\n');
+  assert.throws(() => previewCommands.buildFlutterControlInput('quit'), /Invalid/);
+});
+
+test('preview diagnostics classify failures and format only sanitized issue fields', () => {
+  assert.equal(classifyPreviewError(new Error('did not finish in time')), 'timeout');
+  assert.equal(classifyPreviewError(new Error('Unsupported npm dev script')), 'validation');
+  assert.equal(classifyPreviewError(new Error('spawn process exited')), 'process');
+  assert.equal(classifyPreviewError(new Error('unexpected state')), 'runtime');
+  assert.equal(formatDiagnosis([]), 'Preview diagnostics: no issues detected.');
+  assert.equal(formatDiagnosis([{ severity: 'warning', category: 'responsive', message: 'Overflow' }]), '[WARNING] responsive: Overflow');
 });
 
 test('managed emulator discovery matches only the exact configured AVD', async () => {
@@ -102,6 +124,7 @@ test('preview logs remove terminal controls, project paths, and excessive output
   const output = sanitizeLog(`\u001b[31mfailed\u001b[0m at ${project}\u0000`, project);
   assert.equal(output, 'failed at [project]');
   assert.equal(sanitizeLog('x'.repeat(9_000)).length, 8_000);
+  assert.doesNotMatch(sanitizeLog(`token=private ${'x'.repeat(8_000)}`), /private/);
 });
 
 test('preview issues are classified, sanitized, and stripped to allowed metadata', () => {
@@ -113,9 +136,20 @@ test('preview issues are classified, sanitized, and stripped to allowed metadata
   assert.equal(issue.category, 'network');
   assert.equal(issue.severity, 'warning');
   assert.match(issue.message, /token=\[redacted\]/);
-  assert.match(issue.message, /\[project\]/);
+  assert.match(issue.message, /\[(?:project|path)\]/);
   assert.deepEqual(issue.metadata, { url: 'http://127.0.0.1:4173/api', statusCode: '500' });
   assert.equal(sanitizeIssue({ category: 'unknown', severity: 'fatal', message: 'x' }).category, 'runtime');
+});
+
+test('preview console issues use central redaction before storage or copy', () => {
+  const issue = sanitizeIssue({
+    category: 'runtime', severity: 'error',
+    message: '{"access_token":"private-access","refresh_token":"private-refresh","prompt":"private prompt","code":"private code"} Authorization: Basic dXNlcjpwYXNz Cookie: session=private user@example.com C:\\Users\\Jane Doe\\Private Project\\app.js',
+    metadata: { code: 'private metadata code', prompt: 'private metadata prompt' },
+  });
+  const serialized = JSON.stringify(issue);
+  for (const forbidden of ['private-access', 'private-refresh', 'private prompt', 'private code', 'dXNlcjpwYXNz', 'session=private', 'user@example.com', 'Jane Doe', 'Private Project']) assert.doesNotMatch(serialized, new RegExp(forbidden));
+  assert.deepEqual(issue.metadata, {});
 });
 
 test('watcher guards ignore generated trees and expose relative paths only', () => {
@@ -127,6 +161,11 @@ test('watcher guards ignore generated trees and expose relative paths only', () 
 });
 
 test('Android control builders accept only fixed actions and validated serials', () => {
+  assert.deepEqual(previewCommands.buildAdbDisableAccelerometerArgs('emulator-5554'), ['-s', 'emulator-5554', 'shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0']);
+  assert.deepEqual(previewCommands.buildAdbRotationCommands('emulator-5554', 'landscape'), [
+    ['-s', 'emulator-5554', 'shell', 'settings', 'put', 'system', 'accelerometer_rotation', '0'],
+    ['-s', 'emulator-5554', 'shell', 'settings', 'put', 'system', 'user_rotation', '1'],
+  ]);
   assert.deepEqual(buildAdbRotationArgs('emulator-5554', 'portrait'), ['-s', 'emulator-5554', 'shell', 'settings', 'put', 'system', 'user_rotation', '0']);
   assert.deepEqual(buildAdbRotationArgs('emulator-5554', 'landscape').slice(-1), ['1']);
   assert.deepEqual(buildAdbScreenshotArgs('emulator-5554'), ['-s', 'emulator-5554', 'exec-out', 'screencap', '-p']);

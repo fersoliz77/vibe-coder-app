@@ -12,6 +12,7 @@ const {
   resolveProjectRoot,
 } = require('./fsGuards');
 const { isProjectRegistered } = require('../services/projectManager');
+const { buildSubprocessEnv } = require('../services/subprocessEnv');
 
 let fileHandlersRegistered = false;
 
@@ -21,7 +22,12 @@ const TEXT_EXTENSIONS = new Set([
   '.py', '.sql', '.yml', '.yaml', '.toml', '.env', '.gitignore', '.sh', '.bat', '.ps1', '.xml',
   '.cjs', '.mjs', '.log', '.csv', '.ini', '.lock', '.rb', '.php', '.java', '.kt', '.go', '.rs'
 ]);
+const TEXT_FILENAMES = new Set(['dockerfile', 'makefile', 'license', '.env', '.gitignore']);
 const IGNORED = new Set(['.git', 'node_modules', '.next', 'dist', '.cache', '__pycache__', '.DS_Store']);
+const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_SEARCH_FILE_BYTES = 1024 * 1024;
+const MAX_SEARCH_ENTRIES = 5000;
 
 function withProjectRoot(projectPath) {
   return resolveProjectRoot(projectPath, isProjectRegistered);
@@ -50,7 +56,23 @@ function getCopyPath(targetDir, baseName) {
 }
 
 function isTextPreviewable(extension, size) {
-  return TEXT_EXTENSIONS.has(extension) || size <= 1024 * 1024;
+  return size <= MAX_TEXT_BYTES && (TEXT_EXTENSIONS.has(extension) || size <= MAX_SEARCH_FILE_BYTES);
+}
+
+function isProbablyText(buffer) {
+  const sample = buffer.subarray(0, Math.min(buffer.length, 8192));
+  if (sample.includes(0)) return false;
+  let controls = 0;
+  for (const byte of sample) {
+    if (byte < 32 && byte !== 9 && byte !== 10 && byte !== 13) controls += 1;
+  }
+  return sample.length === 0 || controls / sample.length < 0.05;
+}
+
+function isSearchTextCandidate(name) {
+  const lowerName = String(name).toLowerCase();
+  const extension = path.extname(lowerName);
+  return TEXT_EXTENSIONS.has(extension) || TEXT_FILENAMES.has(lowerName) || extension === '';
 }
 
 function ensureExistingDirectory(targetPath, message = 'Target folder is invalid.') {
@@ -76,6 +98,50 @@ function readDirectoryEntries(currentPath) {
     }));
 }
 
+async function searchProject(projectRoot, query) {
+  const files = [];
+  const contentMatches = [];
+  const searchQuery = String(query || '').trim().toLowerCase();
+  const MAX_RESULTS = 100;
+  let visited = 0;
+
+  async function walk(currentPath, depth = 0) {
+    if (depth > 8 || visited >= MAX_SEARCH_ENTRIES || files.length + contentMatches.length >= MAX_RESULTS) return;
+    const entries = await fs.promises.readdir(currentPath, { withFileTypes: true });
+    for (const entry of entries) {
+      if (IGNORED.has(entry.name) || visited++ >= MAX_SEARCH_ENTRIES) continue;
+      const fullPath = path.join(currentPath, entry.name);
+      let stats;
+      try { stats = await fs.promises.lstat(fullPath); } catch { continue; }
+      if (stats.isSymbolicLink()) continue;
+      if (entry.name.toLowerCase().includes(searchQuery)) files.push({ name: entry.name, path: fullPath, isDirectory: stats.isDirectory() });
+      if (stats.isDirectory()) {
+        await walk(fullPath, depth + 1);
+      } else if (stats.isFile() && isSearchTextCandidate(entry.name) && contentMatches.length < MAX_RESULTS) {
+        try {
+          if (stats.size > MAX_SEARCH_FILE_BYTES) continue;
+          const realPath = await fs.promises.realpath(fullPath);
+          if (path.resolve(realPath).toLowerCase() !== path.resolve(fullPath).toLowerCase()) continue;
+          const buffer = await fs.promises.readFile(fullPath);
+          if (!isProbablyText(buffer)) continue;
+          const content = buffer.toString('utf8');
+          const index = content.toLowerCase().indexOf(searchQuery);
+          if (index !== -1) {
+            contentMatches.push({
+              name: entry.name,
+              path: fullPath,
+              snippet: content.slice(Math.max(0, index - 40), index + searchQuery.length + 80).replace(/\s+/g, ' ').trim(),
+            });
+          }
+        } catch {}
+      }
+      if (files.length + contentMatches.length >= MAX_RESULTS) return;
+    }
+  }
+  await walk(projectRoot);
+  return { files: files.slice(0, MAX_RESULTS), contentMatches: contentMatches.slice(0, MAX_RESULTS) };
+}
+
 function setupFileSystemHandlers() {
   if (fileHandlersRegistered) return;
 
@@ -97,56 +163,8 @@ function setupFileSystemHandlers() {
         return { success: true, files: [], contentMatches: [] };
       }
 
-      const files = [];
-      const contentMatches = [];
-      const MAX_RESULTS = 100;
-
-      function walk(currentPath, depth = 0) {
-        if (depth > 8 || files.length + contentMatches.length >= MAX_RESULTS) return;
-
-        const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-        for (const entry of entries) {
-          if (IGNORED.has(entry.name)) continue;
-          const fullPath = path.join(currentPath, entry.name);
-
-          if (entry.name.toLowerCase().includes(searchQuery)) {
-            files.push({
-              name: entry.name,
-              path: fullPath,
-              isDirectory: entry.isDirectory(),
-            });
-          }
-
-          if (entry.isDirectory()) {
-            walk(fullPath, depth + 1);
-            continue;
-          }
-
-          const extension = path.extname(entry.name).toLowerCase();
-          const size = fs.statSync(fullPath).size;
-          if (!isTextPreviewable(extension, size) || contentMatches.length >= MAX_RESULTS) continue;
-
-          try {
-            const content = fs.readFileSync(fullPath, 'utf8');
-            const lower = content.toLowerCase();
-            const index = lower.indexOf(searchQuery);
-            if (index !== -1) {
-              const start = Math.max(0, index - 40);
-              const end = Math.min(content.length, index + searchQuery.length + 80);
-              contentMatches.push({
-                name: entry.name,
-                path: fullPath,
-                snippet: content.slice(start, end).replace(/\s+/g, ' ').trim(),
-              });
-            }
-          } catch {
-            // Ignore non-utf8 files.
-          }
-        }
-      }
-
-      walk(normalizedProjectPath);
-      return { success: true, files: files.slice(0, MAX_RESULTS), contentMatches: contentMatches.slice(0, MAX_RESULTS) };
+      const result = await searchProject(normalizedProjectPath, searchQuery);
+      return { success: true, ...result };
     } catch (error) {
       return { success: false, error: error.message, files: [], contentMatches: [] };
     }
@@ -156,7 +174,7 @@ function setupFileSystemHandlers() {
     try {
       const normalizedProjectPath = withProjectRoot(projectPath);
       return await new Promise((resolve) => {
-        execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
+        execFile('git', ['status', '--porcelain'], { cwd: normalizedProjectPath, env: buildSubprocessEnv(), timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message, entries: [] });
             return;
@@ -185,7 +203,7 @@ function setupFileSystemHandlers() {
       const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
       return await new Promise((resolve) => {
-        execFile('git', ['add', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
+        execFile('git', ['add', '--', relativePath], { cwd: normalizedProjectPath, env: buildSubprocessEnv(), timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
             return;
@@ -205,7 +223,7 @@ function setupFileSystemHandlers() {
       const relativePath = getProjectRelativePath(normalizedProjectPath, resolvedTargetPath);
 
       return await new Promise((resolve) => {
-        execFile('git', ['reset', 'HEAD', '--', relativePath], { cwd: normalizedProjectPath, timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
+        execFile('git', ['reset', 'HEAD', '--', relativePath], { cwd: normalizedProjectPath, env: buildSubprocessEnv(), timeout: 8000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || error.message });
             return;
@@ -227,7 +245,7 @@ function setupFileSystemHandlers() {
       }
 
       return await new Promise((resolve) => {
-        execFile('git', ['commit', '-m', trimmedMessage], { cwd: normalizedProjectPath, timeout: 120000, windowsHide: true }, (error, stdout, stderr) => {
+        execFile('git', ['commit', '-m', trimmedMessage], { cwd: normalizedProjectPath, env: buildSubprocessEnv(), timeout: 120000, windowsHide: true }, (error, stdout, stderr) => {
           if (error) {
             resolve({ success: false, error: stderr || stdout || error.message });
             return;
@@ -243,7 +261,7 @@ function setupFileSystemHandlers() {
   ipcMain.handle('fs:read-file', async (_, projectPath, filePath) => {
     try {
       const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
-      const stats = fs.statSync(resolvedTargetPath);
+      const stats = await fs.promises.stat(resolvedTargetPath);
 
       if (!stats.isFile()) {
         return { success: false, error: 'Target is not a file.' };
@@ -253,7 +271,10 @@ function setupFileSystemHandlers() {
       const size = stats.size;
 
       if (IMAGE_EXTENSIONS.has(extension)) {
-        const buffer = fs.readFileSync(resolvedTargetPath);
+        if (size > MAX_IMAGE_BYTES) {
+          return { success: false, error: 'Image exceeds the 10 MB preview limit.', size };
+        }
+        const buffer = await fs.promises.readFile(resolvedTargetPath);
         const mime = extension === '.svg'
           ? 'image/svg+xml'
           : extension === '.jpg'
@@ -271,10 +292,10 @@ function setupFileSystemHandlers() {
         };
       }
 
-      if (!isTextPreviewable(extension, size) && size > 1024 * 1024) {
+      if (!isTextPreviewable(extension, size)) {
         return {
           success: false,
-          error: 'This file is too large or binary to preview safely.',
+           error: 'File exceeds the 2 MB text limit or is not safe to preview as text.',
           name: path.basename(resolvedTargetPath),
           path: resolvedTargetPath,
           extension,
@@ -282,7 +303,9 @@ function setupFileSystemHandlers() {
         };
       }
 
-      const content = fs.readFileSync(resolvedTargetPath, 'utf8');
+      const buffer = await fs.promises.readFile(resolvedTargetPath);
+      if (!isProbablyText(buffer)) return { success: false, error: 'File appears to be binary and cannot be opened as text.', size };
+      const content = buffer.toString('utf8');
       return {
         success: true,
         type: 'text',
@@ -300,7 +323,9 @@ function setupFileSystemHandlers() {
   ipcMain.handle('fs:write-file', async (_, projectPath, filePath, content) => {
     try {
       const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
-      fs.writeFileSync(resolvedTargetPath, content, 'utf8');
+      if (typeof content !== 'string') return { success: false, error: 'File content must be text.' };
+      if (Buffer.byteLength(content, 'utf8') > MAX_TEXT_BYTES) return { success: false, error: 'Text exceeds the 2 MB save limit.' };
+      await fs.promises.writeFile(resolvedTargetPath, content, 'utf8');
       return { success: true, path: resolvedTargetPath };
     } catch (error) {
       return { success: false, error: error.message };
@@ -324,6 +349,7 @@ function setupFileSystemHandlers() {
 
       if (process.platform === 'win32') {
         const child = spawn('explorer.exe', [resolvedTargetPath], {
+          env: buildSubprocessEnv(),
           detached: true,
           stdio: 'ignore',
         });
@@ -490,4 +516,4 @@ function setupFileSystemHandlers() {
   fileHandlersRegistered = true;
 }
 
-module.exports = { setupFileSystemHandlers };
+module.exports = { MAX_IMAGE_BYTES, MAX_SEARCH_FILE_BYTES, MAX_TEXT_BYTES, isProbablyText, isSearchTextCandidate, searchProject, setupFileSystemHandlers };

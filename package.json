@@ -12,6 +12,10 @@
     "build": "vite build",
     "package": "node scripts/generate-auth-config.js && vite build && electron-builder",
     "package:dir": "node scripts/generate-auth-config.js && vite build && electron-builder --dir",
+    "release:manifest": "node scripts/generate-release-manifest.js",
+    "release:validate": "node scripts/validate-release-manifest.js",
+    "release:verify-installer": "node scripts/verify-windows-installer.js",
+    "release:smoke": "node scripts/release-smoke.js",
     "rebuild": "electron-rebuild"
   },
   "dependencies": {
@@ -52,6 +56,12 @@
   "build": {
     "appId": "com.vibeidecoder.app",
     "productName": "Vibe IDE Code",
+    "protocols": [
+      {
+        "name": "Vibe IDE Code Authentication",
+        "schemes": ["vibeidecode"]
+      }
+    ],
     "npmRebuild": false,
     "directories": {
       "output": "dist-electron"
@@ -73,8 +83,7 @@
     },
     "nsis": {
       "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "include": "build/installer.nsh"
+      "allowToChangeInstallationDirectory": true
     }
   }
 }

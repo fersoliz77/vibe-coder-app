@@ -1,7 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { app, safeStorage, shell } = require('electron');
-const { getEffectivePolicy, getLeaseExpiry, MEMBERSHIP_STATUSES } = require('./policy');
+const { ACCOUNT_ROLES, ACCOUNT_STATUSES, getEffectivePolicy, getLeaseExpiry } = require('./policy');
+const {
+  createPkceTransaction,
+  getOAuthRedirectUri,
+  isPendingTransactionExpired,
+  parseOAuthCallback,
+} = require('./oauth');
 
 class AuthError extends Error {
   constructor(code, message) {
@@ -18,7 +24,7 @@ function readConfig() {
   const config = {
     supabaseUrl: process.env.VIBE_SUPABASE_URL?.replace(/\/$/, '') || packaged.supabaseUrl,
     anonKey: process.env.VIBE_SUPABASE_ANON_KEY || packaged.anonKey,
-    membershipRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || packaged.membershipRpc || 'get_desktop_access',
+    accessRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || packaged.accessRpc || 'get_desktop_access',
     helpUrl: process.env.VIBE_AUTH_HELP_URL || packaged.helpUrl || null,
   };
   const missing = Object.entries(config)
@@ -39,7 +45,8 @@ function isValidRecord(record) {
     record?.session?.access_token
     && record?.session?.refresh_token
     && record?.session?.user?.id
-    && MEMBERSHIP_STATUSES.includes(record?.membership?.status)
+    && ACCOUNT_ROLES.includes(record?.account?.role)
+    && ACCOUNT_STATUSES.includes(record?.account?.status)
     && Number.isFinite(Date.parse(record?.lastValidatedAt))
     && Number.isFinite(Date.parse(record?.leaseExpiresAt)),
   );
@@ -49,6 +56,8 @@ class AuthService {
   constructor() {
     this.config = readConfig();
     this.sessionPath = path.join(app.getPath('userData'), 'auth-session.bin');
+    this.oauthTransactionPath = path.join(app.getPath('userData'), 'auth-oauth.bin');
+    this.pendingOAuthTransaction = null;
     this.record = null;
     this.lastError = null;
     this.sessionGeneration = 0;
@@ -62,6 +71,7 @@ class AuthService {
         `Missing authentication configuration: ${this.config.missing.join(', ')}.`,
       ));
     }
+    this.restorePendingOAuthTransaction();
     if (!fs.existsSync(this.sessionPath)) return;
     if (!safeStorage.isEncryptionAvailable()) {
       this.lastError = publicError(new AuthError('AUTH_SECURE_STORAGE_UNAVAILABLE', 'OS-backed secure storage is unavailable.'));
@@ -70,19 +80,108 @@ class AuthService {
     try {
       const encrypted = fs.readFileSync(this.sessionPath);
       const record = JSON.parse(safeStorage.decryptString(encrypted));
-      if (!isValidRecord(record)) throw new AuthError('AUTH_SESSION_INVALID', 'The encrypted session is incomplete or invalid.');
-      this.record = record;
+      this.restoreRecord(record);
     } catch {
       this.record = null;
       this.lastError = publicError(new AuthError('AUTH_SESSION_INVALID', 'The encrypted session could not be read. Sign in again.'));
     }
   }
 
+  restorePendingOAuthTransaction() {
+    if (!fs.existsSync(this.oauthTransactionPath)) return;
+    if (!safeStorage.isEncryptionAvailable()) {
+      this.clearPendingOAuthTransaction();
+      return;
+    }
+    try {
+      const encrypted = fs.readFileSync(this.oauthTransactionPath);
+      const transaction = JSON.parse(safeStorage.decryptString(encrypted));
+      if (isPendingTransactionExpired(transaction)
+        || typeof transaction.codeVerifier !== 'string'
+        || typeof transaction.nonce !== 'string'
+        || typeof transaction.redirectUri !== 'string') {
+        this.clearPendingOAuthTransaction();
+        return;
+      }
+      this.pendingOAuthTransaction = transaction;
+    } catch {
+      this.clearPendingOAuthTransaction();
+    }
+  }
+
+  persistPendingOAuthTransaction(transaction) {
+    if (!safeStorage.isEncryptionAvailable()) {
+      throw new AuthError('AUTH_SECURE_STORAGE_UNAVAILABLE', 'OS-backed secure storage is unavailable.');
+    }
+    this.pendingOAuthTransaction = transaction;
+    try {
+      fs.writeFileSync(this.oauthTransactionPath, safeStorage.encryptString(JSON.stringify(transaction)));
+    } catch (error) {
+      this.clearPendingOAuthTransaction(transaction);
+      throw error;
+    }
+  }
+
+  clearPendingOAuthTransaction(expectedTransaction = null) {
+    if (expectedTransaction && this.pendingOAuthTransaction !== expectedTransaction) return true;
+    this.pendingOAuthTransaction = null;
+    try {
+      fs.unlinkSync(this.oauthTransactionPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        try {
+          if (!safeStorage.isEncryptionAvailable()) return false;
+          fs.writeFileSync(this.oauthTransactionPath, safeStorage.encryptString(JSON.stringify({ invalidated: true })));
+        } catch {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  restoreRecord(record) {
+    if (isValidRecord(record)) {
+      this.record = record;
+      return;
+    }
+
+    const legacyAccount = record?.membership;
+    const hasValidLegacyLease = Number.isFinite(Date.parse(record?.leaseExpiresAt));
+    if (record?.account != null
+      || legacyAccount?.role !== 'student'
+      || !ACCOUNT_STATUSES.includes(legacyAccount?.status)
+      || !hasValidLegacyLease) {
+      throw new AuthError('AUTH_SESSION_INVALID', 'The encrypted session is incomplete or invalid.');
+    }
+
+    const migrated = {
+      session: record.session,
+      account: {
+        role: 'student',
+        status: legacyAccount.status,
+        planId: legacyAccount.planId ?? null,
+        planName: legacyAccount.planName ?? null,
+        completedLessons: Number(legacyAccount.completedLessons) || 0,
+        totalLessons: Number(legacyAccount.totalLessons) || 0,
+        progressPercentage: Number(legacyAccount.progressPercentage) || 0,
+      },
+      lastValidatedAt: record.lastValidatedAt,
+      leaseExpiresAt: getLeaseExpiry(record.lastValidatedAt, record.leaseExpiresAt),
+    };
+    if (!isValidRecord(migrated)) {
+      throw new AuthError('AUTH_SESSION_INVALID', 'The encrypted session is incomplete or invalid.');
+    }
+    this.persist(migrated);
+    this.record = migrated;
+  }
+
   getPolicy() {
     if (this.config.missing.length) return 'denied';
     if (!isValidRecord(this.record)) return 'denied';
     return getEffectivePolicy({
-      membershipStatus: this.record?.membership?.status,
+      role: this.record?.account?.role,
+      accountStatus: this.record?.account?.status,
       lastValidatedAt: this.record?.lastValidatedAt,
       leaseExpiresAt: this.record?.leaseExpiresAt,
     });
@@ -97,16 +196,14 @@ class AuthService {
       restrictionReason: policy === 'restricted'
         ? (leaseExpired ? 'OFFLINE_LEASE_EXPIRED' : 'ACCOUNT_RESTRICTED')
         : null,
-      membership: this.record?.membership ? {
-        status: this.record.membership.status,
-        role: this.record.membership.role || null,
-        schoolId: this.record.membership.schoolId || null,
-        schoolName: this.record.membership.schoolName || null,
-        planId: this.record.membership.planId || null,
-        planName: this.record.membership.planName || null,
-        completedLessons: this.record.membership.completedLessons || 0,
-        totalLessons: this.record.membership.totalLessons || 0,
-        progressPercentage: this.record.membership.progressPercentage || 0,
+      account: this.record?.account ? {
+        role: this.record.account.role,
+        status: this.record.account.status,
+        planId: this.record.account.planId ?? null,
+        planName: this.record.account.planName ?? null,
+        completedLessons: Number(this.record.account.completedLessons) || 0,
+        totalLessons: Number(this.record.account.totalLessons) || 0,
+        progressPercentage: Number(this.record.account.progressPercentage) || 0,
       } : null,
       user: this.record?.session?.user ? {
         id: this.record.session.user.id,
@@ -145,24 +242,26 @@ class AuthService {
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new AuthError('AUTH_REMOTE_REJECTED', body.msg || body.message || body.error_description || `Authentication service returned ${response.status}.`);
+      const code = response.status === 401 || response.status === 403
+        ? 'AUTH_ACCESS_REVOKED'
+        : 'AUTH_REMOTE_REJECTED';
+      throw new AuthError(code, body.msg || body.message || body.error_description || `Authentication service returned ${response.status}.`);
     }
     return body;
   }
 
-  normalizeMembership(payload) {
+  normalizeAccess(payload) {
     const value = Array.isArray(payload) ? payload[0] : payload;
-    const status = value?.status || value?.membership_status;
-    if (!MEMBERSHIP_STATUSES.includes(status)) {
-      throw new AuthError('AUTH_MEMBERSHIP_INVALID', 'Membership RPC returned an unsupported or missing status.');
+    const role = value?.role || value?.account_role;
+    const status = value?.status || value?.account_status;
+    if (!ACCOUNT_ROLES.includes(role) || !ACCOUNT_STATUSES.includes(status)) {
+      throw new AuthError('AUTH_ACCESS_INVALID', 'Access RPC returned an unsupported or missing role or status.');
     }
     return {
+      role,
       status,
-      role: value.role || value.membership_role || null,
-      schoolId: value.school_id || value.schoolId || null,
-      schoolName: value.school_name || value.schoolName || null,
-      planId: value.plan_id || value.planId || null,
-      planName: value.plan_name || value.planName || null,
+      planId: value.plan_id ?? value.planId ?? null,
+      planName: value.plan_name ?? value.planName ?? null,
       completedLessons: Number(value.completed_lessons ?? value.completedLessons ?? 0),
       totalLessons: Number(value.total_lessons ?? value.totalLessons ?? 0),
       progressPercentage: Number(value.progress_percentage ?? value.progressPercentage ?? 0),
@@ -170,13 +269,13 @@ class AuthService {
     };
   }
 
-  async validateMembership(session) {
-    const payload = await this.request(`/rest/v1/rpc/${encodeURIComponent(this.config.membershipRpc)}`, {
+  async validateAccess(session) {
+    const payload = await this.request(`/rest/v1/rpc/${encodeURIComponent(this.config.accessRpc)}`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${session.access_token}` },
       body: '{}',
     });
-    return this.normalizeMembership(payload);
+    return this.normalizeAccess(payload);
   }
 
   persist(record = this.record) {
@@ -184,6 +283,24 @@ class AuthService {
       throw new AuthError('AUTH_SECURE_STORAGE_UNAVAILABLE', 'OS-backed secure storage is unavailable.');
     }
     fs.writeFileSync(this.sessionPath, safeStorage.encryptString(JSON.stringify(record)));
+  }
+
+  invalidateRecord() {
+    this.record = null;
+    if (!this.sessionPath) return { durable: true, storageError: false };
+    try {
+      fs.unlinkSync(this.sessionPath);
+      return { durable: true, storageError: false };
+    } catch (error) {
+      if (error.code === 'ENOENT') return { durable: true, storageError: false };
+      try {
+        if (!safeStorage.isEncryptionAvailable()) return { durable: false, storageError: true };
+        fs.writeFileSync(this.sessionPath, safeStorage.encryptString(JSON.stringify({ invalidated: true })));
+        return { durable: true, storageError: true };
+      } catch {
+        return { durable: false, storageError: true };
+      }
+    }
   }
 
   async login({ email, password } = {}) {
@@ -195,22 +312,97 @@ class AuthService {
         method: 'POST',
         body: JSON.stringify({ email, password }),
       });
-      const membership = await this.validateMembership(session);
+      const account = await this.validateAccess(session);
       if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
       const lastValidatedAt = new Date().toISOString();
       const record = {
         session,
-        membership,
+        account,
         lastValidatedAt,
-        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, membership.requestedLeaseExpiry),
+        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, account.requestedLeaseExpiry),
       };
       this.persist(record);
       this.record = record;
       this.lastError = null;
       return { ok: true, state: this.getState() };
     } catch (error) {
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
+      if (error.code === 'AUTH_ACCESS_INVALID') {
+        if (!this.invalidateRecord().durable) {
+          this.lastError = publicError(new AuthError('AUTH_SESSION_INVALIDATION_FAILED', 'The invalid local session could not be securely cleared.'));
+          return { ok: false, error: this.lastError, state: this.getState() };
+        }
+      }
       this.lastError = publicError(error);
       return { ok: false, error: this.lastError, state: this.getState() };
+    }
+  }
+
+  async loginWithGoogle() {
+    let transaction;
+    try {
+      this.requireConfig();
+      const redirectUri = getOAuthRedirectUri(app.isPackaged);
+      transaction = { ...createPkceTransaction(), redirectUri };
+      const authorizeUrl = new URL(`${this.config.supabaseUrl}/auth/v1/authorize`);
+      authorizeUrl.searchParams.set('provider', 'google');
+      authorizeUrl.searchParams.set('redirect_to', redirectUri);
+      authorizeUrl.searchParams.set('code_challenge', transaction.codeChallenge);
+      authorizeUrl.searchParams.set('code_challenge_method', 'S256');
+      authorizeUrl.searchParams.set('nonce', transaction.nonce);
+      this.persistPendingOAuthTransaction(transaction);
+      await shell.openExternal(authorizeUrl.toString());
+      this.lastError = null;
+      return { ok: true, pending: true, state: this.getState() };
+    } catch (error) {
+      this.clearPendingOAuthTransaction(transaction);
+      this.lastError = publicError(error);
+      return { ok: false, error: this.lastError, state: this.getState() };
+    }
+  }
+
+  async handleOAuthCallback(rawUrl) {
+    const generation = ++this.sessionGeneration;
+    let transaction;
+    try {
+      this.requireConfig();
+      transaction = this.pendingOAuthTransaction;
+      if (!transaction || isPendingTransactionExpired(transaction)) {
+        throw new AuthError('AUTH_OAUTH_TRANSACTION_EXPIRED', 'The Google sign-in request expired. Try again.');
+      }
+      let callback;
+      try {
+        callback = parseOAuthCallback(rawUrl, transaction.redirectUri);
+      } catch {
+        throw new AuthError('AUTH_OAUTH_CALLBACK_INVALID', 'The Google sign-in callback is invalid.');
+      }
+      if (callback.error) {
+        throw new AuthError('AUTH_OAUTH_DENIED', 'Google sign-in was cancelled or denied.');
+      }
+      const session = await this.request('/auth/v1/token?grant_type=pkce', {
+        method: 'POST',
+        body: JSON.stringify({ auth_code: callback.code, code_verifier: transaction.codeVerifier }),
+      });
+      const account = await this.validateAccess(session);
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
+      const lastValidatedAt = new Date().toISOString();
+      const record = {
+        session,
+        account,
+        lastValidatedAt,
+        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, account.requestedLeaseExpiry),
+      };
+      this.persist(record);
+      this.record = record;
+      this.lastError = null;
+      return { ok: true, state: this.getState() };
+    } catch (error) {
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
+      if (error.code === 'AUTH_ACCESS_INVALID') this.invalidateRecord();
+      this.lastError = publicError(error);
+      return { ok: false, error: this.lastError, state: this.getState() };
+    } finally {
+      this.clearPendingOAuthTransaction(transaction);
     }
   }
 
@@ -230,20 +422,27 @@ class AuthService {
         method: 'POST',
         body: JSON.stringify({ refresh_token: this.record.session.refresh_token }),
       });
-      const membership = await this.validateMembership(session);
+      const account = await this.validateAccess(session);
       if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
       const lastValidatedAt = new Date().toISOString();
       const record = {
         session,
-        membership,
+        account,
         lastValidatedAt,
-        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, membership.requestedLeaseExpiry),
+        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, account.requestedLeaseExpiry),
       };
-      this.persist(record);
       this.record = record;
+      this.persist(record);
       this.lastError = null;
       return { ok: true, state: this.getState() };
     } catch (error) {
+      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
+      if (error.code === 'AUTH_ACCESS_INVALID' || error.code === 'AUTH_ACCESS_REVOKED') {
+        if (!this.invalidateRecord().durable) {
+          this.lastError = publicError(new AuthError('AUTH_SESSION_INVALIDATION_FAILED', 'The invalid local session could not be securely cleared.'));
+          return { ok: false, error: this.lastError, state: this.getState() };
+        }
+      }
       this.lastError = publicError(error);
       return { ok: false, error: this.lastError, state: this.getState() };
     }
@@ -251,11 +450,11 @@ class AuthService {
 
   logout() {
     this.sessionGeneration += 1;
-    this.record = null;
-    this.lastError = this.config.missing.length ? this.lastError : null;
-    try { fs.unlinkSync(this.sessionPath); } catch (error) {
-      if (error.code !== 'ENOENT') throw error;
-    }
+    this.clearPendingOAuthTransaction();
+    const invalidation = this.invalidateRecord();
+    this.lastError = invalidation.storageError
+      ? publicError(new AuthError('AUTH_SESSION_INVALIDATION_FAILED', 'The local session could not be securely cleared.'))
+      : (this.config.missing.length ? this.lastError : null);
     return this.getState();
   }
 
@@ -276,6 +475,11 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
   ipcMain.handle('auth:get-state', () => authService.getState());
   ipcMain.handle('auth:login', async (_, credentials) => {
     const result = await authService.login(credentials);
+    notify();
+    return result;
+  });
+  ipcMain.handle('auth:google', async () => {
+    const result = await authService.loginWithGoogle();
     notify();
     return result;
   });

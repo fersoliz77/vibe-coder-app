@@ -1,13 +1,15 @@
 const { execFile, spawn } = require('child_process');
 const fs = require('fs');
 const os = require('os');
+const { buildSubprocessEnv } = require('./subprocessEnv');
 const path = require('path');
 const util = require('util');
 const { killProcessTree } = require('./processUtils');
+const { INSTALL_ALLOWLIST, SUPABASE_INSTRUCTION, itemMetadata, normalizeOptions } = require('./environmentCatalog');
+const { buildInstallationPlan } = require('./environmentPlan');
+const { parseVersionOutput, stripAnsi } = require('./environmentVersion');
 
 const execFileAsync = util.promisify(execFile);
-const SUPPORTED_BACKENDS = Object.freeze(['firebase', 'supabase']);
-const SUPABASE_INSTRUCTION = 'Instala Supabase CLI siguiendo la guía oficial: https://supabase.com/docs/guides/local-development/cli/getting-started. Después, vuelve a comprobar el entorno.';
 const MAX_OUTPUT_LENGTH = 12_000;
 const ANDROID_API_LEVEL = '35';
 const ANDROID_BUILD_TOOLS_VERSION = '35.0.0';
@@ -23,105 +25,8 @@ const ANDROID_SDK_PACKAGES = Object.freeze([
   ANDROID_SYSTEM_IMAGE,
 ]);
 
-const WINGET_ARGS = Object.freeze([
-  'install',
-  '--exact',
-  '--silent',
-  '--accept-package-agreements',
-  '--accept-source-agreements',
-  '--disable-interactivity',
-]);
-
-const INSTALL_ALLOWLIST = Object.freeze({
-  node: Object.freeze({
-    id: 'node',
-    label: 'Node.js LTS',
-    file: 'winget.exe',
-    args: Object.freeze([...WINGET_ARGS, '--id', 'OpenJS.NodeJS.LTS']),
-  }),
-  git: Object.freeze({
-    id: 'git',
-    label: 'Git',
-    file: 'winget.exe',
-    args: Object.freeze([...WINGET_ARGS, '--id', 'Git.Git']),
-  }),
-  gh: Object.freeze({
-    id: 'gh',
-    label: 'GitHub CLI',
-    file: 'winget.exe',
-    args: Object.freeze([...WINGET_ARGS, '--id', 'GitHub.cli']),
-  }),
-  java: Object.freeze({
-    id: 'java',
-    label: 'JDK 17',
-    file: 'winget.exe',
-    args: Object.freeze([...WINGET_ARGS, '--id', 'EclipseAdoptium.Temurin.17.JDK']),
-  }),
-  'android-sdk': Object.freeze({
-    id: 'android-sdk',
-    label: 'Android Studio y Android SDK',
-    file: 'winget.exe',
-    args: Object.freeze([...WINGET_ARGS, '--id', 'Google.AndroidStudio']),
-  }),
-  flutter: Object.freeze({
-    id: 'flutter',
-    label: 'Flutter',
-    file: 'git',
-    args: Object.freeze([
-      'clone', '--branch', 'stable', '--depth', '1',
-      'https://github.com/flutter/flutter.git',
-      path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'flutter'),
-    ]),
-  }),
-  vercel: Object.freeze({
-    id: 'vercel',
-    label: 'Vercel CLI',
-    file: 'npm',
-    args: Object.freeze(['install', '--global', 'vercel']),
-  }),
-  firebase: Object.freeze({
-    id: 'firebase',
-    label: 'Firebase CLI',
-    file: 'npm',
-    args: Object.freeze(['install', '--global', 'firebase-tools']),
-  }),
-});
-
-const INSTALL_ORDER = Object.freeze(['node', 'git', 'gh', 'java', 'android-sdk', 'flutter', 'vercel', 'firebase']);
 let activeInstallation = null;
 let nextInstallationId = 1;
-
-function normalizeOptions(options = {}) {
-  if (!options || typeof options !== 'object') options = {};
-  const backend = options.backend == null ? 'firebase' : String(options.backend).toLowerCase();
-  if (!SUPPORTED_BACKENDS.includes(backend)) {
-    throw new TypeError(`Backend no soportado. Usa uno de: ${SUPPORTED_BACKENDS.join(', ')}.`);
-  }
-  return { includeMobile: options.includeMobile === true, backend };
-}
-
-function stripAnsi(value) {
-  return String(value || '').replace(/\x1B\[[0-?]*[ -/]*[@-~]/g, '').trim();
-}
-
-function parseVersionOutput(tool, output) {
-  const clean = stripAnsi(output).replace(/\r/g, '');
-  if (!clean) return null;
-
-  const patterns = {
-    node: /(?:^|\s)v(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i,
-    npm: /(?:^|\s)(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)(?:\s|$)/,
-    git: /git version\s+([^\s]+)/i,
-    gh: /gh version\s+([^\s]+)/i,
-    vercel: /(?:vercel(?: cli)?\s+)?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i,
-    firebase: /(?:firebase(?: cli)?\s+)?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i,
-    supabase: /(?:supabase(?: cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i,
-    flutter: /flutter\s+(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i,
-    java: /(?:openjdk|java|javac)\s+(?:version\s+)?["']?(\d+(?:\.\d+){1,3}(?:[-+][\w.-]+)?)/i,
-  };
-  const match = clean.match(patterns[tool] || /(?:^|\s)v?(\d+\.\d+\.\d+(?:[-+][\w.-]+)?)/i);
-  return match ? match[1] : null;
-}
 
 function getExtraPath() {
   const home = os.homedir();
@@ -136,10 +41,7 @@ function getExtraPath() {
 }
 
 function getProcessEnv(extra = {}) {
-  const env = { ...process.env, PATH: getExtraPath(), FORCE_COLOR: '0', NO_COLOR: '1', ...extra };
-  delete env.ELECTRON_RUN_AS_NODE;
-  delete env.ELECTRON_NO_ASAR;
-  return env;
+  return buildSubprocessEnv({ extra: { PATH: getExtraPath(), FORCE_COLOR: '0', NO_COLOR: '1', ...extra } });
 }
 
 function getDefaultAndroidSdkPath() {
@@ -184,7 +86,7 @@ function getAvdHardwareConfig(totalMemory = os.totalmem(), cpuCount = os.cpus().
   return { ramMb: 2048, cpuCores: Math.min(4, cpuCount), heapMb: 512, dataPartition: '8G' };
 }
 
-async function findExecutable(name, candidates = []) {
+async function findExecutable(name, candidates = [], signal) {
   for (const candidate of candidates.filter(Boolean)) {
     if (fs.existsSync(candidate)) return candidate;
   }
@@ -193,6 +95,7 @@ async function findExecutable(name, candidates = []) {
       env: getProcessEnv(),
       timeout: 7_000,
       windowsHide: true,
+      signal,
     });
     return stdout.split(/\r?\n/).map((entry) => entry.trim()).find(Boolean) || null;
   } catch {
@@ -200,14 +103,14 @@ async function findExecutable(name, candidates = []) {
   }
 }
 
-async function resolveNodeInvocation() {
+async function resolveNodeInvocation(signal) {
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  const nodePath = await findExecutable('node.exe', [path.join(programFiles, 'nodejs', 'node.exe')]);
+  const nodePath = await findExecutable('node.exe', [path.join(programFiles, 'nodejs', 'node.exe')], signal);
   return nodePath ? { file: nodePath, argsPrefix: [] } : null;
 }
 
-async function resolveNpmInvocation() {
-  const node = await resolveNodeInvocation();
+async function resolveNpmInvocation(signal) {
+  const node = await resolveNodeInvocation(signal);
   if (!node) return null;
   const npmCli = [
     path.join(path.dirname(node.file), 'node_modules', 'npm', 'bin', 'npm-cli.js'),
@@ -216,25 +119,26 @@ async function resolveNpmInvocation() {
   return npmCli ? { file: node.file, argsPrefix: [npmCli] } : null;
 }
 
-async function resolveNpmGlobalCli(tool) {
+async function resolveNpmGlobalCli(tool, signal) {
   const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
   const entries = {
     vercel: path.join(appData, 'npm', 'node_modules', 'vercel', 'dist', 'index.js'),
     firebase: path.join(appData, 'npm', 'node_modules', 'firebase-tools', 'lib', 'bin', 'firebase.js'),
   };
-  const node = await resolveNodeInvocation();
+  const node = await resolveNodeInvocation(signal);
   const entry = entries[tool];
   if (node && entry && fs.existsSync(entry)) return { file: node.file, argsPrefix: [entry], displayPath: entry };
   return null;
 }
 
-async function runProbe(file, args = [], extraEnv = {}) {
+async function runProbe(file, args = [], extraEnv = {}, signal) {
   try {
     const { stdout, stderr } = await execFileAsync(file, args, {
       env: getProcessEnv(extraEnv),
       timeout: 12_000,
       windowsHide: true,
       maxBuffer: 512 * 1024,
+      signal,
     });
     return { success: true, output: `${stdout || ''}\n${stderr || ''}`.trim() };
   } catch (error) {
@@ -246,26 +150,10 @@ async function runProbe(file, args = [], extraEnv = {}) {
   }
 }
 
-function itemMetadata(id, options) {
-  const metadata = {
-    node: { name: 'Node.js', category: 'core', required: true, installable: true },
-    npm: { name: 'npm', category: 'core', required: true, installable: true },
-    git: { name: 'Git', category: 'core', required: true, installable: true },
-    gh: { name: 'GitHub CLI', category: 'tools', required: true, installable: true },
-    vercel: { name: 'Vercel CLI', category: 'deployment', required: true, installable: true },
-    firebase: { name: 'Firebase CLI', category: 'backend', required: options.backend === 'firebase', installable: true },
-    supabase: { name: 'Supabase CLI', category: 'backend', required: options.backend === 'supabase', installable: false },
-    flutter: { name: 'Flutter', category: 'mobile', required: true, installable: true },
-    java: { name: 'JDK 17', category: 'mobile', required: true, installable: true },
-    'android-sdk': { name: 'Android SDK', category: 'mobile', required: true, installable: true },
-  };
-  return { id, ...metadata[id] };
-}
-
-async function probeCommandItem(id, name, args, candidates = []) {
-  const executable = await findExecutable(name, candidates);
+async function probeCommandItem(id, name, args, candidates = [], signal) {
+  const executable = await findExecutable(name, candidates, signal);
   if (!executable) return { installed: false, version: null, path: null };
-  const result = await runProbe(executable, args);
+  const result = await runProbe(executable, args, {}, signal);
   return {
     installed: result.success || Boolean(result.output),
     version: parseVersionOutput(id, result.output),
@@ -274,10 +162,10 @@ async function probeCommandItem(id, name, args, candidates = []) {
   };
 }
 
-async function probeNpm() {
-  const invocation = await resolveNpmInvocation();
+async function probeNpm(signal) {
+  const invocation = await resolveNpmInvocation(signal);
   if (!invocation) return { installed: false, version: null, path: null };
-  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version']);
+  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version'], {}, signal);
   return {
     installed: result.success,
     version: parseVersionOutput('npm', result.output),
@@ -286,10 +174,10 @@ async function probeNpm() {
   };
 }
 
-async function probeNpmGlobal(id) {
-  const invocation = await resolveNpmGlobalCli(id);
+async function probeNpmGlobal(id, signal) {
+  const invocation = await resolveNpmGlobalCli(id, signal);
   if (!invocation) return { installed: false, version: null, path: null };
-  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version']);
+  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version'], {}, signal);
   return {
     installed: result.success || Boolean(result.output),
     version: parseVersionOutput(id, result.output),
@@ -298,7 +186,7 @@ async function probeNpmGlobal(id) {
   };
 }
 
-async function probeSupabase() {
+async function probeSupabase(signal) {
   const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
   const nativePath = path.join(
     appData,
@@ -312,12 +200,12 @@ async function probeSupabase() {
   );
   const bundledPath = path.join(__dirname, '..', '..', 'node_modules', `@supabase/cli-windows-${process.arch}`, 'bin', 'supabase.exe')
     .replace(`${path.sep}app.asar${path.sep}`, `${path.sep}app.asar.unpacked${path.sep}`);
-  const executable = await findExecutable('supabase.exe', [bundledPath, nativePath]);
+  const executable = await findExecutable('supabase.exe', [bundledPath, nativePath], signal);
   if (!executable) {
-    const wrapper = await findExecutable('supabase.cmd');
+    const wrapper = await findExecutable('supabase.cmd', [], signal);
     return { installed: Boolean(wrapper), version: null, path: wrapper, ...(!wrapper ? { instruction: SUPABASE_INSTRUCTION } : {}) };
   }
-  const result = await runProbe(executable, ['--version']);
+  const result = await runProbe(executable, ['--version'], {}, signal);
   return {
     installed: result.success || Boolean(result.output),
     version: parseVersionOutput('supabase', result.output),
@@ -325,14 +213,14 @@ async function probeSupabase() {
   };
 }
 
-async function probeFlutter() {
+async function probeFlutter(signal) {
   const installedPath = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'flutter', 'bin', 'flutter.bat');
-  const invocation = await resolveFlutterToolInvocation([installedPath]);
+  const invocation = await resolveFlutterToolInvocation([installedPath], signal);
   if (!invocation) {
-    const flutterPath = await findExecutable('flutter.bat', [installedPath]);
+    const flutterPath = await findExecutable('flutter.bat', [installedPath], signal);
     return flutterPath ? { installed: true, version: null, path: flutterPath } : { installed: false, version: null, path: null };
   }
-  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version', '--machine']);
+  const result = await runProbe(invocation.file, [...invocation.argsPrefix, '--version', '--machine'], {}, signal);
   let version = parseVersionOutput('flutter', result.output);
   if (!version) {
     try { version = JSON.parse(result.output).frameworkVersion || null; } catch {}
@@ -340,9 +228,9 @@ async function probeFlutter() {
   return { installed: true, version, path: invocation.flutterPath };
 }
 
-async function resolveFlutterToolInvocation(extraCandidates = []) {
+async function resolveFlutterToolInvocation(extraCandidates = [], signal) {
   const managedPath = path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Programs', 'flutter', 'bin', 'flutter.bat');
-  const flutterPath = await findExecutable('flutter.bat', [...extraCandidates, managedPath]);
+  const flutterPath = await findExecutable('flutter.bat', [...extraCandidates, managedPath], signal);
   if (!flutterPath) return null;
   const binDir = path.dirname(flutterPath);
   const dart = path.join(binDir, 'cache', 'dart-sdk', 'bin', 'dart.exe');
@@ -405,17 +293,17 @@ function getJdk17Candidates() {
   return candidates.filter(Boolean);
 }
 
-async function probeEnvironmentItem(id) {
+async function probeEnvironmentItem(id, signal) {
   const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-  if (id === 'node') return probeCommandItem(id, 'node.exe', ['--version'], [path.join(programFiles, 'nodejs', 'node.exe')]);
-  if (id === 'npm') return probeNpm();
-  if (id === 'git') return probeCommandItem(id, 'git.exe', ['--version'], [path.join(programFiles, 'Git', 'cmd', 'git.exe')]);
-  if (id === 'gh') return probeCommandItem(id, 'gh.exe', ['--version'], [path.join(programFiles, 'GitHub CLI', 'gh.exe')]);
-  if (id === 'vercel' || id === 'firebase') return probeNpmGlobal(id);
-  if (id === 'supabase') return probeSupabase();
-  if (id === 'flutter') return probeFlutter();
+  if (id === 'node') return probeCommandItem(id, 'node.exe', ['--version'], [path.join(programFiles, 'nodejs', 'node.exe')], signal);
+  if (id === 'npm') return probeNpm(signal);
+  if (id === 'git') return probeCommandItem(id, 'git.exe', ['--version'], [path.join(programFiles, 'Git', 'cmd', 'git.exe')], signal);
+  if (id === 'gh') return probeCommandItem(id, 'gh.exe', ['--version'], [path.join(programFiles, 'GitHub CLI', 'gh.exe')], signal);
+  if (id === 'vercel' || id === 'firebase') return probeNpmGlobal(id, signal);
+  if (id === 'supabase') return probeSupabase(signal);
+  if (id === 'flutter') return probeFlutter(signal);
   if (id === 'java') {
-    const jdk = await probeCommandItem(id, 'javac.exe', ['--version'], getJdk17Candidates());
+    const jdk = await probeCommandItem(id, 'javac.exe', ['--version'], getJdk17Candidates(), signal);
     if (!jdk.installed || jdk.version?.split('.')[0] === '17') return jdk;
     return {
       ...jdk,
@@ -428,7 +316,7 @@ async function probeEnvironmentItem(id) {
   return { installed: false, version: null, path: null, error: 'Componente desconocido.' };
 }
 
-async function checkEnvironment(options = {}) {
+async function checkEnvironment(options = {}, { signal } = {}) {
   const normalized = normalizeOptions(options);
   if (process.platform !== 'win32') {
     return {
@@ -448,7 +336,7 @@ async function checkEnvironment(options = {}) {
 
   const items = await Promise.all(ids.map(async (id) => ({
     ...itemMetadata(id, normalized),
-    ...await probeEnvironmentItem(id),
+    ...await probeEnvironmentItem(id, signal),
   })));
   const missing = items.filter((item) => !item.installed);
   return {
@@ -464,26 +352,6 @@ async function checkEnvironment(options = {}) {
     },
     instructions: missing.filter((item) => item.instruction).map((item) => ({ id: item.id, text: item.instruction })),
   };
-}
-
-function getInstalledIds(environment) {
-  const items = Array.isArray(environment?.items) ? environment.items : [];
-  return new Set(items.filter((item) => item.installed).map((item) => item.id));
-}
-
-function buildInstallationPlan(options = {}, environment = { items: [] }) {
-  const normalized = normalizeOptions(options);
-  const installed = getInstalledIds(environment);
-  const selected = new Set(['node', 'git', 'gh', 'vercel']);
-  if (normalized.includeMobile) ['java', 'android-sdk', 'flutter'].forEach((id) => selected.add(id));
-  if (normalized.backend === 'firebase') selected.add('firebase');
-
-  // Reinstalling Node LTS is the allowlisted repair path when npm is missing.
-  if (installed.has('node') && installed.has('npm')) selected.delete('node');
-  for (const id of ['git', 'gh', 'vercel', 'java', 'android-sdk', 'flutter', 'firebase']) {
-    if (installed.has(id)) selected.delete(id);
-  }
-  return INSTALL_ORDER.filter((id) => selected.has(id)).map((id) => INSTALL_ALLOWLIST[id]);
 }
 
 function emitProgress(callback, event) {
@@ -548,12 +416,18 @@ async function installAndroidCommandLineTools(run, sdkPath, progress) {
     'Remove-Item -LiteralPath $env:VIBE_ANDROID_TOOLS_ARCHIVE -Force -ErrorAction SilentlyContinue',
     'Remove-Item -LiteralPath $env:VIBE_ANDROID_TOOLS_EXTRACT -Recurse -Force -ErrorAction SilentlyContinue',
   ].join('; ');
+  if (run.cancelled) return { success: false, cancelled: true };
   const result = await runTracked(run, 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], progress, {
     VIBE_ANDROID_TOOLS_URL: ANDROID_COMMAND_LINE_TOOLS_URL,
     VIBE_ANDROID_TOOLS_ARCHIVE: archive,
     VIBE_ANDROID_TOOLS_EXTRACT: extractPath,
     VIBE_ANDROID_TOOLS_DESTINATION: destination,
   });
+  if (run.cancelled) {
+    fs.rmSync(extractPath, { recursive: true, force: true });
+    fs.rmSync(archive, { force: true });
+    return { success: false, cancelled: true };
+  }
   if (!result.success) {
     fs.rmSync(extractPath, { recursive: true, force: true });
     fs.rmSync(archive, { force: true });
@@ -602,38 +476,51 @@ function tuneAndroidAvd() {
 async function provisionAndroidSdk(run, progress) {
   const sdkPath = getAndroidSdkPath();
   fs.mkdirSync(sdkPath, { recursive: true });
+  if (run.cancelled) return { success: false, cancelled: true };
   let result = await installAndroidCommandLineTools(run, sdkPath, progress);
+  if (run.cancelled) return { success: false, cancelled: true };
   if (!result.success) return result;
   const sdkmanager = getAndroidSdkManagerPath(sdkPath);
   const avdmanager = getAndroidAvdManagerPath(sdkPath);
   if (!sdkmanager || !avdmanager) return { success: false, error: 'No se encontraron sdkmanager y avdmanager despues de instalar las herramientas de linea de comandos.' };
 
+  if (run.cancelled) return { success: false, cancelled: true };
   result = await runAndroidBatch(run, sdkmanager, progress, sdkPath, true);
+  if (run.cancelled) return { success: false, cancelled: true };
   if (!result.success) return result;
+  if (run.cancelled) return { success: false, cancelled: true };
   result = await runAndroidBatch(run, sdkmanager, progress, sdkPath);
+  if (run.cancelled) return { success: false, cancelled: true };
   if (!result.success) return result;
 
   if (!fs.existsSync(path.join(getAndroidAvdPath(), 'config.ini'))) {
     const script = "'no' | & $env:VIBE_ANDROID_MANAGER 'create' 'avd' '--name' 'Vibe_API_35' '--package' 'system-images;android-35;google_apis;x86_64' '--force'; exit $LASTEXITCODE";
+    if (run.cancelled) return { success: false, cancelled: true };
     result = await runTracked(run, 'powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script], progress, {
       ANDROID_SDK_ROOT: sdkPath,
       ANDROID_HOME: sdkPath,
       VIBE_ANDROID_MANAGER: avdmanager,
     });
+    if (run.cancelled) return { success: false, cancelled: true };
     if (!result.success) return result;
   }
   tuneAndroidAvd();
   return { success: true };
 }
 
-async function resolveInstallationInvocation(step) {
+async function resolveInstallationInvocation(step, signal) {
   if (step.file !== 'npm') return { file: step.file, args: [...step.args] };
-  const npm = await resolveNpmInvocation();
+  const npm = await resolveNpmInvocation(signal);
   if (!npm) return null;
   return { file: npm.file, args: [...npm.argsPrefix, ...step.args] };
 }
 
-async function installAllEnvironment(options = {}, onProgress) {
+function cancelledInstallation(progress, results) {
+  emitProgress(progress, { type: 'cancelled', message: 'Instalación cancelada.' });
+  return { success: false, cancelled: true, steps: results };
+}
+
+async function installAllEnvironment(options = {}, onProgress, dependencies = {}) {
   let normalized;
   try {
     normalized = normalizeOptions(options);
@@ -648,14 +535,19 @@ async function installAllEnvironment(options = {}, onProgress) {
     return { success: false, busy: true, error: 'Ya hay una instalación del entorno en curso.', steps: [] };
   }
 
-  const run = { id: nextInstallationId++, cancelled: false, processes: new Set() };
+  const run = { id: nextInstallationId++, cancelled: false, controller: new AbortController(), processes: new Set() };
   activeInstallation = run;
   const results = [];
+  const check = dependencies.checkEnvironment || checkEnvironment;
+  const resolveInvocation = dependencies.resolveInstallationInvocation || resolveInstallationInvocation;
+  const track = dependencies.runTracked || runTracked;
+  const probeItem = dependencies.probeEnvironmentItem || probeEnvironmentItem;
+  const provisionAndroid = dependencies.provisionAndroidSdk || provisionAndroidSdk;
 
   try {
     emitProgress(progress, { type: 'checking', message: 'Comprobando el entorno actual...' });
-    const before = await checkEnvironment(normalized);
-    if (run.cancelled) return { success: false, cancelled: true, steps: results };
+    const before = await check(normalized, { signal: run.controller.signal });
+    if (run.cancelled) return cancelledInstallation(progress, results);
     const plan = buildInstallationPlan(normalized, before);
     const provisioningNeeded = normalized.includeMobile && !before.items.find((item) => item.id === 'android-sdk')?.installed;
     const totalSteps = plan.length + (provisioningNeeded ? 1 : 0);
@@ -683,7 +575,8 @@ async function installAllEnvironment(options = {}, onProgress) {
         fs.rmSync(flutterTemporaryPath, { recursive: true, force: true });
       }
 
-      const invocation = await resolveInstallationInvocation(step);
+      const invocation = await resolveInvocation(step, run.controller.signal);
+      if (run.cancelled) return cancelledInstallation(progress, results);
       if (!invocation) {
         const result = { id: step.id, success: false, error: 'npm no está disponible después de instalar Node.js.' };
         results.push(result);
@@ -691,13 +584,20 @@ async function installAllEnvironment(options = {}, onProgress) {
         continue;
       }
       if (flutterTemporaryPath) invocation.args[invocation.args.length - 1] = flutterTemporaryPath;
-      let execution = await runTracked(run, invocation.file, invocation.args, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+      if (run.cancelled) return cancelledInstallation(progress, results);
+      let execution = await track(run, invocation.file, invocation.args, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+      if (run.cancelled) {
+        if (flutterTemporaryPath) fs.rmSync(flutterTemporaryPath, { recursive: true, force: true });
+        return cancelledInstallation(progress, results);
+      }
       if (flutterTemporaryPath) {
         const flutterTarget = step.args.at(-1);
         if (execution.success && !run.cancelled) {
           fs.renameSync(flutterTemporaryPath, flutterTarget);
           const flutterBatch = path.join(flutterTarget, 'bin', 'flutter.bat');
-          execution = await runTracked(run, process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${flutterBatch}" --version`], (event) => emitProgress(progress, { ...baseEvent, ...event }));
+          if (run.cancelled) return cancelledInstallation(progress, results);
+          execution = await track(run, process.env.ComSpec || 'cmd.exe', ['/d', '/s', '/c', `"${flutterBatch}" --version`], (event) => emitProgress(progress, { ...baseEvent, ...event }));
+          if (run.cancelled) return cancelledInstallation(progress, results);
         } else {
           fs.rmSync(flutterTemporaryPath, { recursive: true, force: true });
         }
@@ -714,14 +614,20 @@ async function installAllEnvironment(options = {}, onProgress) {
     if (!run.cancelled && provisioningNeeded) {
       const baseEvent = { stepId: 'android-sdk-provision', label: 'Android SDK y AVD API 35', current: plan.length + 1, total: totalSteps };
       emitProgress(progress, { type: 'step-start', ...baseEvent, message: 'Preparando las herramientas, imagen y AVD de Android...' });
-      const [java, flutter] = await Promise.all([probeEnvironmentItem('java'), probeEnvironmentItem('flutter')]);
+      const [java, flutter] = await Promise.all([
+        probeItem('java', run.controller.signal),
+        probeItem('flutter', run.controller.signal),
+      ]);
+      if (run.cancelled) return cancelledInstallation(progress, results);
       const androidStudioStep = results.find((result) => result.id === 'android-sdk');
       let execution;
       if (!java.installed || !flutter.installed || (androidStudioStep && !androidStudioStep.success)) {
         const missing = [!java.installed && 'JDK 17', !flutter.installed && 'Flutter', androidStudioStep && !androidStudioStep.success && 'Android Studio'].filter(Boolean).join(' y ');
         execution = { success: false, error: `No se puede preparar Android hasta que estén disponibles: ${missing}.` };
       } else {
-        execution = await provisionAndroidSdk(run, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+        if (run.cancelled) return cancelledInstallation(progress, results);
+        execution = await provisionAndroid(run, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+        if (run.cancelled) return cancelledInstallation(progress, results);
       }
       const result = { id: 'android-sdk-provision', ...execution };
       results.push(result);
@@ -733,12 +639,13 @@ async function installAllEnvironment(options = {}, onProgress) {
     }
 
     if (run.cancelled) {
-      emitProgress(progress, { type: 'cancelled', message: 'Instalación cancelada.' });
-      return { success: false, cancelled: true, steps: results };
+      return cancelledInstallation(progress, results);
     }
 
-    const after = await checkEnvironment(normalized);
+    const after = await check(normalized, { signal: run.controller.signal });
+    if (run.cancelled) return cancelledInstallation(progress, results);
     const success = results.every((result) => result.success) && after.summary.requiredMissing === 0;
+    if (run.cancelled) return cancelledInstallation(progress, results);
     emitProgress(progress, { type: 'complete', message: success ? 'Instalación finalizada.' : 'Instalación finalizada con incidencias.', success });
     return { success, cancelled: false, steps: results, environment: after, instructions: after.instructions };
   } catch (error) {
@@ -752,6 +659,7 @@ async function installAllEnvironment(options = {}, onProgress) {
 function cancelEnvironmentInstallation() {
   if (!activeInstallation) return { success: true, cancelled: false };
   activeInstallation.cancelled = true;
+  activeInstallation.controller.abort();
   for (const child of activeInstallation.processes) killProcessTree(child);
   activeInstallation.processes.clear();
   return { success: true, cancelled: true };
