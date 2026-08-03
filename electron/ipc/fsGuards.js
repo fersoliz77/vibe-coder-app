@@ -31,8 +31,8 @@ function resolveProjectRoot(projectPath, isProjectRegistered) {
   }
 
   if (fs.existsSync(resolvedProjectPath)) {
-    const realProjectPath = fs.realpathSync(resolvedProjectPath);
-    if (normalizeForComparison(realProjectPath) !== normalizeForComparison(resolvedProjectPath)) {
+    const projectStats = fs.lstatSync(resolvedProjectPath);
+    if (projectStats.isSymbolicLink()) {
       throw new Error('A symbolic link or junction cannot be used as the project root.');
     }
   }

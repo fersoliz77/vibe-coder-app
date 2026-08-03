@@ -104,6 +104,7 @@ async function searchProject(projectRoot, query) {
   const searchQuery = String(query || '').trim().toLowerCase();
   const MAX_RESULTS = 100;
   let visited = 0;
+  const canonicalProjectRoot = await fs.promises.realpath(projectRoot);
 
   async function walk(currentPath, depth = 0) {
     if (depth > 8 || visited >= MAX_SEARCH_ENTRIES || files.length + contentMatches.length >= MAX_RESULTS) return;
@@ -121,7 +122,7 @@ async function searchProject(projectRoot, query) {
         try {
           if (stats.size > MAX_SEARCH_FILE_BYTES) continue;
           const realPath = await fs.promises.realpath(fullPath);
-          if (path.resolve(realPath).toLowerCase() !== path.resolve(fullPath).toLowerCase()) continue;
+          if (!isSubPath(canonicalProjectRoot, realPath)) continue;
           const buffer = await fs.promises.readFile(fullPath);
           if (!isProbablyText(buffer)) continue;
           const content = buffer.toString('utf8');

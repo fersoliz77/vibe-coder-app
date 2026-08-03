@@ -46,15 +46,14 @@ function assertRealParent(parentPath, fsImpl) {
   if (stat.isSymbolicLink()) {
     throw new ProvisioningError('INVALID_LOCATION', 'Junctions and symbolic links cannot be project locations.');
   }
-  let realPath;
   try {
-    realPath = fsImpl.realpathSync.native ? fsImpl.realpathSync.native(resolved) : fsImpl.realpathSync(resolved);
+    if (fsImpl.realpathSync.native) fsImpl.realpathSync.native(resolved);
+    else fsImpl.realpathSync(resolved);
   } catch {
     throw new ProvisioningError('INVALID_LOCATION', 'The selected parent folder cannot be resolved.');
   }
-  if (normalizeForComparison(realPath) !== normalizeForComparison(resolved)) {
-    throw new ProvisioningError('INVALID_LOCATION', 'Junctions and symbolic links cannot be project locations.');
-  }
+  // Ancestors may be canonicalized by Windows (for example on hosted runners or redirected
+  // Documents folders). The selected directory itself was checked with lstat above.
   return resolved;
 }
 
