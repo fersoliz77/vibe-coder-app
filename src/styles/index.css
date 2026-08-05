@@ -1,112 +1,97 @@
 /* ═══════════════════════════════════════════════════════════════════
-   VibeCoder Launch — Design System
-   Premium dark theme with glassmorphism, gradients & micro-animations
+   VibeCoder — Design System
+   Precision Studio: superficies solidas, un acento, densidad controlada
    ═══════════════════════════════════════════════════════════════════ */
+@import './tokens.css';
 
-/* ─── CSS Custom Properties ──────────────────────────────────────── */
+/* ─── Mapa de compatibilidad ─────────────────────────────────────────
+   Los nombres historicos se conservan y ahora resuelven contra la capa
+   canonica --vc-*. Ningun componente necesita editarse: al redefinir el
+   token, las 182 superficies de vidrio pasan a ser solidas de una vez.
+   ─────────────────────────────────────────────────────────────────── */
 :root {
-  /* Background layers */
-  --bg-deepest: hsl(225, 25%, 6%);
-  --bg-deep: hsl(225, 22%, 9%);
-  --bg-base: hsl(225, 20%, 12%);
-  --bg-raised: hsl(225, 18%, 15%);
-  --bg-surface: hsl(225, 16%, 18%);
-  --bg-overlay: hsl(225, 14%, 22%);
+  /* Capas de fondo */
+  --bg-deepest: var(--vc-surface-0);
+  --bg-deep: var(--vc-surface-1);
+  --bg-base: var(--vc-surface-2);
+  --bg-raised: var(--vc-surface-3);
+  --bg-surface: var(--vc-surface-3);
+  --bg-overlay: var(--vc-surface-4);
 
-  /* Glass effect */
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-hover: rgba(255, 255, 255, 0.06);
-  --glass-active: rgba(255, 255, 255, 0.1);
-  --glass-blur: 20px;
+  /* Antes vidrio, ahora superficies solidas.
+     El blur queda en 0: la transparencia se reserva para overlays. */
+  --glass-bg: var(--vc-surface-2);
+  --glass-border: var(--vc-line);
+  --glass-hover: var(--vc-surface-3);
+  --glass-active: var(--vc-surface-4);
+  --glass-blur: 0px;
 
-  /* Accent colors */
-  --accent-primary: hsl(195, 100%, 55%);
-  --accent-primary-dim: hsl(195, 80%, 35%);
-  --accent-secondary: hsl(265, 90%, 65%);
-  --accent-gradient: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
-  --accent-gradient-soft: linear-gradient(135deg, hsla(195, 100%, 55%, 0.15), hsla(265, 90%, 65%, 0.15));
-  --accent-glow: 0 0 20px hsla(195, 100%, 55%, 0.3);
+  /* Acento unico. Los gradientes se aplanan a color solido para que
+     sigan siendo validos donde se esperaba un `background` de gradiente. */
+  --accent-primary: var(--vc-accent);
+  --accent-primary-dim: var(--vc-accent-dim);
+  --accent-secondary: var(--vc-accent);
+  --accent-gradient: linear-gradient(var(--vc-accent), var(--vc-accent));
+  --accent-gradient-soft: linear-gradient(var(--vc-accent-soft), var(--vc-accent-soft));
+  /* En esta hoja --accent-glow es un valor de sombra completo. */
+  --accent-glow: none;
 
-  /* Status colors */
-  --status-success: hsl(145, 70%, 50%);
-  --status-success-bg: hsla(145, 70%, 50%, 0.1);
-  --status-success-glow: 0 0 12px hsla(145, 70%, 50%, 0.4);
-  --status-error: hsl(0, 75%, 60%);
-  --status-error-bg: hsla(0, 75%, 60%, 0.1);
-  --status-warning: hsl(40, 90%, 55%);
-  --status-warning-bg: hsla(40, 90%, 55%, 0.1);
-  --status-checking: hsl(195, 100%, 55%);
+  /* Estados */
+  --status-success: var(--vc-success);
+  --status-success-bg: var(--vc-success-soft);
+  --status-success-glow: none;
+  --status-error: var(--vc-danger);
+  --status-error-bg: var(--vc-danger-soft);
+  --status-warning: var(--vc-warning);
+  --status-warning-bg: var(--vc-warning-soft);
+  --status-checking: var(--vc-accent);
 
-  /* Text */
-  --text-primary: hsl(220, 20%, 95%);
-  --text-secondary: hsl(220, 15%, 65%);
-  --text-tertiary: hsl(220, 10%, 45%);
-  --text-accent: var(--accent-primary);
+  /* Texto */
+  --text-primary: var(--vc-text-1);
+  --text-secondary: var(--vc-text-2);
+  --text-tertiary: var(--vc-text-3);
+  --text-accent: var(--vc-accent);
 
-  /* Typography */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', monospace;
+  /* Tipografia */
+  --font-sans: var(--vc-font-sans);
+  --font-mono: var(--vc-font-mono);
 
-  /* Spacing */
-  --space-xs: 4px;
-  --space-sm: 8px;
-  --space-md: 16px;
-  --space-lg: 24px;
-  --space-xl: 32px;
-  --space-2xl: 48px;
+  /* Espaciado */
+  --space-xs: var(--vc-space-1);
+  --space-sm: var(--vc-space-2);
+  --space-md: var(--vc-space-4);
+  --space-lg: var(--vc-space-6);
+  --space-xl: var(--vc-space-8);
+  --space-2xl: var(--vc-space-12);
 
-  /* Border radius */
-  --radius-sm: 6px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 24px;
-  --radius-full: 9999px;
+  /* Radios: 4 compacto, 8 controles, 12 paneles, 16 especiales */
+  --radius-sm: var(--vc-radius-xs);
+  --radius-md: var(--vc-radius-md);
+  --radius-lg: var(--vc-radius-lg);
+  --radius-xl: var(--vc-radius-xl);
+  --radius-full: var(--vc-radius-full);
 
-  /* Transitions */
-  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-slow: 400ms cubic-bezier(0.4, 0, 0.2, 1);
-  --transition-spring: 500ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  /* Duraciones. Aca los tokens son solo duracion + easing. */
+  --transition-fast: var(--vc-duration-fast) var(--vc-ease);
+  --transition-normal: var(--vc-duration-normal) var(--vc-ease);
+  --transition-slow: var(--vc-duration-dialog) var(--vc-ease);
+  /* El rebote se elimina: ningun control debe saltar al aparecer. */
+  --transition-spring: var(--vc-duration-dialog) var(--vc-ease);
 
-  /* Sidebar */
+  /* Layout */
   --sidebar-width: 72px;
   --sidebar-expanded: 240px;
   --titlebar-height: 40px;
 }
 
-/* ─── Light Theme Overrides ─────────────────────────────────────── */
-.light-theme {
-  /* Background layers */
-  --bg-deepest: hsl(220, 20%, 97%);
-  --bg-deep: hsl(220, 20%, 94%);
-  --bg-base: hsl(220, 20%, 90%);
-  --bg-raised: hsl(220, 20%, 86%);
-  --bg-surface: hsl(220, 20%, 82%);
-  --bg-overlay: hsl(220, 20%, 78%);
-
-  /* Glass effect (More opaque for light mode) */
-  --glass-bg: rgba(255, 255, 255, 0.6);
-  --glass-border: rgba(0, 0, 0, 0.1);
-  --glass-hover: rgba(255, 255, 255, 0.8);
-  --glass-active: rgba(255, 255, 255, 1);
-  
-  /* Text (Darker for contrast) */
-  --text-primary: hsl(220, 30%, 15%);
-  --text-secondary: hsl(220, 15%, 35%);
-  --text-tertiary: hsl(220, 10%, 45%);
-  
-  /* Adjust accents for light mode */
-  --accent-glow: 0 4px 12px hsla(195, 100%, 45%, 0.3);
-  --status-success-glow: 0 2px 8px hsla(145, 70%, 40%, 0.3);
-}
-
+/* El tema claro solo redefine la capa canonica (ver tokens.css);
+   el mapa de arriba se hereda sin duplicar nada. */
 .light-theme .glass-card {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  box-shadow: var(--vc-shadow-sm);
 }
 
 .light-theme .glass-card:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+  box-shadow: var(--vc-shadow-md);
 }
 
 /* ─── Reset & Base ───────────────────────────────────────────────── */
@@ -151,7 +136,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--vc-line-strong);
 }
 
 /* ─── Custom Titlebar ────────────────────────────────────────────── */
@@ -211,7 +196,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   background: transparent;
   border: none;
@@ -240,7 +225,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
   color: white;
 }
@@ -313,21 +298,18 @@ body {
   }
 }
 
-/* ─── Glass Card ─────────────────────────────────────────────────── */
+/* ─── Superficie de panel ────────────────────────────────────────── */
 .glass-card {
   background: var(--glass-bg);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-lg);
-  transition: all var(--transition-normal);
+  transition: var(--vc-transition-normal);
 }
 
+/* El hover no desplaza el elemento: solo cambia superficie y borde. */
 .glass-card:hover {
   background: var(--glass-hover);
-  border-color: rgba(255, 255, 255, 0.12);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border-color: var(--vc-line-strong);
 }
 
 /* ─── Buttons ────────────────────────────────────────────────────── */
@@ -342,48 +324,44 @@ body {
   background: var(--glass-bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: var(--vc-text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: var(--vc-transition-normal);
   white-space: nowrap;
 }
 
+/* Los controles no se desplazan al pasar el mouse. */
 .btn:hover {
   background: var(--glass-hover);
-  border-color: rgba(255, 255, 255, 0.15);
-  transform: translateY(-1px);
-}
-
-.btn:active {
-  transform: translateY(0);
+  border-color: var(--vc-line-strong);
 }
 
 .btn--primary {
-  background: var(--accent-gradient);
-  border-color: transparent;
-  color: white;
+  background: var(--vc-accent);
+  border-color: var(--vc-accent);
+  color: var(--vc-on-accent);
   font-weight: 600;
 }
 
 .btn--primary:hover {
-  box-shadow: var(--accent-glow);
-  filter: brightness(1.1);
+  background: var(--vc-accent-hover);
+  border-color: var(--vc-accent-hover);
 }
 
 .btn--danger {
-  border-color: hsla(0, 75%, 60%, 0.3);
-  color: var(--status-error);
+  border-color: var(--vc-danger-line);
+  color: var(--vc-danger);
 }
 
 .btn--danger:hover {
-  background: var(--status-error-bg);
-  border-color: hsla(0, 75%, 60%, 0.5);
+  background: var(--vc-danger-soft);
+  border-color: var(--vc-danger);
 }
 
 .btn--small {
   padding: var(--space-xs) var(--space-sm);
-  font-size: 12px;
+  font-size: var(--vc-text-sm);
   border-radius: var(--radius-sm);
 }
 
@@ -402,10 +380,10 @@ body {
   flex-shrink: 0;
 }
 
+/* Conectado es un estado estable: no debe latir indefinidamente.
+   El pulso queda reservado para lo que realmente esta en curso. */
 .status-dot--connected {
   background: var(--status-success);
-  box-shadow: var(--status-success-glow);
-  animation: pulse-glow 2s ease-in-out infinite;
 }
 
 .status-dot--disconnected {
@@ -414,7 +392,7 @@ body {
 
 .status-dot--checking {
   background: var(--status-checking);
-  animation: pulse-glow 1s ease-in-out infinite;
+  animation: pulse-glow 1.2s ease-in-out infinite;
 }
 
 /* ─── Animations ─────────────────────────────────────────────────── */
@@ -423,10 +401,11 @@ body {
   to { opacity: 1; }
 }
 
+/* Desplazamientos de entrada cortos: acompanan, no llaman la atencion. */
 @keyframes slide-up {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(6px);
   }
   to {
     opacity: 1;
@@ -437,7 +416,7 @@ body {
 @keyframes slide-in-left {
   from {
     opacity: 0;
-    transform: translateX(-20px);
+    transform: translateX(-6px);
   }
   to {
     opacity: 1;
@@ -467,11 +446,11 @@ body {
 }
 
 .animate-fade-in {
-  animation: fade-in var(--transition-normal) ease-out;
+  animation: fade-in var(--vc-duration-normal) var(--vc-ease);
 }
 
 .animate-slide-up {
-  animation: slide-up var(--transition-slow) ease-out;
+  animation: slide-up var(--vc-duration-dialog) var(--vc-ease);
 }
 
 /* ─── Utility Classes ────────────────────────────────────────────── */
@@ -491,9 +470,7 @@ body {
   color: var(--accent-primary);
 }
 
+/* Sin degradado sobre texto: el acento se aplica plano y legible. */
 .text-gradient {
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--vc-accent);
 }

@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { callIpc } from '../utils/callIpc';
 
 export function useTerminal(projectPath) {
   const [terminals, setTerminals] = useState([]);
@@ -6,6 +7,9 @@ export function useTerminal(projectPath) {
   const xtermRefs = useRef(new Map());
 
   const [openCodeTerminal, setOpenCodeTerminal] = useState(null);
+  // Ultimo fallo al abrir una terminal. Sin esto, el panel mostraba el mismo
+  // vacio que cuando todavia no abriste ninguna.
+  const [lastError, setLastError] = useState('');
 
   const createTerminal = useCallback(async (options = {}) => {
     if (!window.electronAPI?.terminal) {
@@ -19,7 +23,17 @@ export function useTerminal(projectPath) {
 
     const { name, ...terminalOptions } = options;
     const mergedOptions = { cwd: projectPath, ...terminalOptions };
-    const result = await window.electronAPI.terminal.create(mergedOptions);
+    setLastError('');
+    const { ok, data: result, error } = await callIpc(window.electronAPI.terminal.create, mergedOptions);
+
+    if (!ok || !result?.id) {
+      setLastError(error || 'No se pudo abrir la terminal.');
+      return null;
+    }
+
+    // La terminal existe pero el shell puede haber fallado al arrancar.
+    if (result.error) setLastError(result.error);
+
     const newTerm = {
       id: result.id,
       name: name || `Terminal ${terminals.length + 1}`,
@@ -35,14 +49,14 @@ export function useTerminal(projectPath) {
     if (!window.electronAPI?.terminal) return null;
     if (openCodeTerminal) return openCodeTerminal;
 
-    const result = await window.electronAPI.terminal.create({
+    const { ok, data: result, error } = await callIpc(window.electronAPI.terminal.create, {
       cwd: projectPath,
       name: 'OpenCode',
       mode: 'opencode'
     });
 
-    if (result.error) {
-      console.error('Failed to create preloaded OpenCode terminal:', result.error);
+    if (!ok || !result?.id || result.error) {
+      setLastError(result?.error || error || 'No se pudo abrir OpenCode.');
       return null;
     }
 
@@ -143,5 +157,7 @@ export function useTerminal(projectPath) {
     closeAllTerminals,
     openCodeTerminal,
     createOpenCodeTerminal,
+    lastError,
+    clearLastError: () => setLastError(''),
   };
 }

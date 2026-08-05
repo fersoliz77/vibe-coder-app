@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useStatusMessage } from './useStatusMessage';
 import { getName, getParentDirectory, isStagedCode } from './explorerUtils';
 
 export function useExplorerActions({
@@ -18,7 +19,7 @@ export function useExplorerActions({
 }) {
   const [contextMenu, setContextMenu] = useState(null);
   const [modalAction, setModalAction] = useState(null);
-  const [statusMessage, setStatusMessage] = useState('');
+  const { statusMessage, statusTone, setStatusMessage } = useStatusMessage();
   const [clipboardEntry, setClipboardEntry] = useState(null);
 
   const openExternal = useCallback((filePath) => {
@@ -53,7 +54,7 @@ export function useExplorerActions({
     }
     const result = await window.electronAPI.fs.renameEntry(project.path, node.path, nextName);
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.renameFailed'));
+      setStatusMessage(result.error || t('explorer.renameFailed'), 'error');
       return;
     }
     remapPaths(result.oldPath, result.path);
@@ -90,7 +91,7 @@ export function useExplorerActions({
     }
 
     if (!result?.success) {
-      setStatusMessage(result?.error || t('explorer.actionFailed'));
+      setStatusMessage(result?.error || t('explorer.actionFailed'), 'error');
       return;
     }
 
@@ -121,7 +122,7 @@ export function useExplorerActions({
       : await window.electronAPI.fs.gitStage(project.path, absolutePath);
 
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.gitActionFailed'));
+      setStatusMessage(result.error || t('explorer.gitActionFailed'), 'error');
       return;
     }
 
@@ -138,7 +139,7 @@ export function useExplorerActions({
     if (getParentDirectory(sourcePath) === targetDir) return;
     const result = await window.electronAPI.fs.moveEntry(project.path, sourcePath, targetDir);
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.moveFailed'));
+      setStatusMessage(result.error || t('explorer.moveFailed'), 'error');
       return;
     }
     remapPaths(result.oldPath, result.path);
@@ -159,7 +160,7 @@ export function useExplorerActions({
       ? await window.electronAPI.fs.moveEntry(project.path, clipboardEntry.path, targetDir)
       : await window.electronAPI.fs.copyEntry(project.path, clipboardEntry.path, targetDir);
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.pasteFailed'));
+      setStatusMessage(result.error || t('explorer.pasteFailed'), 'error');
       return;
     }
     if (clipboardEntry.mode === 'cut') {
@@ -174,7 +175,7 @@ export function useExplorerActions({
   const handleDuplicateEntry = useCallback(async (node) => {
     const result = await window.electronAPI.fs.duplicateEntry(project.path, node.path);
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.duplicateFailed'));
+      setStatusMessage(result.error || t('explorer.duplicateFailed'), 'error');
       return;
     }
     await refreshTree();
@@ -205,6 +206,7 @@ export function useExplorerActions({
     modalAction,
     setModalAction,
     statusMessage,
+    statusTone,
     setStatusMessage,
     clipboardEntry,
     setClipboardEntry,

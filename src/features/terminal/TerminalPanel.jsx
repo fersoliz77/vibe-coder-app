@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { tabAction, nextTabIndex } from '../../utils/tablist';
 import './TerminalPanel.css';
 
 export default function TerminalPanel({
@@ -11,6 +12,8 @@ export default function TerminalPanel({
   writeToTerminal,
   resizeTerminal,
   registerXterm,
+  lastError,
+  clearLastError,
 }) {
   const { t } = useI18n();
   const containerRef = useRef(null);
@@ -20,10 +23,10 @@ export default function TerminalPanel({
 
   // Create a terminal on first render if none exist
   useEffect(() => {
-    if (terminals.length === 0) {
+    if (terminals.length === 0 && !lastError) {
       createTerminal();
     }
-  }, [createTerminal, terminals.length]);
+  }, [createTerminal, terminals.length, lastError]);
 
   // Initialize xterm for active terminal
   useEffect(() => {
@@ -177,25 +180,47 @@ export default function TerminalPanel({
   }, [closeTerminal]);
 
   const handleTabKeyDown = useCallback((event, id) => {
-    if (event.key === 'Enter' || event.key === ' ') {
+    const action = tabAction(event);
+    if (!action) return;
+
+    if (action === 'activate') {
       event.preventDefault();
       setActiveTerminalId(id);
+      return;
     }
-  }, [setActiveTerminalId]);
+    if (action === 'close') {
+      event.preventDefault();
+      handleCloseTab(event, id);
+      return;
+    }
+
+    const current = terminals.findIndex((term) => term.id === id);
+    const target = nextTabIndex(action, current, terminals.length);
+    if (target === null || target === current) return;
+    event.preventDefault();
+    // Al moverse el foco, la pestana enfocada pasa a ser la activa.
+    setActiveTerminalId(terminals[target].id);
+    event.currentTarget.parentElement
+      ?.querySelectorAll('[role="tab"]')?.[target]
+      ?.focus();
+  }, [setActiveTerminalId, terminals, handleCloseTab]);
 
   return (
     <div className="terminal-panel">
       {/* Tab Bar */}
       <div className="terminal-panel__tabs">
-        <div className="terminal-panel__tabs-list">
+        <div className="terminal-panel__tabs-list" role="tablist" aria-label={t('terminal.tabsLabel')}>
           {terminals.map((term) => (
             <div
               key={term.id}
               className={`terminal-panel__tab ${term.id === activeTerminalId ? 'terminal-panel__tab--active' : ''}`}
               onClick={() => setActiveTerminalId(term.id)}
               onKeyDown={(event) => handleTabKeyDown(event, term.id)}
-              role="button"
-              tabIndex={0}
+              role="tab"
+              id={`terminal-tab-${term.id}`}
+              aria-selected={term.id === activeTerminalId}
+              aria-controls={`terminal-container-${term.id}`}
+              tabIndex={term.id === activeTerminalId ? 0 : -1}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="4 17 10 11 4 5" />
@@ -228,10 +253,25 @@ export default function TerminalPanel({
             key={term.id}
             id={`terminal-container-${term.id}`}
             className="terminal-panel__instance"
+            role="tabpanel"
+            aria-labelledby={`terminal-tab-${term.id}`}
             style={{ display: term.id === activeTerminalId ? 'block' : 'none' }}
           />
         ))}
-        {terminals.length === 0 && (
+        {terminals.length === 0 && lastError && (
+          <div className="terminal-panel__empty terminal-panel__empty--error" role="alert">
+            <strong>{t('terminal.failedTitle')}</strong>
+            <p className="terminal-panel__error-detail">{lastError}</p>
+            <button
+              className="btn btn--primary"
+              onClick={() => { clearLastError?.(); createTerminal(); }}
+              type="button"
+            >
+              {t('terminal.retry')}
+            </button>
+          </div>
+        )}
+        {terminals.length === 0 && !lastError && (
           <div className="terminal-panel__empty">
             <p className="text-secondary">{t('terminal.none')}</p>
             <button className="btn btn--primary" onClick={handleNewTerminal} type="button">

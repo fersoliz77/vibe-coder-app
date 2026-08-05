@@ -7,8 +7,11 @@ export const useAppStore = create((set, get) => ({
   initialized: false,
   currentProject: null,
   recentProjects: [],
-  theme: 'dark', // for future use
+  theme: 'dark',
   language: getSystemLocale(),
+  // Ultima vista abierta. Se guarda para volver donde el usuario dejo el
+  // trabajo; App.jsx decide si es seguro restaurarla.
+  lastView: null,
 
   // Actions
   init: async () => {
@@ -20,6 +23,7 @@ export const useAppStore = create((set, get) => ({
         recentProjects: config.recentProjects || [],
         theme: config.theme || 'dark',
         language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
+        lastView: typeof config.lastView === 'string' ? config.lastView : null,
       });
       return;
     }
@@ -74,6 +78,14 @@ export const useAppStore = create((set, get) => ({
     set({ theme });
     if (window.electronAPI?.store) {
       await window.electronAPI.store.set('theme', theme);
+    }
+  },
+
+  setLastView: async (view) => {
+    if (get().lastView === view) return;
+    set({ lastView: view });
+    if (window.electronAPI?.store) {
+      await window.electronAPI.store.set('lastView', view);
     }
   },
 

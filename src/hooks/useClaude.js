@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { appendProgress, appendRendererStream, limitChatMessages } from '../utils/chatLimits.mjs';
+import { callIpc } from '../utils/callIpc';
 
 /**
  * useClaude hook — manages the full Claude CLI lifecycle:
@@ -15,6 +16,7 @@ export function useClaude(projectPath) {
     path: null,
     version: null,
     loading: true,
+    error: '',
   });
   const [isRunning, setIsRunning] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -73,23 +75,35 @@ export function useClaude(projectPath) {
   // ─── Status ───────────────────────────────────────────────────────────────
 
   const refreshStatus = useCallback(async () => {
-    if (!window.electronAPI?.claude) return;
-    setStatus((prev) => ({ ...prev, loading: true }));
-    const result = await window.electronAPI.claude.getStatus();
-    setStatus({ ...result, loading: false });
+    if (!window.electronAPI?.claude) {
+      setStatus((prev) => ({ ...prev, loading: false, error: 'Claude no esta disponible en esta ejecucion.' }));
+      return null;
+    }
+    setStatus((prev) => ({ ...prev, loading: true, error: '' }));
+    const { ok, data: result, error } = await callIpc(window.electronAPI.claude.getStatus);
+    if (!ok) {
+      // La consulta fallo: el estado real es desconocido, no "no instalado".
+      setStatus((prev) => ({ ...prev, loading: false, error }));
+      return null;
+    }
+    setStatus({ ...result, loading: false, error: '' });
     return result;
   }, []);
 
   // ─── Install ──────────────────────────────────────────────────────────────
 
   const install = useCallback(async () => {
-    if (!window.electronAPI?.claude) return;
+    if (!window.electronAPI?.claude) return null;
     setIsInstalling(true);
     setInstallLog([]);
-    const result = await window.electronAPI.claude.install();
+    const { ok, data: result, error } = await callIpc(window.electronAPI.claude.install);
     setIsInstalling(false);
-    if (result.success) {
-      setStatus({ ...result.status, loading: false });
+    if (!ok) {
+      setStatus((prev) => ({ ...prev, loading: false, error }));
+      return { success: false, error };
+    }
+    if (result?.success) {
+      setStatus({ ...result.status, loading: false, error: '' });
     }
     return result;
   }, []);
@@ -97,12 +111,16 @@ export function useClaude(projectPath) {
   // ─── Login ────────────────────────────────────────────────────────────────
 
   const login = useCallback(async () => {
-    if (!window.electronAPI?.claude) return;
+    if (!window.electronAPI?.claude) return null;
     setIsLoggingIn(true);
     setLoginLog([]);
-    const result = await window.electronAPI.claude.login();
+    const { ok, data: result, error } = await callIpc(window.electronAPI.claude.login);
     setIsLoggingIn(false);
-    if (result.success) {
+    if (!ok) {
+      setStatus((prev) => ({ ...prev, error }));
+      return { success: false, error };
+    }
+    if (result?.success) {
       await refreshStatus();
     }
     return result;
@@ -112,7 +130,11 @@ export function useClaude(projectPath) {
 
   const logout = useCallback(async () => {
     if (!window.electronAPI?.claude) return;
-    await window.electronAPI.claude.logout();
+    const { ok, error } = await callIpc(window.electronAPI.claude.logout);
+    if (!ok) {
+      setStatus((prev) => ({ ...prev, error }));
+      return;
+    }
     setMessages([]);
     clearHistory();
     await refreshStatus();

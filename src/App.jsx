@@ -19,20 +19,12 @@ import OnboardingWizard from './features/setup/OnboardingWizard';
 import PreviewCenter from './features/preview/PreviewCenter';
 import { useI18n } from './i18n/I18nContext';
 import './styles/App.css';
+import { VIEWS, restoreView } from './utils/viewRestore';
+import AppSplash from './components/AppSplash';
 
-const VIEWS = {
-  PROJECTS: 'projects',
-  DASHBOARD: 'dashboard',
-  FILES: 'files',
-  TERMINAL: 'terminal',
-  CLAUDE: 'claude',
-  OPENAI: 'openai',
-  SETTINGS: 'settings',
-  OPENCODE: 'opencode',
-  PREVIEW: 'preview',
-};
 
 const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
+
 
 function Workspace() {
   const { state: authState } = useAuth();
@@ -51,10 +43,13 @@ function Workspace() {
     currentProject,
     theme,
     initialized,
+    lastView,
     setCurrentProject,
     clearCurrentProject,
     setTheme,
+    setLastView,
   } = useAppStore();
+  const viewRestored = useRef(false);
   const isDarkMode = theme !== 'light';
   
   const serviceHook = useServices(currentProject?.path);
@@ -244,6 +239,20 @@ function Workspace() {
     if (urlParams.get('open') === 'opencode') handleOpenCode();
   }, [activeView, currentProject, terminalHook.terminals.length, handleOpenCode]);
 
+  // Restaura la ultima vista una unica vez, cuando el store ya cargo.
+  useEffect(() => {
+    if (!initialized || viewRestored.current) return;
+    viewRestored.current = true;
+    setActiveView(restoreView(lastView, Boolean(currentProject)));
+  }, [initialized, lastView, currentProject]);
+
+  // Recien despues de restaurar se empieza a guardar, para no pisar
+  // la vista guardada con el valor inicial por defecto.
+  useEffect(() => {
+    if (!viewRestored.current) return;
+    setLastView(activeView);
+  }, [activeView, setLastView]);
+
   const handleNavigate = useCallback((view) => {
     if (view === 'opencode') handleOpenCode();
     else setActiveView(view);
@@ -293,7 +302,7 @@ function Workspace() {
 
   const renderView = () => {
     if (!initialized) {
-      return <div className="main-content__loading">{t('common.loadingWorkspace')}</div>;
+      return <AppSplash />;
     }
 
     if (activeView === VIEWS.SETTINGS) {
@@ -342,8 +351,8 @@ function Workspace() {
     }
   };
 
-  // While we haven't loaded the onboarding flag yet, render nothing
-  if (onboardingDone === null) return null;
+  // Mientras se lee la bandera de onboarding se muestra la marca, no un vacio.
+  if (onboardingDone === null) return <AppSplash />;
 
   // Show full-screen onboarding wizard on first launch
   if (!onboardingDone) {

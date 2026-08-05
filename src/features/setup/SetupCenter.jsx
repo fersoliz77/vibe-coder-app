@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import './SetupCenter.css';
 import { useI18n } from '../../i18n/I18nContext';
+import { CheckIcon, AlertIcon } from '../../components/icons/StatusIcons';
 
 const ENVIRONMENT_OPTIONS = Object.freeze({ includeMobile: true, backend: 'firebase' });
 
@@ -8,7 +10,7 @@ function StatusIcon({ installed, checking }) {
   if (checking) return <span className="setup-center__spinner" aria-hidden="true" />;
   return (
     <span className={`setup-center__status-icon ${installed ? 'is-ready' : 'is-missing'}`} aria-hidden="true">
-      {installed ? '✓' : '!'}
+      {installed ? <CheckIcon size={14} /> : <AlertIcon size={14} />}
     </span>
   );
 }
@@ -38,6 +40,17 @@ export default function SetupCenter({ compact = false }) {
   const [checking, setChecking] = useState(true);
   const [installing, setInstalling] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const confirmDialogRef = useRef(null);
+  const confirmBackRef = useRef(null);
+
+  // Instalar el entorno completo es costoso y dificil de revertir: el foco
+  // arranca en "Volver" y no puede salir del dialogo.
+  useFocusTrap({
+    active: confirming,
+    containerRef: confirmDialogRef,
+    onEscape: () => setConfirming(false),
+    initialFocusRef: confirmBackRef,
+  });
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(null);
   const [log, setLog] = useState([]);
@@ -228,13 +241,13 @@ export default function SetupCenter({ compact = false }) {
 
       {confirming && (
         <div className="setup-center__dialog-backdrop" role="presentation" onMouseDown={() => setConfirming(false)}>
-          <div className="setup-center__dialog" role="dialog" aria-modal="true" aria-labelledby="setup-confirm-title" onMouseDown={(event) => event.stopPropagation()}>
+          <div ref={confirmDialogRef} className="setup-center__dialog" role="alertdialog" aria-modal="true" aria-labelledby="setup-confirm-title" onMouseDown={(event) => event.stopPropagation()}>
             <span className="setup-center__dialog-mark" aria-hidden="true">→</span>
             <h3 id="setup-confirm-title">{t('setup.confirmInstall')}</h3>
             <p>{t('setup.confirmCopy')}</p>
             <div className="setup-center__dialog-summary"><span>{t('setup.webMobileTools')} <strong>{t('setup.alwaysIncluded')}</strong></span></div>
             <div className="setup-center__dialog-actions">
-              <button className="setup-center__button is-secondary" type="button" onClick={() => setConfirming(false)}>{t('setup.back')}</button>
+              <button ref={confirmBackRef} className="setup-center__button is-secondary" type="button" onClick={() => setConfirming(false)}>{t('setup.back')}</button>
               <button className="setup-center__button is-primary" type="button" onClick={install}>{t('setup.confirmAndInstall')}</button>
             </div>
           </div>

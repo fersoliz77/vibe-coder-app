@@ -1,0 +1,89 @@
+/* ─── Pantalla de arranque ────────────────────────────────────────────
+   Se ve antes que cualquier otra cosa: sin marca, un arranque lento es
+   indistinguible de una ventana rota. */
+.app-splash {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-4);
+  padding: var(--space-8);
+  background: var(--vc-surface-0);
+  text-align: center;
+}
+
+.app-splash__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.app-splash__mark {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-accent);
+  color: var(--vc-on-accent);
+  font-size: var(--vc-text-base);
+  font-weight: 800;
+}
+
+.app-splash__name {
+  font-size: var(--vc-text-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.app-splash__track {
+  width: 200px;
+  height: 3px;
+  overflow: hidden;
+  border-radius: var(--vc-radius-full);
+  background: var(--vc-surface-3);
+}
+
+.app-splash__bar {
+  display: block;
+  width: 40%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--vc-accent);
+  animation: app-splash-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes app-splash-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(250%); }
+}
+
+.app-splash__hint {
+  margin: 0;
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-sm);
+}
+
+.app-splash__slow {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: center;
+  max-width: 44ch;
+}
+
+.app-splash__slow strong { font-size: var(--vc-text-md); }
+
+.app-splash__slow p {
+  margin: 0;
+  color: var(--vc-text-2);
+  font-size: var(--vc-text-base);
+  line-height: 1.55;
+}
+
+.app-splash__slow button { margin-top: var(--space-2); }
+
+/* Sin movimiento, la barra se muestra completa y quieta. */
+@media (prefers-reduced-motion: reduce) {
+  .app-splash__bar { width: 100%; animation: none; }
+}

@@ -29,12 +29,12 @@
   gap: 8px;
 }
 
-.project-setup-banner { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 18px; border: 1px solid rgba(245, 158, 11, .28); border-radius: 12px; background: rgba(245, 158, 11, .07); }
+.project-setup-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 16px; border: 1px solid rgba(var(--vc-warning-rgb), .28); border-radius: 12px; background: rgba(var(--vc-warning-rgb), .07); }
 .project-setup-banner > div { display: grid; gap: 3px; }
 .project-setup-banner strong { color: var(--text-primary); font-size: 13px; }
 .project-setup-banner span { color: var(--text-secondary); font-size: 12px; }
-.project-setup-banner button { padding: 8px 12px; border: 1px solid rgba(245, 158, 11, .35); border-radius: 8px; color: #f59e0b; background: transparent; cursor: pointer; }
-.project-error { padding: 12px 14px; border: 1px solid rgba(239, 68, 68, .3); border-radius: 10px; color: #f87171; background: rgba(239, 68, 68, .08); font-size: 13px; }
+.project-setup-banner button { padding: 8px 12px; border: 1px solid rgba(var(--vc-warning-rgb), .35); border-radius: 8px; color: var(--vc-warning); background: transparent; cursor: pointer; }
+.project-error { padding: 12px 12px; border: 1px solid rgba(var(--vc-danger-rgb), .3); border-radius: 10px; color: var(--vc-danger); background: rgba(var(--vc-danger-rgb), .08); font-size: 13px; }
 
 @media (max-width: 900px) {
   .project-list-sidebar { display: none; }
@@ -69,13 +69,12 @@
   flex-direction: column;
   gap: 16px;
   cursor: pointer;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: var(--vc-transition-normal);
   position: relative;
   overflow: hidden;
 }
 
 .project-card:hover {
-  transform: translateY(-4px);
 }
 
 .project-card:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; }
@@ -131,7 +130,7 @@
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
-  transition: all 0.2s;
+  transition: var(--vc-transition-fast);
   opacity: 0;
 }
 

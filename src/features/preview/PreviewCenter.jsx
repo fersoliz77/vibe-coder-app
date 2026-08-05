@@ -20,7 +20,7 @@ function Icon({ name }) {
 function StateDot({ state }) {
   const active = ['ready', 'running'].includes(state);
   const busy = ['loading', 'starting', 'stopping'].includes(state);
-  return <span className={`preview-state-dot ${active ? 'is-active' : ''} ${busy ? 'is-busy' : ''}`} />;
+  return <span className={`preview-state-dot ${active ? 'is-active' : ''} ${busy ? 'is-busy' : ''}`} aria-hidden="true" />;
 }
 
 export default function PreviewCenter({ project }) {
@@ -76,8 +76,27 @@ export default function PreviewCenter({ project }) {
     return api.web.snapshot(project.path, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   };
 
+  // Los estados se veian pero no se anunciaban: arrancabas el servidor y nada
+  // avisaba cuando quedaba listo, ni cuando fallaba. Se anuncia solo la
+  // transicion del panel visible, para no narrar dos flujos a la vez.
+  const liveState = tab === 'web'
+    ? { key: web.state, text: t(`preview.webStates.${web.state}`) }
+    : { key: android.appState, text: t(`preview.appStates.${android.appState}`) };
+  const liveIsError = liveState.key === 'error';
+
   return (
     <section className="preview-center">
+      {/*
+        Dos regiones montadas siempre: `aria-live` no se puede cambiar en
+        caliente, y una region que aparece con su primer mensaje se pierde
+        justamente ese anuncio. Un fallo interrumpe; un avance espera turno.
+      */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {liveIsError ? '' : liveState.text}
+      </p>
+      <p className="sr-only" role="alert" aria-live="assertive">
+        {liveIsError ? liveState.text : ''}
+      </p>
       <header className="preview-header">
         <div>
           <span className="preview-eyebrow">{t('preview.eyebrow')}</span>
@@ -96,7 +115,7 @@ export default function PreviewCenter({ project }) {
         <div className="preview-workspace">
           <div className="preview-toolbar">
             <div className="preview-status"><StateDot state={web.state} /><span>{t(`preview.webStates.${web.state}`)}</span></div>
-            <div className="preview-viewport-switcher" aria-label={t('preview.viewport')}>
+            <div className="preview-viewport-switcher" role="group" aria-label={t('preview.viewport')}>
               {Object.keys(VIEWPORTS).map((name) => <button key={name} className={viewport === name ? 'is-active' : ''} onClick={() => setViewport(name)} title={t(`preview.${name}`)}>{t(`preview.${name}`)}</button>)}
             </div>
             <div className="preview-actions">

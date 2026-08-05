@@ -1,29 +1,37 @@
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import './OpenCodeSetupDialog.css';
 
 export default function OpenCodeSetupDialog({ state, onClose, onInstall }) {
   const { t } = useI18n();
+  const dialogRef = useRef(null);
   const installButtonRef = useRef(null);
-
-  useEffect(() => {
-    installButtonRef.current?.focus();
-  }, [state.phase]);
-
-  useEffect(() => {
-    const onKeyDown = (event) => {
-      if (event.key === 'Escape' && state.phase !== 'installing') onClose();
-    };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [state.phase, onClose]);
 
   const checking = state.phase === 'checking';
   const installing = state.phase === 'installing';
 
+  // Escape se ignora mientras instala: cerrar a mitad dejaria el agente
+  // a medio escribir en disco.
+  const handleEscape = useCallback(() => {
+    if (!installing) onClose();
+  }, [installing, onClose]);
+
+  useFocusTrap({
+    active: true,
+    containerRef: dialogRef,
+    onEscape: handleEscape,
+    initialFocusRef: installButtonRef,
+  });
+
+  // Al cambiar de fase el boton principal cambia de rol: se lo vuelve a enfocar.
+  useEffect(() => {
+    installButtonRef.current?.focus();
+  }, [state.phase]);
+
   return (
     <div className="opencode-setup__backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget && !installing) onClose(); }}>
-      <section className="opencode-setup" role="dialog" aria-modal="true" aria-labelledby="opencode-setup-title">
+      <section ref={dialogRef} className="opencode-setup" role="dialog" aria-modal="true" aria-labelledby="opencode-setup-title">
         <button className="opencode-setup__close" type="button" onClick={onClose} disabled={installing} aria-label={t('opencode.close')}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 6 12 12M18 6 6 18" /></svg>
         </button>

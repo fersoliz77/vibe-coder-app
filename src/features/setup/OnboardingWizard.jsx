@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { CheckIcon, AlertIcon, DashIcon, BoltIcon, HintIcon } from '../../components/icons/StatusIcons';
 import './OnboardingWizard.css';
 
 const TOTAL_STEPS = 4;
@@ -20,8 +21,8 @@ function StepWelcome() {
       </p>
 
       <div className="onboarding-wizard__preferences" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '120px' }}>
-        <div style={{ textAlign: 'center', color: '#94a3b8', fontSize: '15px' }}>
-          <div style={{ fontSize: '32px', marginBottom: '12px' }}>⚡</div>
+        <div style={{ textAlign: 'center', color: 'var(--vc-text-3)', fontSize: '15px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '12px', color: 'var(--vc-accent)' }}><BoltIcon size={32} /></div>
           {t('onboarding.environmentSummary')}
         </div>
       </div>
@@ -100,7 +101,9 @@ function StepEnvironment({ environment, checking, installing, progress, log, onI
                 </span>
               )}
               <span className={`onboarding-wizard__status-indicator onboarding-wizard__status-indicator--${item.installed ? 'ready' : 'missing'}`}>
-                {item.installed ? '✓' : '—'}
+                {item.installed
+                  ? <CheckIcon label={t('onboarding.installed')} />
+                  : <DashIcon label={t('onboarding.pendingInstall')} />}
               </span>
             </div>
           </div>
@@ -126,7 +129,9 @@ function StepEnvironment({ environment, checking, installing, progress, log, onI
               disabled={checking || items.length === 0 || !items.some(i => !i.installed) || !window.electronAPI?.setup?.install || environment?.supported === false}
               onClick={onInstall}
             >
-              {items.length > 0 && !items.some(i => !i.installed) ? `${t('onboarding.allInstalled')} ✓` : t('onboarding.installMissing')}
+              {items.length > 0 && !items.some(i => !i.installed)
+                ? <><CheckIcon /> {t('onboarding.allInstalled')}</>
+                : t('onboarding.installMissing')}
             </button>
           </>
         )}
@@ -155,7 +160,7 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
               <strong style={{ fontSize: 16 }}>OpenCode</strong>
               <span className="onboarding-wizard__agent-badge">{t('onboarding.aiTerminal')}</span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--vc-text-3)' }}>
               {openCode.loading || openCode.installing
                 ? openCode.progress || t('onboarding.verifying')
                 : (openCode.status?.usable || openCode.status?.installed)
@@ -167,13 +172,13 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           </div>
           <div>
             {openCode.loading || openCode.installing ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#38bdf8' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-accent)' }}>
                 <span className="onboarding-wizard__spinner" /> {t('onboarding.installing')}
               </span>
             ) : (openCode.status?.usable || openCode.status?.installed) ? (
-              <span style={{ fontSize: 14, color: '#10b981', fontWeight: 600 }}>✓ {t('onboarding.ready')}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--vc-success)', fontWeight: 600 }}><CheckIcon /> {t('onboarding.ready')}</span>
             ) : (
-              <span style={{ fontSize: 13, color: '#f59e0b' }}>⚠ {t('onboarding.retrying')}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-warning)' }}><AlertIcon /> {t('onboarding.retrying')}</span>
             )}
           </div>
         </div>
@@ -185,9 +190,9 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <strong style={{ fontSize: 16 }}>Claude Code</strong>
-              <span className="onboarding-wizard__agent-badge" style={{ color: '#fb923c', background: 'rgba(251, 146, 60, 0.12)' }}>CLI</span>
+              <span className="onboarding-wizard__agent-badge" style={{ color: 'var(--vc-warning)', background: 'rgba(251, 146, 60, 0.12)' }}>CLI</span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--vc-text-3)' }}>
               {claudeStatus?.loading
                 ? t('onboarding.verifying')
                 : claudeStatus?.installing
@@ -199,13 +204,13 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           </div>
           <div>
             {claudeStatus?.loading || claudeStatus?.installing ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#38bdf8' }}>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-accent)' }}>
                 <span className="onboarding-wizard__spinner" /> {t('onboarding.installing')}
               </span>
             ) : claudeStatus?.installed ? (
-              <span style={{ fontSize: 14, color: '#10b981', fontWeight: 600 }}>✓ {t('onboarding.ready')}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--vc-success)', fontWeight: 600 }}><CheckIcon /> {t('onboarding.ready')}</span>
             ) : (
-              <span style={{ fontSize: 13, color: '#f59e0b' }}>⚠ {t('onboarding.error')}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-warning)' }}><AlertIcon /> {t('onboarding.error')}</span>
             )}
           </div>
         </div>
@@ -217,9 +222,9 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <strong style={{ fontSize: 16 }}>ChatGPT (Codex)</strong>
-              <span className="onboarding-wizard__agent-badge" style={{ color: '#34d399', background: 'rgba(52, 211, 153, 0.12)' }}>{t('onboarding.included')}</span>
+              <span className="onboarding-wizard__agent-badge" style={{ color: 'var(--vc-success)', background: 'rgba(52, 211, 153, 0.12)' }}>{t('onboarding.included')}</span>
             </div>
-            <p style={{ margin: 0, fontSize: 13, color: '#94a3b8' }}>
+            <p style={{ margin: 0, fontSize: 13, color: 'var(--vc-text-3)' }}>
               {codexReady
                 ? t('onboarding.bundledBinary')
                 : t('onboarding.checkingBundledBinary')}
@@ -227,15 +232,15 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           </div>
           <div>
             {codexReady
-              ? <span style={{ fontSize: 14, color: '#10b981', fontWeight: 600 }}>✓ {t('onboarding.ready')}</span>
-              : <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: '#38bdf8' }}><span className="onboarding-wizard__spinner" /> {t('onboarding.checkingBundledBinary')}</span>
+              ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--vc-success)', fontWeight: 600 }}><CheckIcon /> {t('onboarding.ready')}</span>
+              : <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-accent)' }}><span className="onboarding-wizard__spinner" /> {t('onboarding.checkingBundledBinary')}</span>
             }
           </div>
         </div>
       </div>
 
-      <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
-        💡 {t('onboarding.agentsHint')}
+      <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--vc-text-3)', marginTop: 8 }}>
+        <HintIcon /> {t('onboarding.agentsHint')}
       </p>
     </div>
   );
@@ -250,13 +255,13 @@ function StepDone({ environment }) {
   return (
     <div className="onboarding-wizard__content" key="step-done">
       <div className="onboarding-wizard__success-hero">
-        <div className="onboarding-wizard__success-icon">✓</div>
+        <div className="onboarding-wizard__success-icon"><CheckIcon size={28} /></div>
         <h2 className="onboarding-wizard__title" style={{ textAlign: 'center' }}>{t('onboarding.doneTitle')}</h2>
         <p className="onboarding-wizard__subtitle" style={{ textAlign: 'center', maxWidth: 440 }}>
           {t('onboarding.doneCopy')}
         </p>
         {items.length > 0 && (
-          <p style={{ fontSize: 14, color: '#94a3b8', textAlign: 'center' }}>
+          <p style={{ fontSize: 14, color: 'var(--vc-text-3)', textAlign: 'center' }}>
             {t('onboarding.toolsInstalled', { ready: readyCount, total: items.length })}
           </p>
         )}
@@ -458,7 +463,7 @@ export default function OnboardingWizard({ onComplete }) {
                 aria-selected={isActive}
                 title={label}
               >
-                {isCompleted ? '✓' : num}
+                {isCompleted ? <CheckIcon size={14} /> : num}
               </div>
             );
           })}

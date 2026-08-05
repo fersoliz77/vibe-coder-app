@@ -40,10 +40,10 @@
   background: transparent;
   color: var(--text-tertiary);
   font-family: var(--font-sans);
-  font-size: 12px;
+  font-size: var(--vc-text-base);
   font-weight: 500;
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: var(--vc-transition-fast);
   white-space: nowrap;
 }
 
@@ -71,7 +71,7 @@
   cursor: pointer;
   border-radius: var(--radius-sm);
   opacity: 0;
-  transition: all var(--transition-fast);
+  transition: var(--vc-transition-fast);
 }
 
 .terminal-panel__tab:hover .terminal-panel__tab-close {
@@ -94,7 +94,7 @@
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition: var(--vc-transition-fast);
 }
 
 .terminal-panel__new-tab:hover {
@@ -126,8 +126,34 @@
   height: 100%;
   gap: var(--space-md);
 }
+
+/* Un fallo no puede verse igual que "todavia no abriste ninguna". */
+.terminal-panel__empty--error {
+  padding: var(--space-6);
+  text-align: center;
+}
+
+.terminal-panel__empty--error strong {
+  color: var(--vc-danger);
+  font-size: var(--vc-text-md);
+}
+
+.terminal-panel__error-detail {
+  max-width: 60ch;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--vc-danger-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-danger-soft);
+  color: var(--vc-text-2);
+  font-family: var(--vc-font-mono);
+  font-size: var(--vc-text-xs);
+  line-height: 1.55;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
 .terminal-panel__fallback {
-  padding: 20px;
+  padding: 16px;
   color: var(--text-tertiary);
   font-family: var(--font-mono);
   font-size: 13px;

@@ -1,4 +1,5 @@
 import { forwardRef, useState, useEffect, useCallback, useImperativeHandle, useMemo } from 'react';
+import { useStatusMessage } from './useStatusMessage';
 import './FileExplorer.css';
 import { ExplorerContextMenu } from './ExplorerContextMenu';
 import { ExplorerGitPanel } from './ExplorerGitPanel';
@@ -7,7 +8,7 @@ import { ExplorerTree } from './ExplorerTree';
 import { useExplorerPersistence } from './useExplorerPersistence';
 import { useExplorerDragAndDrop } from './useExplorerDragAndDrop';
 import { useExplorerKeyboardShortcuts } from './useExplorerKeyboardShortcuts';
-import { ExplorerWorkspace } from './ExplorerWorkspace';
+import { ExplorerWorkspace, prefetchCodeEditor } from './ExplorerWorkspace';
 import { isStagedCode } from './explorerUtils';
 import { useExplorerActions } from './useExplorerActions';
 import { useExplorerTabs } from './useExplorerTabs';
@@ -26,10 +27,13 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
   const [isSearching, setIsSearching] = useState(false);
   const [highlightedContent, setHighlightedContent] = useState('');
   const [savedHighlightedContent, setSavedHighlightedContent] = useState('');
-  const [editingTabId, setEditingTabId] = useState(null);
   const [gitStatus, setGitStatus] = useState([]);
   const [gitStatusError, setGitStatusError] = useState('');
-  const [tabStatusMessage, setTabStatusMessage] = useState('');
+  const {
+    statusMessage: tabStatusMessage,
+    statusTone: tabStatusTone,
+    setStatusMessage: setTabStatusMessage,
+  } = useStatusMessage();
 
   const loadFile = useCallback((filePath) => {
     return window.electronAPI.fs.readFile(project.path, filePath);
@@ -152,6 +156,8 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
     loadFile,
   });
 
+  useEffect(() => { prefetchCodeEditor(); }, []);
+
   useEffect(() => {
     if (!actions.contextMenu) return undefined;
     const close = () => actions.setContextMenu(null);
@@ -230,6 +236,11 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
     setRenamingValue: treeState.setRenamingValue,
   });
 
+  // Los mensajes de acciones y los de pestanas comparten una sola voz.
+  // El de acciones tiene prioridad: es el que responde a lo que acabas de hacer.
+  const currentStatus = actions.statusMessage || tabStatusMessage || '';
+  const currentTone = actions.statusMessage ? actions.statusTone : tabStatusTone;
+
   const stagedEntries = useMemo(() => gitStatus.filter((entry) => isStagedCode(entry.code)), [gitStatus]);
   const showSearch = searchQuery.trim().length >= 2;
   const openPreview = useCallback((path) => tabsState.openPreview(path, treeState.setSelectedPaths, treeState.setSelectedEntry), [tabsState, treeState.setSelectedEntry, treeState.setSelectedPaths]);
@@ -241,6 +252,22 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
 
   return (
     <div className="file-explorer">
+      {/*
+        Dos regiones vivas, no una: `aria-live` no se puede cambiar en caliente
+        de forma confiable, asi que el mensaje va a la que corresponde segun su
+        severidad. Un error interrumpe; una confirmacion espera su turno.
+
+        Ambas estan montadas siempre, aunque esten vacias: si aparecieran recien
+        con el primer mensaje, el lector de pantalla se perderia ese anuncio.
+        Los mensajes visibles quedan aria-hidden para no anunciarse dos veces.
+      */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {currentTone === 'error' ? '' : currentStatus}
+      </p>
+      <p className="sr-only" role="alert" aria-live="assertive">
+        {currentTone === 'error' ? currentStatus : ''}
+      </p>
+
       <aside className="file-explorer__sidebar">
         <div className="file-explorer__header">
           <span className="file-explorer__eyebrow">{t('explorer.title')}</span>
@@ -269,6 +296,8 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
 
         <ExplorerTree
           project={project}
+          onDeleteNode={actions.openDeleteAction}
+          onContextMenuKey={(event, node) => actions.handleContextMenu(event, node, selectNodeWithRoot)}
           dropTargetPath={dropTargetPath}
           expandedPaths={treeState.expandedPaths}
           selectedPaths={treeState.selectedPaths}
@@ -318,17 +347,17 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
         activeTabId={tabsState.activeTabId}
         closeTab={tabsState.closeTab}
         reorderTabs={tabsState.reorderTabs}
+        moveTabBy={tabsState.moveTabBy}
         splitView={tabsState.splitView}
         setSplitView={tabsState.setSplitView}
         activeTab={tabsState.activeTab}
         projectPath={project.path}
-        statusMessage={actions.statusMessage || tabStatusMessage}
+        statusMessage={currentStatus}
+        statusTone={currentTone}
         paneTabs={tabsState.paneTabs}
         setActivePane={tabsState.setActivePane}
         showDiff={tabsState.showDiff}
         setShowDiff={tabsState.setShowDiff}
-        editingTabId={editingTabId}
-        setEditingTabId={setEditingTabId}
         saveActiveTab={tabsState.saveActiveTab}
         openExternal={actions.openExternal}
         revealFolder={actions.revealFolder}
@@ -337,7 +366,11 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
         setTabs={tabsState.setTabs}
       />
 
-      <ExplorerContextMenu contextMenu={actions.contextMenu} actions={actions.contextActions} />
+      <ExplorerContextMenu
+        contextMenu={actions.contextMenu}
+        actions={actions.contextActions}
+        onClose={() => actions.setContextMenu(null)}
+      />
       <ActionModal action={actions.modalAction} onClose={() => actions.setModalAction(null)} onConfirm={actions.handleConfirmModal} />
       <ConfirmModal state={tabsState.confirmState} onCancel={() => tabsState.setConfirmState(null)} onConfirm={() => tabsState.confirmState?.onConfirm?.()} />
       {dragState && (

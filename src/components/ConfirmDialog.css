@@ -1,0 +1,51 @@
+/* Superficie transitoria: aca la transparencia si corresponde. */
+.confirm-dialog__backdrop {
+  position: fixed;
+  z-index: 10040;
+  inset: var(--titlebar-height) 0 0;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: rgba(3, 6, 12, 0.72);
+}
+
+.confirm-dialog {
+  width: min(460px, 100%);
+  padding: var(--space-6);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-lg);
+  background: var(--vc-surface-2);
+  box-shadow: var(--vc-shadow-lg);
+}
+
+.confirm-dialog__title {
+  margin: 0 0 var(--space-2);
+  font-size: var(--vc-text-lg);
+  line-height: 1.3;
+}
+
+.confirm-dialog__text {
+  margin: 0;
+  color: var(--vc-text-2);
+  font-size: var(--vc-text-base);
+  line-height: 1.55;
+}
+
+/* La consecuencia concreta: que pasa y que no pasa al confirmar. */
+.confirm-dialog__detail {
+  margin: var(--space-3) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 2px solid var(--vc-line-strong);
+  background: var(--vc-surface-3);
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.confirm-dialog__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  margin-top: var(--space-6);
+}

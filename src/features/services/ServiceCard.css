@@ -47,12 +47,10 @@
   border-radius: var(--radius-md);
   background: var(--service-bg);
   color: var(--service-accent);
-  transition: all var(--transition-normal);
+  transition: var(--vc-transition-normal);
 }
 
 .service-card:hover .service-card__icon-wrap {
-  transform: scale(1.1);
-  box-shadow: 0 0 16px color-mix(in srgb, var(--service-accent) 20%, transparent);
 }
 
 .service-icon__svg {
@@ -67,7 +65,7 @@
 }
 
 .service-card__status-text {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   color: var(--text-tertiary);
   text-transform: uppercase;

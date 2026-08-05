@@ -248,7 +248,7 @@
 }
 
 .claude-panel__input-hint {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: var(--space-xs);
   padding-left: var(--space-xs);
 }
@@ -285,7 +285,7 @@
   padding: var(--space-xs) var(--space-sm);
 }
 .btn--ghost:hover {
-  background: var(--bg-hover);
+  background: var(--vc-surface-3);
   color: var(--text-primary);
   border-color: var(--glass-border);
 }
@@ -465,7 +465,7 @@
   border-radius: var(--radius-md);
   padding: var(--space-sm) var(--space-md);
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 12px;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -480,4 +480,28 @@
 }
 
 .claude-progress-log__line--stdout { color: var(--text-secondary); }
-.claude-progress-log__line--stderr { color: var(--status-warning, #f0a500); }
+.claude-progress-log__line--stderr { color: var(--status-warning, var(--vc-warning)); }
+
+/* ─── Fallo al comprobar el estado ─────────────────────────────────────
+   Se distingue de "no instalado": el problema fue la comprobacion. */
+.claude-setup-screen__icon--error {
+  background: var(--vc-danger-soft);
+  border-color: var(--vc-danger-line);
+  color: var(--vc-danger);
+}
+
+.claude-setup-screen__error {
+  max-width: 60ch;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--vc-danger-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-danger-soft);
+  color: var(--vc-text-2);
+  font-family: var(--vc-font-mono);
+  font-size: var(--vc-text-xs);
+  line-height: 1.55;
+  text-align: left;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

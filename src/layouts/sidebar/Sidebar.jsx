@@ -2,6 +2,7 @@ import './Sidebar.css';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
 import { useI18n } from '../../i18n/I18nContext';
+import { CheckIcon } from '../../components/icons/StatusIcons';
 
 const NAV_ITEMS = [
   {
@@ -111,13 +112,13 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                   <span className="sidebar__badge sidebar__badge--success">{connectedCount}</span>
                 )}
                 {item.id === 'claude' && claudeAvailable && (
-                  <span className="sidebar__badge sidebar__badge--success">✓</span>
+                  <span className="sidebar__badge sidebar__badge--success"><CheckIcon size={12} label={t('sidebar.connected')} /></span>
                 )}
                 {item.id === 'opencode' && openCodeAvailable && (
-                  <span className="sidebar__badge sidebar__badge--success">✓</span>
+                  <span className="sidebar__badge sidebar__badge--success"><CheckIcon size={12} label={t('sidebar.connected')} /></span>
                 )}
                 {item.id === 'openai' && openAIAvailable && (
-                  <span className="sidebar__badge sidebar__badge--success">✓</span>
+                  <span className="sidebar__badge sidebar__badge--success"><CheckIcon size={12} label={t('sidebar.connected')} /></span>
                 )}
               </button>
             ))}

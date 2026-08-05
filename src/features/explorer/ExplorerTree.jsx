@@ -1,4 +1,7 @@
+import { useCallback, useRef, useState } from 'react';
 import { dragLog, getExtension, getFileMeta } from './explorerUtils';
+import { treeAction, nextIndex, parentIndex } from './treeKeyboard';
+import { opensMenu } from './menuKeyboard';
 import { useI18n } from '../../i18n/I18nContext';
 
 function FileTypeIcon({ meta, extension }) {
@@ -79,11 +82,16 @@ function TreeNode(props) {
     onClearDirectoryExpandSchedule,
     onDragStartNode,
     isDragging,
+    activePath,
+    onActivePathChange,
   } = props;
   const meta = getFileMeta(node.name, node.isDirectory);
   const isSelected = selectedPaths.includes(node.path);
   const isExpanded = expandedPaths.has(node.path);
   const isDropTarget = dropTargetPath === node.path;
+  // Tabindex movil: solo la fila activa es alcanzable con Tab; dentro del
+  // arbol se navega con las flechas.
+  const isActive = activePath === node.path;
   const children = node.isDirectory ? (directoryCache[node.path] || []) : [];
 
   return (
@@ -91,13 +99,19 @@ function TreeNode(props) {
       <div
         className={`file-tree-item ${isSelected ? 'file-tree-item--selected' : ''} ${isDropTarget ? 'file-tree-item--drop-target' : ''}`}
         style={{ paddingLeft: `${12 + depth * 16}px`, '--file-accent': meta.color }}
-        role="button"
-        tabIndex={0}
+        role="treeitem"
+        aria-level={depth + 1}
+        aria-selected={isSelected}
+        aria-expanded={node.isDirectory ? isExpanded : undefined}
+        tabIndex={isActive ? 0 : -1}
         title={node.path}
         data-testid="file-tree-item"
         data-node-path={node.path}
         data-node-directory={node.isDirectory ? 'true' : 'false'}
+        data-node-root={node.isRoot ? 'true' : 'false'}
+        onFocus={() => onActivePathChange?.(node.path)}
         onClick={(event) => {
+          onActivePathChange?.(node.path);
           onSelectNode(node, event);
           if (node.isDirectory) onToggleDirectory(node.path);
           else onOpenPreview(node.path);
@@ -161,7 +175,7 @@ function TreeNode(props) {
         )}
       </div>
       {node.isDirectory && isExpanded && children.length > 0 && (
-        <div className="file-tree-children">
+        <div className="file-tree-children" role="group">
           {children.map((child) => (
             <TreeNode
               key={child.path}
@@ -205,14 +219,105 @@ export function ExplorerTree({
   clearDirectoryExpandSchedule,
   handleDragStartNode,
   dragState,
+  onDeleteNode,
+  onContextMenuKey,
 }) {
   const { t } = useI18n();
+  const treeRef = useRef(null);
+  // Fila que recibe el foco al entrar al arbol con Tab.
+  const [activePath, setActivePath] = useState(null);
+
+  const focusRow = useCallback((index) => {
+    const rows = treeRef.current?.querySelectorAll('[role="treeitem"]');
+    const row = rows?.[index];
+    if (!row) return;
+    const nodePath = row.dataset.nodePath || null;
+    setActivePath(nodePath);
+    row.focus();
+
+    // Moverse con flechas tambien selecciona. Sin esto, Ctrl+X, F2 o Suprimir
+    // actuarian sobre la fila clickeada antes, no sobre la que ves enfocada.
+    if (nodePath) {
+      // La tecla Menu (o Shift+F10) abre el menu contextual sobre la fila,
+    // posicionado donde esta, no donde estuvo el mouse por ultima vez.
+    if (opensMenu(event)) {
+      event.preventDefault();
+      const box = row.getBoundingClientRect();
+      onContextMenuKey?.(
+        { clientX: box.left + 16, clientY: box.bottom, preventDefault() {} },
+        {
+          path: row.dataset.nodePath,
+          name: row.dataset.nodePath.split(/[\/]/).pop(),
+          isDirectory: row.dataset.nodeDirectory === 'true',
+          isRoot: row.dataset.nodeRoot === 'true',
+        },
+      );
+      return;
+    }
+
+    const isDirectory = row.dataset.nodeDirectory === 'true';
+      const name = nodePath.split(/[\/]/).pop();
+      setSelectedEntry({ name, path: nodePath, isDirectory });
+      setSelectedPaths([nodePath]);
+    }
+  }, [setSelectedEntry, setSelectedPaths]);
+
+  const handleTreeKeyDown = useCallback((event) => {
+    const row = event.target.closest?.('[role="treeitem"]');
+    if (!row || !treeRef.current?.contains(row)) return;
+
+    const isDirectory = row.dataset.nodeDirectory === 'true';
+    const isExpanded = row.getAttribute('aria-expanded') === 'true';
+    const action = treeAction({ key: event.key, isDirectory, isExpanded, shiftKey: event.shiftKey });
+    if (!action) return;
+
+    const rows = [...treeRef.current.querySelectorAll('[role="treeitem"]')];
+    const current = rows.indexOf(row);
+    const path = row.dataset.nodePath;
+
+    if (action === 'activate') {
+      event.preventDefault();
+      row.click();
+      return;
+    }
+    if (action === 'delete') {
+      event.preventDefault();
+      const isRoot = row.dataset.nodeRoot === 'true';
+      if (isRoot) return;
+      onDeleteNode?.({
+        path,
+        name: path.split(/[\/]/).pop(),
+        isDirectory,
+      });
+      return;
+    }
+    if (action === 'expand' || action === 'collapse') {
+      event.preventDefault();
+      toggleDirectory(path);
+      return;
+    }
+    if (action === 'goToParent') {
+      event.preventDefault();
+      const levels = rows.map((item) => Number(item.getAttribute('aria-level')) - 1);
+      const parent = parentIndex(levels, current);
+      if (parent !== null) focusRow(parent);
+      return;
+    }
+
+    const target = nextIndex(action, current, rows.length);
+    if (target === null || target === current) return;
+    event.preventDefault();
+    focusRow(target);
+  }, [toggleDirectory, focusRow, onDeleteNode, onContextMenuKey]);
+
   return (
     <div className="file-explorer__root" onContextMenu={handleRootContextMenu}>
       <button
         className={`file-explorer__root-row ${dropTargetPath === project.path ? 'file-explorer__root-row--drop-target' : ''}`}
         type="button"
         title={project.path}
+        aria-expanded={expandedPaths.has(project.path)}
+        aria-controls="file-tree-list"
         data-node-path={project.path}
         data-node-directory="true"
         onClick={() => {
@@ -233,7 +338,15 @@ export function ExplorerTree({
         ) : rootItems.length === 0 ? (
           <div className="file-tree-empty-root">{t('explorer.emptyProjectFolder')}</div>
         ) : (
-          <div className="file-tree-list">
+          <div
+            className="file-tree-list"
+            id="file-tree-list"
+            role="tree"
+            aria-label={t('explorer.projectExplorer')}
+            aria-multiselectable="true"
+            ref={treeRef}
+            onKeyDown={handleTreeKeyDown}
+          >
             {rootItems.map((node) => (
               <TreeNode
                 key={node.path}
@@ -257,6 +370,8 @@ export function ExplorerTree({
                 onClearDirectoryExpandSchedule={clearDirectoryExpandSchedule}
                 onDragStartNode={handleDragStartNode}
                 isDragging={Boolean(dragState)}
+                activePath={activePath ?? rootItems[0]?.path ?? null}
+                onActivePathChange={setActivePath}
               />
             ))}
           </div>

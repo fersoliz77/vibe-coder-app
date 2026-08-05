@@ -29,7 +29,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     setSelectedEntry?.({ path: filePath, name: getName(filePath), isDirectory: false });
     const result = await loadFile(filePath);
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.openFileFailed'));
+      setStatusMessage(result.error || t('explorer.openFileFailed'), 'error');
       return;
     }
 
@@ -48,7 +48,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     if (!activeTab || activeTab.type !== 'text') return;
     const result = await window.electronAPI.fs.writeFile(projectPath, activeTab.path, activeTab.draftContent ?? '');
     if (!result.success) {
-      setStatusMessage(result.error || t('explorer.saveFailed'));
+      setStatusMessage(result.error || t('explorer.saveFailed'), 'error');
       return;
     }
     setTabs((prev) => prev.map((tab) => tab.id === activeTab.id ? { ...tab, savedContent: tab.draftContent, content: tab.draftContent } : tab));
@@ -60,7 +60,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     for (const tab of dirtyTabs) {
       const result = await window.electronAPI.fs.writeFile(projectPath, tab.path, tab.draftContent ?? '');
       if (!result.success) {
-        setStatusMessage(result.error || t('explorer.saveFailed'));
+        setStatusMessage(result.error || t('explorer.saveFailed'), 'error');
         return false;
       }
     }
@@ -100,6 +100,19 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     }
     closeTabImmediate(tabId);
   }, [closeTabImmediate, tabs, t]);
+
+  // Mueve una pestana un lugar. Es el equivalente por teclado del arrastre,
+  // que hasta ahora solo existia con mouse.
+  const moveTabBy = useCallback((tabId, direction) => {
+    setTabs((prev) => {
+      const from = prev.findIndex((tab) => tab.id === tabId);
+      const to = from + direction;
+      if (from === -1 || to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[from], next[to]] = [next[to], next[from]];
+      return next;
+    });
+  }, []);
 
   const reorderTabs = useCallback((draggedId, targetId) => {
     if (!draggedId || !targetId || draggedId === targetId) return;
@@ -164,6 +177,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
     discardDirtyTabs,
     closeTab,
     reorderTabs,
+    moveTabBy,
     removeTabsForPaths,
     remapTabPaths,
   };

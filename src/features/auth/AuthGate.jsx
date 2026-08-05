@@ -1,4 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
+import AppSplash from '../../components/AppSplash';
 import { AuthProvider } from './AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
 import './AuthGate.css';
@@ -72,10 +74,22 @@ function Login({ state, onState }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState(state.error);
+  // El acceso con Google termina en otra aplicacion. Sin registrar esa espera,
+  // la ventana volvia a verse ociosa apenas se abria el navegador, como si el
+  // clic no hubiera hecho nada.
+  const [googleWait, setGoogleWait] = useState(null);
 
   useEffect(() => {
     setError(state.error || null);
   }, [state.error]);
+
+  // La solicitud vive 10 minutos del lado del proceso principal; pasado ese
+  // plazo el enlace ya no sirve y hay que decirlo, no seguir esperando.
+  useEffect(() => {
+    if (googleWait !== 'waiting') return undefined;
+    const timer = setTimeout(() => setGoogleWait('expired'), 10 * 60 * 1000);
+    return () => clearTimeout(timer);
+  }, [googleWait]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -99,12 +113,57 @@ function Login({ state, onState }) {
       const result = await window.electronAPI.auth.google();
       setError(result.error || null);
       onState(result.state);
+      // `pending` significa que el navegador se abrio y falta que el usuario
+      // confirme alli. La espera queda visible hasta que vuelva el resultado.
+      setGoogleWait(result.ok && result.pending ? 'waiting' : null);
     } catch {
       setError({ code: 'AUTH_UNEXPECTED', message: t('auth.signInFailed') });
+      setGoogleWait(null);
     } finally {
       setBusy('');
     }
   };
+
+  // Mientras se espera al navegador, la tarjeta muestra solo eso: dejar el
+  // formulario detras invitaria a reintentar por otro camino y romper el flujo.
+  if (googleWait) {
+    const expired = googleWait === 'expired';
+    return (
+      <div className="auth-page">
+        <AuthTitlebar />
+        <div className="auth-page__glow" />
+        <main className="auth-card auth-card--waiting" aria-labelledby="google-wait-title">
+          <div className="auth-mark">V</div>
+          <p className="auth-eyebrow">Vibe IDE Code</p>
+          <h1 id="google-wait-title">{expired ? t('auth.googleExpiredTitle') : t('auth.googleWaitingTitle')}</h1>
+          <p className="auth-copy" role="status" aria-live="polite">
+            {expired ? t('auth.googleExpiredCopy') : t('auth.googleWaitingCopy')}
+          </p>
+          {!expired && (
+            <>
+              <div className="auth-wait-bar" aria-hidden="true"><span /></div>
+              <p className="auth-wait-hint">{t('auth.googleWaitingHint')}</p>
+            </>
+          )}
+          <button
+            type="button"
+            className="auth-button auth-button--primary auth-button--wide"
+            disabled={Boolean(busy)}
+            onClick={() => { setGoogleWait(null); google(); }}
+          >
+            {expired ? t('auth.googleRetry') : t('auth.googleReopen')}
+          </button>
+          <button
+            type="button"
+            className="auth-button auth-button--wide"
+            onClick={() => { setGoogleWait(null); setError(null); }}
+          >
+            {t('auth.googleCancelWait')}
+          </button>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-page">
@@ -154,7 +213,13 @@ function Denied({ state, onState }) {
 
 function RestrictedOverlay({ state, onState }) {
   const { t, formatDate } = useI18n();
+  const overlayRef = useRef(null);
   const [busy, setBusy] = useState('');
+
+  // No lleva Escape a proposito: esta pantalla bloquea el acceso y no hay
+  // nada valido detras a lo que volver. Solo se aisla el foco para que el
+  // teclado no siga recorriendo el workspace tapado.
+  useFocusTrap({ active: true, containerRef: overlayRef });
   const [supportMessage, setSupportMessage] = useState('');
   const status = state.account?.status;
   const exportDiagnostics = async () => {
@@ -170,7 +235,7 @@ function RestrictedOverlay({ state, onState }) {
     }
   };
   return (
-    <div className="restricted-overlay" role="dialog" aria-modal="true" aria-labelledby="restricted-title">
+    <div ref={overlayRef} className="restricted-overlay" role="dialog" aria-modal="true" aria-labelledby="restricted-title">
       <section className="restricted-card">
         <span className="restricted-card__status">{state.restrictionReason === 'OFFLINE_LEASE_EXPIRED' ? t('auth.offlineValidationExpired') : (status ? t(`accountStatuses.${status}`) : t('auth.restricted'))}</span>
         <h1 id="restricted-title">{t('auth.restrictedAccount')}</h1>
@@ -208,7 +273,7 @@ export default function AuthGate({ children }) {
     };
   }, []);
 
-  if (!state) return <div className="auth-loading">{t('auth.checkingAccountAccess')}</div>;
+  if (!state) return <AppSplash message={t('auth.checkingAccountAccess')} />;
 
   const content = !state.authenticated
     ? <Login state={state} onState={setState} />

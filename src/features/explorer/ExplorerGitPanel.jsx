@@ -1,4 +1,5 @@
 import { isStagedCode, toAbsoluteProjectPath } from './explorerUtils';
+import { describeGitCode, gitStageKey } from './gitStatusMeaning';
 import { useI18n } from '../../i18n/I18nContext';
 
 export function ExplorerGitPanel({
@@ -27,17 +28,30 @@ export function ExplorerGitPanel({
         <div className="file-explorer__git-empty">{t('explorer.workingTreeClean')}</div>
       ) : (
         <div className="file-explorer__git-list">
-          {gitStatus.slice(0, 40).map((entry) => (
-            <div key={`${entry.code}:${entry.path}`} className="file-explorer__git-row">
-              <button className="file-explorer__git-item" type="button" onClick={() => openPreview(toAbsoluteProjectPath(projectPath, entry.path))}>
-                <span className="file-explorer__git-code">{entry.code}</span>
-                <span className="file-explorer__git-path">{entry.path}</span>
-              </button>
-              <button className="file-explorer__git-btn" type="button" onClick={() => handleGitStageToggle(entry)}>
-                {isStagedCode(entry.code) ? t('explorer.unstage') : t('explorer.stage')}
-              </button>
-            </div>
-          ))}
+          {gitStatus.slice(0, 40).map((entry) => {
+            const meaning = describeGitCode(entry.code);
+            const label = t(`explorer.git.${meaning.key}`);
+            const help = t(`explorer.git.${gitStageKey(meaning)}`);
+            return (
+              <div key={`${entry.code}:${entry.path}`} className="file-explorer__git-row">
+                <button
+                  className="file-explorer__git-item"
+                  type="button"
+                  /* El codigo crudo queda a mano para quien ya sabe Git. */
+                  title={`${label} — ${help} (${entry.code.trim() || entry.code})`}
+                  onClick={() => openPreview(toAbsoluteProjectPath(projectPath, entry.path))}
+                >
+                  <span className={`file-explorer__git-code file-explorer__git-code--${meaning.tone}`}>
+                    {label}
+                  </span>
+                  <span className="file-explorer__git-path">{entry.path}</span>
+                </button>
+                <button className="file-explorer__git-btn" type="button" onClick={() => handleGitStageToggle(entry)}>
+                  {isStagedCode(entry.code) ? t('explorer.unstage') : t('explorer.stage')}
+                </button>
+              </div>
+            );
+          })}
         </div>
       )}
     </div>

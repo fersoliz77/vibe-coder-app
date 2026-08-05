@@ -1,9 +1,29 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useCallback } from 'react';
+import { tabAction, nextTabIndex } from '../../utils/tablist';
 import { ExplorerPane } from './ExplorerPane';
 import { formatBytes, getParentDirectory } from './explorerUtils';
 import { useI18n } from '../../i18n/I18nContext';
 
-const CodeEditor = lazy(() => import('./CodeEditor'));
+const loadCodeEditor = () => import('./CodeEditor');
+const CodeEditor = lazy(loadCodeEditor);
+
+/*
+ * El editor es el modulo mas pesado de la app (~690 kB). Antes se cargaba
+ * recien al apretar un boton "Editor", asi que abrir un archivo no costaba
+ * nada... pero tampoco dejaba escribir.
+ *
+ * Ahora los archivos abren escribibles, asi que la carga se adelanta al
+ * momento en que el explorador aparece en pantalla: para cuando elegis un
+ * archivo, el editor ya esta listo y no se ve ningun salto.
+ *
+ * Es solo un empujon: si el archivo llega antes, Suspense muestra el estado
+ * de carga como siempre.
+ */
+export function prefetchCodeEditor() {
+  loadCodeEditor().catch(() => {
+    // Si falla, Suspense lo reintenta al abrir el primer archivo.
+  });
+}
 
 export function ExplorerWorkspace({
   dirtyTabs,
@@ -13,17 +33,17 @@ export function ExplorerWorkspace({
   activeTabId,
   closeTab,
   reorderTabs,
+  moveTabBy,
   splitView,
   setSplitView,
   activeTab,
   projectPath,
   statusMessage,
+  statusTone,
   paneTabs,
   setActivePane,
   showDiff,
   setShowDiff,
-  editingTabId,
-  setEditingTabId,
   saveActiveTab,
   openExternal,
   revealFolder,
@@ -32,6 +52,38 @@ export function ExplorerWorkspace({
   setTabs,
 }) {
   const { t } = useI18n();
+
+  const handleTabsKeyDown = useCallback((event) => {
+    const row = event.target.closest?.('[role="tab"]');
+    if (!row) return;
+    const tabId = row.dataset.tabId;
+    const action = tabAction(event);
+    if (!action) return;
+
+    if (action === 'activate') {
+      event.preventDefault();
+      setPaneTabs((prev) => ({ ...prev, [activePane]: tabId }));
+      return;
+    }
+    if (action === 'close') {
+      event.preventDefault();
+      closeTab(tabId);
+      return;
+    }
+    // Ctrl/Cmd + flecha reordena, en lugar de cambiar de pestana.
+    if (action === 'moveLeft' || action === 'moveRight') {
+      event.preventDefault();
+      moveTabBy?.(tabId, action === 'moveLeft' ? -1 : 1);
+      return;
+    }
+
+    const current = tabs.findIndex((tab) => tab.id === tabId);
+    const target = nextTabIndex(action, current, tabs.length);
+    if (target === null || target === current) return;
+    event.preventDefault();
+    setPaneTabs((prev) => ({ ...prev, [activePane]: tabs[target].id }));
+    event.currentTarget.querySelectorAll('[role="tab"]')?.[target]?.focus();
+  }, [tabs, activePane, setPaneTabs, closeTab, moveTabBy]);
   return (
     <section className="file-explorer__workspace">
       <div className="file-explorer__editor-shell">
@@ -48,7 +100,12 @@ export function ExplorerWorkspace({
           </div>
         )}
 
-        <div className="file-explorer__tabs">
+        <div
+          className="file-explorer__tabs"
+          role="tablist"
+          aria-label={t('explorer.openFilesTabs')}
+          onKeyDown={handleTabsKeyDown}
+        >
           {tabs.length === 0 ? (
             <div className="file-explorer__tabs-empty">{t('explorer.noFileOpen')}</div>
           ) : tabs.map((tab) => {
@@ -57,6 +114,11 @@ export function ExplorerWorkspace({
               <div
                 key={tab.id}
                 className={`file-explorer__tab ${tab.id === activeTabId ? 'file-explorer__tab--active' : ''}`}
+                role="tab"
+                aria-selected={tab.id === activeTabId}
+                data-tab-id={tab.id}
+                tabIndex={tab.id === activeTabId ? 0 : -1}
+                title={dirty ? t('explorer.unsaved') : tab.name}
                 onClick={() => setPaneTabs((prev) => ({ ...prev, [activePane]: tab.id }))}
                 draggable
                 onDragStart={(event) => event.dataTransfer.setData('application/tab-id', tab.id)}
@@ -64,8 +126,8 @@ export function ExplorerWorkspace({
                 onDrop={(event) => reorderTabs(event.dataTransfer.getData('application/tab-id'), tab.id)}
               >
                 <span className="file-explorer__tab-name">{tab.name}</span>
-                {dirty && <span className="file-explorer__tab-dirty" />}
-                <button className="file-explorer__tab-close" type="button" onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>x</button>
+                {dirty && <span className="file-explorer__tab-dirty" role="img" aria-label={t('explorer.unsaved')} />}
+                <button className="file-explorer__tab-close" type="button" tabIndex={-1} aria-label={t('explorer.closeTab', { name: tab.name })} onClick={(event) => { event.stopPropagation(); closeTab(tab.id); }}>x</button>
               </div>
             );
           })}
@@ -77,7 +139,7 @@ export function ExplorerWorkspace({
             <h2 className="file-explorer__workspace-title">{t('explorer.projectExplorer')}</h2>
             <p className="file-explorer__workspace-text">{t('explorer.workspaceCopy')}</p>
             <p className="file-explorer__workspace-path">{projectPath}</p>
-            {statusMessage && <p className="file-explorer__status">{statusMessage}</p>}
+            {statusMessage && <p className={`file-explorer__status ${statusTone === 'error' ? 'file-explorer__status--error' : ''}`} aria-hidden="true">{statusMessage}</p>}
           </div>
         ) : (
           <div className={`file-explorer__panes ${splitView ? 'file-explorer__panes--split' : ''}`}>
@@ -88,7 +150,7 @@ export function ExplorerWorkspace({
                   {!paneTab ? (
                     <div className="file-explorer__workspace-card file-explorer__workspace-card--empty">
                       <p className="file-explorer__workspace-text">{t('explorer.selectFilePane', { pane: paneKey === 'primary' ? t('explorer.primary').toLowerCase() : t('explorer.secondary').toLowerCase() })}</p>
-                      {statusMessage && paneKey === 'primary' && <p className="file-explorer__status">{statusMessage}</p>}
+                      {statusMessage && paneKey === 'primary' && <p className={`file-explorer__status ${statusTone === 'error' ? 'file-explorer__status--error' : ''}`} aria-hidden="true">{statusMessage}</p>}
                     </div>
                   ) : (
                     <div className="file-explorer__preview">
@@ -101,8 +163,16 @@ export function ExplorerWorkspace({
                           <span className="file-explorer__meta-pill">{paneTab.extension || t('explorer.noExtension')}</span>
                           <span className="file-explorer__meta-pill">{formatBytes(paneTab.size)}</span>
                           {paneTab.type === 'text' && paneKey === activePane && <button className="btn btn--small" type="button" onClick={() => setShowDiff((value) => !value)}>{showDiff ? t('explorer.editor') : t('explorer.diff')}</button>}
-                          {paneTab.type === 'text' && paneKey === activePane && <button className="btn btn--small btn--primary" type="button" onClick={() => setEditingTabId(editingTabId === paneTab.id ? null : paneTab.id)}>{t('explorer.editor')}</button>}
-                          {paneTab.type === 'text' && paneKey === activePane && editingTabId === paneTab.id && <button className="btn btn--small btn--primary file-explorer__save-btn" type="button" onClick={saveActiveTab}>{t('explorer.save')}</button>}
+                          {paneTab.type === 'text' && paneKey === activePane && (
+                            <button
+                              className="btn btn--small btn--primary file-explorer__save-btn"
+                              type="button"
+                              onClick={saveActiveTab}
+                              disabled={paneTab.draftContent === paneTab.savedContent}
+                            >
+                              {t('explorer.save')}
+                            </button>
+                          )}
                           <button className="btn btn--small" type="button" onClick={() => openExternal(paneTab.path)}>{t('explorer.open')}</button>
                           <button className="btn btn--small" type="button" onClick={() => revealFolder(getParentDirectory(paneTab.path))}>{t('explorer.reveal')}</button>
                         </div>
@@ -121,8 +191,6 @@ export function ExplorerWorkspace({
                               <pre className="file-explorer__diff-code language-code" dangerouslySetInnerHTML={{ __html: highlightedContent }} />
                             </section>
                           </div>
-                        ) : paneTab.type === 'text' && editingTabId !== paneTab.id ? (
-                          <pre className="file-explorer__diff-code language-code">{paneTab.draftContent ?? ''}</pre>
                         ) : (
                           <Suspense fallback={<div className="file-tree-loading">{t('explorer.loadingEditor')}</div>}>
                             <CodeEditor

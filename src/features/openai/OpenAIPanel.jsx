@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { callIpc } from '../../utils/callIpc';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import { useI18n } from '../../i18n/I18nContext';
 import { appendProgress, appendRendererStream, limitChatMessages } from '../../utils/chatLimits.mjs';
 import './OpenAIPanel.css';
@@ -178,6 +180,8 @@ export default function OpenAIPanel({ cwd }) {
   // The real check runs in background and updates silently.
   const [status, setStatus] = useState({ authenticated: false, email: null });
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  // Comprobar el estado puede fallar; eso no es lo mismo que no estar conectado.
+  const [statusError, setStatusError] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [loginLog, setLoginLog] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -191,6 +195,8 @@ export default function OpenAIPanel({ cwd }) {
   const activeRunRef = useRef(null);
   const projectPathRef = useRef(cwd);
   const inputRef = useRef(null);
+  // Limpiar y cerrar sesion borran historial que no se puede recuperar.
+  const [pendingAction, setPendingAction] = useState(null);
   const saveTimerRef = useRef(null);
 
   // ── Persistence helpers ──────────────────────────────────────────────────
@@ -239,12 +245,17 @@ export default function OpenAIPanel({ cwd }) {
   // ── Auth: optimistic load then background verify ─────────────────────────
   const refreshStatus = useCallback(async () => {
     if (!window.electronAPI?.openai) return;
-    const s = await window.electronAPI.openai.getStatus();
-    setStatus(s);
+    setStatusError('');
+    const { ok, data, error } = await callIpc(window.electronAPI.openai.getStatus);
     setIsAuthLoading(false);
+    if (!ok || !data) {
+      setStatusError(error || 'No se pudo comprobar el estado de la cuenta.');
+      return;
+    }
+    setStatus(data);
     // Persist the auth flag so next launch can show chat immediately
     if (window.electronAPI?.store) {
-      window.electronAPI.store.set('openai:authenticated', s.authenticated);
+      window.electronAPI.store.set('openai:authenticated', data.authenticated);
     }
   }, []);
 
@@ -263,10 +274,11 @@ export default function OpenAIPanel({ cwd }) {
   }, [refreshStatus]);
 
   useEffect(() => {
-    window.electronAPI?.openai?.getModels().then(({ models: availableModels, defaultModel }) => {
+    callIpc(window.electronAPI?.openai?.getModels).then(({ ok, data }) => {
+      const availableModels = ok ? data?.models : null;
       if (!availableModels?.length) return;
       setModels(availableModels);
-      const selected = availableModels.find((item) => item.id === defaultModel) || availableModels[0];
+      const selected = availableModels.find((item) => item.id === data.defaultModel) || availableModels[0];
       setModel(selected.id);
       setReasoning(selected.defaultReasoning || 'medium');
     });
@@ -396,10 +408,10 @@ export default function OpenAIPanel({ cwd }) {
         </div>
         <div className="openai-panel__header-actions">
           {status.authenticated && messages.length > 0 && (
-            <button className="btn btn--small" onClick={handleClear}>{t('ai.clear')}</button>
+            <button className="btn btn--small" onClick={() => setPendingAction('clear')}>{t('ai.clear')}</button>
           )}
           {status.authenticated && (
-            <button className="btn btn--small btn--ghost" onClick={handleLogout} title={t('ai.logout')}>
+            <button className="btn btn--small btn--ghost" onClick={() => setPendingAction('logout')} title={t('ai.logout')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           )}
@@ -410,7 +422,14 @@ export default function OpenAIPanel({ cwd }) {
       </div>
 
       <div className="openai-panel__body">
-        {!status.authenticated ? (
+        {statusError && !status.authenticated ? (
+          <div className="openai-setup-screen" role="alert">
+            <h3>{t('ai.statusFailed')}</h3>
+            <p className="text-secondary">{t('ai.statusFailedCopy')}</p>
+            <pre className="openai-setup-screen__error">{statusError}</pre>
+            <button className="btn btn--primary" onClick={refreshStatus} type="button">{t('ai.retry')}</button>
+          </div>
+        ) : !status.authenticated ? (
           <NotAuthScreen onLogin={handleLogin} isLoggingIn={isLoggingIn} loginLog={loginLog} />
         ) : (
           <ChatScreen
@@ -422,7 +441,7 @@ export default function OpenAIPanel({ cwd }) {
             setInput={setInput}
             onSend={handleSend}
             onCancel={handleCancel}
-            onLogout={handleLogout}
+            onLogout={() => setPendingAction('logout')}
             inputRef={inputRef}
             model={model}
             setModel={setModel}
@@ -432,6 +451,19 @@ export default function OpenAIPanel({ cwd }) {
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        title={pendingAction === 'logout' ? t('ai.logoutTitle') : t('ai.clearTitle')}
+        description={pendingAction === 'logout' ? t('ai.logoutCopy') : t('ai.clearCopy')}
+        confirmLabel={pendingAction === 'logout' ? t('ai.logoutConfirm') : t('ai.clearConfirm')}
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action === 'logout') handleLogout(); else handleClear();
+        }}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

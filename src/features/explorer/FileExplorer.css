@@ -29,12 +29,12 @@
 
 .file-explorer__header {
   justify-content: space-between;
-  padding: 14px 16px 10px;
+  padding: 12px 16px 8px;
   border-bottom: 1px solid var(--glass-border);
 }
 
 .file-explorer__eyebrow {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 1.2px;
   color: var(--text-tertiary);
@@ -81,7 +81,7 @@
 }
 
 .file-explorer__search-wrap {
-  padding: 10px 12px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -91,14 +91,14 @@
   padding: 0 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--vc-surface-3);
   color: var(--text-primary);
 }
 
 .file-explorer__clipboard,
 .file-explorer__drag-hint {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -109,7 +109,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 10px 12px 8px;
+  padding: 8px 12px 8px;
   border: none;
   background: transparent;
   color: var(--text-primary);
@@ -120,13 +120,13 @@
 }
 
 .file-explorer__root-row:hover {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--vc-surface-3);
 }
 
 .file-explorer__root-row--drop-target,
 .file-explorer__root-row--drop-target:hover {
-  background: rgba(62, 207, 142, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(62, 207, 142, 0.35);
+  background: rgba(var(--vc-success-rgb), 0.16);
+  box-shadow: inset 0 0 0 1px rgba(var(--vc-success-rgb), 0.35);
 }
 
 .file-explorer__root-caret,
@@ -151,7 +151,7 @@
 .file-explorer__tree {
   overflow-y: auto;
   flex: 1;
-  padding: 0 0 10px;
+  padding: 0 0 8px;
 }
 
 .file-tree-node,
@@ -171,7 +171,7 @@
   top: 0;
   bottom: 4px;
   width: 1px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vc-surface-3);
 }
 
 .file-tree-item {
@@ -224,10 +224,10 @@
   z-index: 4000;
   pointer-events: none;
   height: 28px;
-  padding: 0 10px;
+  padding: 0 8px;
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(88, 166, 255, 0.25);
+  border: 1px solid rgba(var(--vc-accent-rgb), 0.25);
   border-radius: 8px;
   background: rgba(16, 20, 30, 0.94);
   color: var(--text-primary);
@@ -237,14 +237,14 @@
 
 .file-tree-item--selected,
 .file-tree-item--selected:hover {
-  background: rgba(88, 166, 255, 0.14);
+  background: rgba(var(--vc-accent-rgb), 0.14);
   color: var(--text-primary);
 }
 
 .file-tree-item--drop-target,
 .file-tree-item--drop-target:hover {
-  background: rgba(62, 207, 142, 0.16);
-  box-shadow: inset 0 0 0 1px rgba(62, 207, 142, 0.35);
+  background: rgba(var(--vc-success-rgb), 0.16);
+  box-shadow: inset 0 0 0 1px rgba(var(--vc-success-rgb), 0.35);
 }
 
 .file-tree-caret {
@@ -277,7 +277,7 @@
 }
 
 .file-glyph--html {
-  color: #ff8a65;
+  color: var(--vc-danger);
 }
 
 .file-tree-name {
@@ -289,9 +289,9 @@
   min-width: 0;
   height: 22px;
   padding: 0 6px;
-  border: 1px solid rgba(88, 166, 255, 0.35);
+  border: 1px solid rgba(var(--vc-accent-rgb), 0.35);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--vc-surface-3);
   color: var(--text-primary);
 }
 
@@ -301,6 +301,12 @@
 .file-explorer__tabs-empty,
 .file-explorer__status {
   color: var(--text-tertiary);
+}
+
+/* Un fallo no puede verse igual que una confirmacion. */
+.file-explorer__status--error {
+  color: var(--vc-danger);
+  font-weight: 600;
 }
 
 .file-tree-empty,
@@ -316,10 +322,10 @@
   flex: 1;
   min-width: 0;
   display: flex;
-  padding: 18px;
+  padding: 16px;
   background:
-    radial-gradient(circle at top right, rgba(88, 166, 255, 0.08), transparent 32%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.01), rgba(255, 255, 255, 0));
+    radial-gradient(circle at top right, rgba(var(--vc-accent-rgb), 0.08), transparent 32%),
+    linear-gradient(180deg, var(--vc-surface-3), rgba(255, 255, 255, 0));
 }
 
 .file-explorer__editor-shell,
@@ -331,7 +337,7 @@
   flex-direction: column;
   border: 1px solid var(--glass-border);
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--vc-surface-3);
   box-shadow: 0 24px 60px rgba(0, 0, 0, 0.22);
   overflow: hidden;
 }
@@ -350,15 +356,15 @@
 .file-explorer__changes-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--glass-border);
-  background: rgba(245, 197, 66, 0.08);
+  background: rgba(var(--vc-warning-rgb), 0.08);
 }
 
 .file-explorer__changes-title {
-  color: #f5c542;
-  font-size: 11px;
+  color: var(--vc-warning);
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -370,17 +376,17 @@
 }
 
 .file-explorer__changes-item {
-  border: 1px solid rgba(245, 197, 66, 0.25);
-  background: rgba(245, 197, 66, 0.08);
-  color: #f8d36e;
+  border: 1px solid rgba(var(--vc-warning-rgb), 0.25);
+  background: rgba(var(--vc-warning-rgb), 0.08);
+  color: var(--vc-warning);
   border-radius: 999px;
-  padding: 3px 9px;
+  padding: 3px 8px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .file-explorer__changes-item:hover {
-  background: rgba(245, 197, 66, 0.14);
+  background: rgba(var(--vc-warning-rgb), 0.14);
 }
 
 .file-explorer__tab {
@@ -390,14 +396,14 @@
   min-width: 0;
   max-width: 220px;
   height: 34px;
-  padding: 0 10px;
+  padding: 0 8px;
   border-radius: 10px 10px 0 0;
   cursor: pointer;
   color: var(--text-tertiary);
 }
 
 .file-explorer__tab--active {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--vc-surface-3);
   color: var(--text-primary);
 }
 
@@ -409,7 +415,7 @@
   width: 8px;
   height: 8px;
   border-radius: 999px;
-  background: #f5c542;
+  background: var(--vc-warning);
 }
 
 .file-explorer__tab-close {
@@ -423,7 +429,7 @@
 }
 
 .file-explorer__tab-close:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--vc-surface-3);
 }
 
 .file-explorer__workspace-card {
@@ -435,7 +441,7 @@
   font-size: 24px;
   font-weight: 700;
   color: var(--text-primary);
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .file-explorer__workspace-text {
@@ -454,7 +460,7 @@
 .file-explorer__preview-header {
   justify-content: space-between;
   gap: 16px;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid var(--glass-border);
 }
 
@@ -467,11 +473,11 @@
   display: inline-flex;
   align-items: center;
   min-height: 30px;
-  padding: 0 10px;
+  padding: 0 8px;
   border: 1px solid var(--glass-border);
   border-radius: 999px;
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -513,10 +519,10 @@
 }
 
 .file-explorer__diff-head {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--glass-border);
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -526,7 +532,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 18px;
+  padding: 16px;
   background: rgba(7, 10, 18, 0.82);
   color: #dbe6ff;
   font-family: var(--font-mono);
@@ -552,14 +558,14 @@
 .file-explorer .token.boolean,
 .file-explorer__diff-code .token.number,
 .file-explorer__diff-code .token.boolean {
-  color: #ffb86b;
+  color: var(--vc-warning);
 }
 
 .file-explorer .token.keyword,
 .file-explorer .token.operator,
 .file-explorer__diff-code .token.keyword,
 .file-explorer__diff-code .token.operator {
-  color: #ff7b72;
+  color: var(--vc-danger);
 }
 
 .file-explorer .token.function,
@@ -572,20 +578,20 @@
 }
 
 .file-search-results {
-  padding: 10px 0 16px;
+  padding: 8px 0 16px;
 }
 
 .file-search-results__title,
 .file-search-results__label {
-  padding: 0 14px 8px;
+  padding: 0 12px 8px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: var(--vc-text-base);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
 .file-search-results__group + .file-search-results__group {
-  margin-top: 10px;
+  margin-top: 8px;
 }
 
 .file-search-results__item {
@@ -595,7 +601,7 @@
   gap: 4px;
   border: none;
   background: transparent;
-  padding: 8px 14px;
+  padding: 8px 12px;
   text-align: left;
   cursor: pointer;
 }
@@ -612,7 +618,7 @@
 .file-search-results__path,
 .file-search-results__snippet {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -633,7 +639,7 @@
 }
 
 .file-explorer__status {
-  margin-top: 14px;
+  margin-top: 12px;
 }
 
 .file-context-menu {
@@ -653,7 +659,7 @@
   background: transparent;
   color: var(--text-secondary);
   border-radius: 8px;
-  padding: 9px 10px;
+  padding: 8px 8px;
   text-align: left;
   cursor: pointer;
 }
@@ -674,7 +680,7 @@
 }
 
 .file-context-menu__item--danger {
-  color: #ff8f8f;
+  color: var(--vc-danger);
 }
 
 .file-modal-backdrop {
@@ -689,7 +695,7 @@
 
 .file-modal {
   width: min(420px, calc(100% - 32px));
-  padding: 22px;
+  padding: 24px;
   border-radius: 18px;
   border: 1px solid var(--glass-border);
   background: rgba(16, 20, 30, 0.98);
@@ -697,14 +703,14 @@
 }
 
 .file-modal__title {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   color: var(--text-primary);
   font-size: 20px;
 }
 
 .file-modal__text {
   color: var(--text-secondary);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   word-break: break-word;
 }
 
@@ -714,7 +720,7 @@
   padding: 0 12px;
   border: 1px solid var(--glass-border);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--vc-surface-3);
   color: var(--text-primary);
   margin-bottom: 16px;
 }
@@ -752,7 +758,7 @@
 
 .file-explorer__multi-count {
   margin-top: 8px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--accent-primary);
 }
 
@@ -770,7 +776,7 @@
 .file-tree-indent {
   flex-shrink: 0;
   height: 100%;
-  border-left: 1px solid rgba(255, 255, 255, 0.05);
+  border-left: 1px solid var(--vc-line);
 }
 
 .file-explorer__split-toggle {
@@ -779,7 +785,7 @@
   padding: 0 12px;
   border: 1px solid var(--glass-border);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--vc-surface-3);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -816,18 +822,18 @@
   border: 1px solid var(--glass-border);
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.02);
+  background: var(--vc-surface-3);
 }
 
 .file-explorer__pane--active {
-  box-shadow: inset 0 0 0 1px rgba(88, 166, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(var(--vc-accent-rgb), 0.2);
 }
 
 .file-explorer__pane-head {
-  padding: 10px 14px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--glass-border);
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -840,15 +846,15 @@
 
 .file-explorer__git-panel {
   border-top: 1px solid var(--glass-border);
-  padding-top: 10px;
+  padding-top: 8px;
   max-height: 180px;
   overflow: hidden;
 }
 
 .file-explorer__git-title {
-  padding: 0 14px 8px;
+  padding: 0 12px 8px;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
@@ -858,7 +864,7 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 0 10px 8px 0;
+  padding: 0 8px 8px 0;
 }
 
 .file-explorer__git-actions {
@@ -871,9 +877,9 @@
   padding: 0 8px;
   border: 1px solid var(--glass-border);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--vc-surface-3);
   color: var(--text-secondary);
-  font-size: 11px;
+  font-size: var(--vc-text-base);
   cursor: pointer;
 }
 
@@ -896,14 +902,14 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-right: 10px;
+  padding-right: 8px;
 }
 
 .file-explorer__git-item {
   flex: 1;
   display: flex;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 7px 12px;
   background: transparent;
   border: none;
   text-align: left;
@@ -914,20 +920,45 @@
   background: var(--glass-hover);
 }
 
+/* Antes eran dos letras crudas en 22px fijos; ahora es la palabra que
+   nombra el estado, con color segun su gravedad. */
 .file-explorer__git-code {
-  width: 22px;
   flex-shrink: 0;
-  color: #f5c542;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  min-width: 74px;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: var(--vc-radius-xs);
+  color: var(--vc-warning);
+  font-size: var(--vc-text-2xs);
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
 }
+
+.file-explorer__git-code--new { color: var(--vc-success); }
+.file-explorer__git-code--staged { color: var(--vc-accent); }
+.file-explorer__git-code--danger { color: var(--vc-danger); }
+.file-explorer__git-code--muted { color: var(--vc-text-3); }
 
 .file-explorer__git-path,
 .file-explorer__git-empty {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .file-explorer__git-empty {
-  padding: 0 14px 10px;
+  padding: 0 12px 8px;
+}
+
+/* ─── Foco dentro del arbol ────────────────────────────────────────────
+   La navegacion por flechas mueve el foco sin cambiar la seleccion, asi
+   que la fila enfocada necesita marca propia y distinta de la elegida. */
+.file-tree-item:focus-visible {
+  outline: var(--vc-focus-ring);
+  outline-offset: -2px;
+  border-radius: var(--vc-radius-xs);
+}
+
+.file-tree-list:focus-within .file-tree-item[tabindex="0"] {
+  background: var(--vc-surface-3);
 }

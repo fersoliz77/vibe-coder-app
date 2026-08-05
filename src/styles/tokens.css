@@ -1,0 +1,225 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Vibe IDE Code — Capa canonica de tokens (compartida web + escritorio)
+   Direccion: Workshop Editorial + Precision Studio
+
+   Este archivo es identico en:
+     vibe coder app/src/styles/tokens.css
+     vibe coder web/src/tokens.css
+
+   Regla: aca solo viven tokens canonicos --vc-*.
+   Cada producto mapea sus nombres historicos sobre esta capa, de modo
+   que ningun componente necesita cambiar para adoptar el sistema.
+   ═══════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* ─── Tipografia ──────────────────────────────────────────────────
+     Interfaz humanista + mono compartida. 14px es el minimo operativo
+     y 17px el tamano de lectura sostenida.                            */
+  --vc-font-sans: 'Manrope', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --vc-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
+  --vc-font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
+
+  --vc-text-2xs: 11px;  /* solo badges no informativos */
+  --vc-text-xs: 12px;   /* metadatos secundarios */
+  --vc-text-sm: 13px;
+  --vc-text-base: 14px; /* minimo operativo */
+  --vc-text-md: 15px;
+  --vc-text-lg: 17px;   /* lectura */
+  --vc-leading-tight: 1.25;
+  --vc-leading-normal: 1.5;
+  --vc-leading-read: 1.65;
+
+  /* ─── Superficies (oscuro por defecto) ────────────────────────────
+     Solidas. La jerarquia se construye con luminosidad, no con vidrio. */
+  --vc-surface-0: #0c0e12;
+  --vc-surface-1: #12151b;
+  --vc-surface-2: #181c24;
+  --vc-surface-3: #1f242e;
+  --vc-surface-4: #272d39;
+
+  /* ─── Texto ───────────────────────────────────────────────────────
+     Los tres niveles cumplen AA sobre surface-0 y surface-1.          */
+  --vc-text-1: #eef1f6;  /* 15.2:1 */
+  --vc-text-2: #b3bccb;  /* 10.1:1 */
+  --vc-text-3: #8b95a6;  /*  6.4:1 */
+
+  /* ─── Lineas ──────────────────────────────────────────────────────
+     Siempre 1px. El grosor no comunica jerarquia; el contraste si.    */
+  --vc-line: #262c37;
+  --vc-line-strong: #38414f;
+
+  /* ─── Acento unico ────────────────────────────────────────────────
+     Un solo acento de marca. Los colores semanticos no compiten.      */
+  --vc-accent: #7c8cff;         /* 6.5:1 sobre surface-0 */
+  --vc-accent-hover: #929fff;
+  --vc-accent-dim: #4d5cc4;
+  --vc-accent-soft: #1c2145;
+  --vc-accent-line: #39427e;
+  --vc-on-accent: #0b0d13;
+
+  /* Componentes RGB: permiten que un rgba() con alfa arbitrario siga
+     el tema activo, sin reescribir cada declaracion historica. */
+  --vc-accent-rgb: 124, 140, 255;
+  --vc-ink-rgb: 238, 241, 246;
+
+  /* ─── Semanticos ──────────────────────────────────────────────────*/
+  --vc-success: #44c58a;
+  --vc-success-soft: #12301f;
+  --vc-success-line: #1e5238;
+  --vc-warning: #e0a355;
+  --vc-warning-soft: #33230f;
+  --vc-warning-line: #5c421d;
+  --vc-danger: #eb6a6a;
+  --vc-danger-soft: #331617;
+  --vc-danger-line: #5e2a2c;
+  --vc-info: var(--vc-accent);
+
+  --vc-success-rgb: 68, 197, 138;
+  --vc-warning-rgb: 224, 163, 85;
+  --vc-danger-rgb: 235, 106, 106;
+
+  /* ─── Espaciado: escala base 4 ────────────────────────────────────*/
+  --vc-space-1: 4px;
+  --vc-space-2: 8px;
+  --vc-space-3: 12px;
+  --vc-space-4: 16px;
+  --vc-space-6: 24px;
+  --vc-space-8: 32px;
+  --vc-space-12: 48px;
+  --vc-space-16: 64px;
+  --vc-space-24: 96px;
+
+  /* ─── Radios ──────────────────────────────────────────────────────*/
+  --vc-radius-xs: 4px;   /* compacto: chips, celdas */
+  --vc-radius-sm: 6px;
+  --vc-radius-md: 8px;   /* controles */
+  --vc-radius-lg: 12px;  /* paneles */
+  --vc-radius-xl: 16px;  /* superficies especiales */
+  --vc-radius-full: 9999px;
+
+  /* ─── Sombras ─────────────────────────────────────────────────────
+     Elevacion real, sin glow de color.                                */
+  --vc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --vc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+  --vc-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.44);
+
+  /* ─── Movimiento ──────────────────────────────────────────────────
+     Feedback 120-180ms, dialogos 180-240ms. Nunca `all`.              */
+  --vc-ease: cubic-bezier(0.2, 0, 0, 1);
+  --vc-duration-fast: 120ms;
+  --vc-duration-normal: 160ms;
+  --vc-duration-dialog: 220ms;
+
+  /* Listas de propiedades explicitas, para reemplazar `transition: all` */
+  --vc-transition-fast:
+    background-color var(--vc-duration-fast) var(--vc-ease),
+    border-color var(--vc-duration-fast) var(--vc-ease),
+    color var(--vc-duration-fast) var(--vc-ease),
+    opacity var(--vc-duration-fast) var(--vc-ease),
+    box-shadow var(--vc-duration-fast) var(--vc-ease);
+  --vc-transition-normal:
+    background-color var(--vc-duration-normal) var(--vc-ease),
+    border-color var(--vc-duration-normal) var(--vc-ease),
+    color var(--vc-duration-normal) var(--vc-ease),
+    opacity var(--vc-duration-normal) var(--vc-ease),
+    box-shadow var(--vc-duration-normal) var(--vc-ease);
+
+  /* ─── Foco ────────────────────────────────────────────────────────*/
+  --vc-focus-ring: 2px solid var(--vc-accent);
+  --vc-focus-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Tema claro — papel mineral, calido.
+   Se soportan los dos selectores historicos: la web usa `body.light-mode`
+   y el escritorio `.light-theme`.
+   ═══════════════════════════════════════════════════════════════════ */
+body.light-mode,
+.light-theme,
+[data-theme='light'] {
+  --vc-surface-0: #f4f2ed;
+  --vc-surface-1: #fbfaf7;
+  --vc-surface-2: #ffffff;
+  --vc-surface-3: #edeae3;
+  --vc-surface-4: #e3dfd6;
+
+  --vc-text-1: #16181d;  /* 15.9:1 */
+  --vc-text-2: #454b57;  /*  8.6:1 */
+  --vc-text-3: #5f6675;  /*  5.2:1 */
+
+  --vc-line: #dcd8cf;
+  --vc-line-strong: #bdb8ac;
+
+  --vc-accent: #4d5edb;  /* 4.8:1 sobre surface-0 */
+  --vc-accent-hover: #3f4fc4;
+  --vc-accent-dim: #8e97e8;
+  --vc-accent-soft: #e8eafc;
+  --vc-accent-line: #c2c8f5;
+  --vc-on-accent: #ffffff;
+
+  --vc-accent-rgb: 77, 94, 219;
+  --vc-ink-rgb: 22, 24, 29;
+  --vc-success-rgb: 23, 114, 74;
+  --vc-warning-rgb: 150, 85, 26;
+  --vc-danger-rgb: 179, 39, 31;
+
+  --vc-success: #17724a;
+  --vc-success-soft: #e3f3ea;
+  --vc-success-line: #b6ddc7;
+  --vc-warning: #96551a;
+  --vc-warning-soft: #fbeeda;
+  --vc-warning-line: #e6cba1;
+  --vc-danger: #b3271f;
+  --vc-danger-soft: #fbe8e6;
+  --vc-danger-line: #edc0bb;
+
+  --vc-shadow-sm: 0 1px 2px rgba(32, 30, 26, 0.08);
+  --vc-shadow-md: 0 4px 12px rgba(32, 30, 26, 0.10);
+  --vc-shadow-lg: 0 12px 32px rgba(32, 30, 26, 0.12);
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Base compartida
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Foco visible y consistente en todo control alcanzable por teclado.
+   Se aplica solo con :focus-visible, asi el mouse no lo dispara. */
+:focus-visible {
+  outline: var(--vc-focus-ring);
+  outline-offset: var(--vc-focus-offset);
+  border-radius: var(--vc-radius-xs);
+}
+
+/* Contenido solo para lectores de pantalla: fuera de la vista, pero dentro
+   del arbol de accesibilidad. No usa `display:none` ni `visibility:hidden`,
+   que lo sacarian tambien del anuncio. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
+::selection {
+  background: var(--vc-accent-soft);
+  color: var(--vc-text-1);
+}
+
+/* Reduced motion es obligatorio: se neutraliza toda animacion
+   decorativa sin desactivar cambios de estado. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

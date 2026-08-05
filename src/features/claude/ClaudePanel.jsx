@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import { useI18n } from '../../i18n/I18nContext';
+import ConfirmDialog from '../../components/ConfirmDialog';
 import './ClaudePanel.css';
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -22,6 +23,19 @@ function ProgressLog({ entries }) {
 }
 
 // ─── Screens ─────────────────────────────────────────────────────────────────
+
+function StatusFailedScreen({ error, onRetry }) {
+  const { t } = useI18n();
+  return (
+    <div className="claude-setup-screen" role="alert">
+      <div className="claude-setup-screen__icon claude-setup-screen__icon--error"><ClaudeIcon size={28} /></div>
+      <h3>{t('ai.statusFailed')}</h3>
+      <p className="text-secondary">{t('ai.statusFailedCopy')}</p>
+      {error && <pre className="claude-setup-screen__error">{error}</pre>}
+      <button className="btn btn--primary" onClick={onRetry} type="button">{t('ai.retry')}</button>
+    </div>
+  );
+}
 
 function NotInstalledScreen({ onInstall, isInstalling, installLog }) {
   const { t } = useI18n();
@@ -246,6 +260,8 @@ export default function ClaudePanel({
   const [input, setInput] = useState('');
   const [model, setModel] = useState('claude-sonnet-4-6');
   const inputRef = useRef(null);
+  // Limpiar y cerrar sesion borran historial que no se puede recuperar.
+  const [pendingAction, setPendingAction] = useState(null);
 
   const handleSend = () => {
     const trimmed = input.trim();
@@ -270,10 +286,10 @@ export default function ClaudePanel({
         </div>
         <div className="claude-panel__header-actions">
           {isAvailable && messages.length > 0 && (
-            <button className="btn btn--small" onClick={clear}>{t('ai.clear')}</button>
+            <button className="btn btn--small" onClick={() => setPendingAction('clear')}>{t('ai.clear')}</button>
           )}
           {isAvailable && (
-            <button className="btn btn--small btn--ghost" onClick={logout} title={t('ai.logout')}>
+            <button className="btn btn--small btn--ghost" onClick={() => setPendingAction('logout')} title={t('ai.logout')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           )}
@@ -292,6 +308,8 @@ export default function ClaudePanel({
             <div className="claude-spinner" />
             <span className="text-tertiary">{t('ai.checking')}</span>
           </div>
+        ) : status.error ? (
+          <StatusFailedScreen error={status.error} onRetry={refreshStatus} />
         ) : !status.installed ? (
           <NotInstalledScreen onInstall={install} isInstalling={isInstalling} installLog={installLog} />
         ) : !status.authenticated ? (
@@ -306,13 +324,26 @@ export default function ClaudePanel({
             setInput={setInput}
             onSend={handleSend}
             onCancel={cancel}
-            onLogout={logout}
+            onLogout={() => setPendingAction('logout')}
             inputRef={inputRef}
             model={model}
             setModel={setModel}
           />
         )}
       </div>
+
+      <ConfirmDialog
+        open={pendingAction !== null}
+        title={pendingAction === 'logout' ? t('ai.logoutTitle') : t('ai.clearTitle')}
+        description={pendingAction === 'logout' ? t('ai.logoutCopy') : t('ai.clearCopy')}
+        confirmLabel={pendingAction === 'logout' ? t('ai.logoutConfirm') : t('ai.clearConfirm')}
+        onConfirm={() => {
+          const action = pendingAction;
+          setPendingAction(null);
+          if (action === 'logout') logout(); else clear();
+        }}
+        onCancel={() => setPendingAction(null)}
+      />
     </div>
   );
 }

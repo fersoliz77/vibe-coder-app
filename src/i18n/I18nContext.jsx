@@ -3,15 +3,21 @@ import { dictionaries, getSystemLocale, SUPPORTED_LOCALES } from './locales';
 import { useAppStore } from '../store/useAppStore';
 
 const I18nContext = createContext(null);
-const legacyAi = {
-  en: { connected: 'Connected', notConnected: 'Not connected', checking: 'Checking...', notInstalled: 'Not installed', notAuthenticated: 'Not authenticated', clear: 'Clear', logout: 'Log out', refresh: 'Refresh status', model: 'Model', reasoning: 'Reasoning', you: 'You', thinkingClaude: 'Claude is thinking...', thinkingChatGPT: 'ChatGPT is thinking...', askClaude: 'Ask Claude...', askChatGPT: 'Ask ChatGPT...', stop: 'Stop', send: 'Send', inputHint: 'Enter to send · Shift+Enter for a new line', suggestions: { react: 'Create a React component', debug: 'Debug this error', explainCode: 'Explain this code', tests: 'Write unit tests', review: 'Review this code', explainError: 'Explain this error' } },
-  es: { connected: 'Conectado', notConnected: 'No conectado', checking: 'Comprobando...', notInstalled: 'No instalado', notAuthenticated: 'No autenticado', clear: 'Limpiar', logout: 'Cerrar sesión', refresh: 'Actualizar estado', model: 'Modelo', reasoning: 'Razonamiento', you: 'Tú', thinkingClaude: 'Claude está pensando...', thinkingChatGPT: 'ChatGPT está pensando...', askClaude: 'Preguntale algo a Claude...', askChatGPT: 'Preguntale algo a ChatGPT...', stop: 'Detener', send: 'Enviar', inputHint: 'Enter para enviar · Shift+Enter para nueva línea', suggestions: { react: 'Creá un componente React', debug: 'Depurá este error', explainCode: 'Explicá este código', tests: 'Escribí tests unitarios', review: 'Revisá este código', explainError: 'Explicá este error' } },
-};
 
+const resolve = (source, key) => key.split('.').reduce((value, segment) => value?.[segment], source);
+
+/*
+ * Busca en el idioma activo y, si falta la clave, cae al ingles antes de
+ * mostrar la clave cruda.
+ *
+ * Aca vivia un tercer diccionario, `legacyAi`, que parcheaba las claves de
+ * `ai.*` borradas por un Object.assign en locales.js. Nunca funciono: sus
+ * claves estaban al nivel raiz ('clear') y las busquedas llegan con prefijo
+ * ('ai.clear'), asi que jamas resolvio nada. La causa se arreglo en
+ * locales.js y este fallback se elimino.
+ */
 function translate(locale, key, values) {
-  const message = key.split('.').reduce((value, segment) => value?.[segment], dictionaries[locale])
-    ?? key.split('.').reduce((value, segment) => value?.[segment], legacyAi[locale])
-    ?? key.split('.').reduce((value, segment) => value?.[segment], dictionaries.en);
+  const message = resolve(dictionaries[locale], key) ?? resolve(dictionaries.en, key);
   if (typeof message !== 'string') return key;
   return message.replace(/{{(\w+)}}/g, (_, name) => values?.[name] ?? `{{${name}}}`);
 }

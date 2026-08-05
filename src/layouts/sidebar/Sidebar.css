@@ -34,14 +34,13 @@
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: all var(--transition-normal);
+  transition: var(--vc-transition-normal);
   overflow: visible;
 }
 
 .sidebar__item:hover {
   background: var(--glass-hover);
   color: var(--text-secondary);
-  transform: scale(1.05);
 }
 
 .sidebar__item--active {
@@ -82,13 +81,13 @@
   color: var(--text-primary);
   padding: var(--space-xs) var(--space-sm);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--vc-text-base);
   font-weight: 500;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
   transform: translateX(-5px);
-  transition: all var(--transition-fast);
+  transition: var(--vc-transition-fast);
   z-index: 1000;
   border: 1px solid var(--glass-border);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
@@ -110,7 +109,7 @@
   justify-content: center;
   background: var(--accent-primary);
   color: white;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   border-radius: var(--radius-full);
   padding: 0 4px;
@@ -119,7 +118,7 @@
 
 .sidebar__badge--success {
   background: var(--status-success);
-  font-size: 8px;
+  font-size: 12px;
 }
 
 .sidebar__footer {

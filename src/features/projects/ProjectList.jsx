@@ -3,6 +3,7 @@ import GlobalServices from '../services/GlobalServices';
 import CreateProjectWizard from './CreateProjectWizard';
 import './ProjectList.css';
 import { useI18n } from '../../i18n/I18nContext';
+import ConfirmDialog from '../../components/ConfirmDialog';
 
 export default function ProjectList({ onProjectSelect, onOpenSetup, services = [], claudeAvailable = false, onRefreshServices }) {
   const { t, formatDate } = useI18n();
@@ -12,6 +13,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
   const [createdProject, setCreatedProject] = useState(null);
   const [environmentMissing, setEnvironmentMissing] = useState(false);
   const [projectError, setProjectError] = useState('');
+  // Proyecto pendiente de confirmacion antes de quitarlo de la lista.
+  const [pendingRemoval, setPendingRemoval] = useState(null);
 
   useEffect(() => {
     loadProjects();
@@ -62,12 +65,23 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
     onProjectSelect(project);
   };
 
-  const handleRemove = async (e, id) => {
+  const handleRemove = (e, project) => {
     e.stopPropagation();
-    if (window.electronAPI && window.electronAPI.projects) {
-      await window.electronAPI.projects.remove(id);
-      loadProjects();
+    setPendingRemoval(project);
+  };
+
+  const confirmRemove = async () => {
+    const project = pendingRemoval;
+    setPendingRemoval(null);
+    if (!project || !window.electronAPI?.projects) return;
+    setProjectError('');
+    try {
+      await window.electronAPI.projects.remove(project.id);
+    } catch (error) {
+      setProjectError(error?.message || t('projects.removeFailed'));
+      return;
     }
+    loadProjects();
   };
 
   return (
@@ -94,7 +108,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
                 </div>
                 <button
                   className="project-card__remove"
-                  onClick={(e) => handleRemove(e, proj.id)}
+                  onClick={(e) => handleRemove(e, proj)}
                   title={t('projects.remove')}
                   aria-label={t('projects.removeAria', { name: proj.name })}
                 >
@@ -140,6 +154,15 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         <GlobalServices services={services} onRefresh={onRefreshServices} />
       </div>
       {wizardOpen && <CreateProjectWizard onClose={closeWizard} onCreated={(response) => { setCreatedProject(response.project); loadProjects(); }} />}
+      <ConfirmDialog
+        open={Boolean(pendingRemoval)}
+        title={t('projects.removeTitle', { name: pendingRemoval?.name })}
+        description={t('projects.removeCopy')}
+        detail={t('projects.removeDetail', { path: pendingRemoval?.path })}
+        confirmLabel={t('projects.removeConfirm')}
+        onConfirm={confirmRemove}
+        onCancel={() => setPendingRemoval(null)}
+      />
     </div>
   );
 }
