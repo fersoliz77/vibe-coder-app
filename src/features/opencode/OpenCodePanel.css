@@ -52,6 +52,41 @@
   font-size: 14px;
 }
 
+/* Un arranque fallido no puede verse igual que un arranque en curso. */
+.opencode-panel__failure {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 12px;
+  padding: 24px;
+  text-align: center;
+}
+
+.opencode-panel__failure strong {
+  color: var(--vc-danger);
+  font-size: var(--vc-text-md);
+}
+
+.opencode-panel__failure-detail {
+  max-width: 60ch;
+  margin: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-2);
+  font-family: var(--vc-font-mono);
+  font-size: var(--vc-text-xs);
+  line-height: 1.55;
+}
+
+.opencode-panel__failure[role='alert'] .opencode-panel__failure-detail {
+  border-color: var(--vc-danger-line);
+  background: var(--vc-danger-soft);
+}
+
 .opencode-panel__badge {
   background: rgba(var(--vc-accent-rgb), 0.1);
   color: var(--vc-accent);

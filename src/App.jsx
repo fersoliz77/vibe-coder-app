@@ -146,6 +146,20 @@ function Workspace() {
     }
   }, [terminalHook, currentProject]);
 
+  // Configuracion informaba el estado de GitHub/Vercel pero no ofrecia forma de
+  // conectarlos. El comando oficial se ejecuta en la terminal del proyecto, que
+  // es la unica con cwd autorizado.
+  const handleRunInTerminal = useCallback(async (command) => {
+    if (!currentProject || !command) return false;
+    setActiveView(VIEWS.TERMINAL);
+    const existing = terminalHook.terminals.find((term) => !term.error);
+    const target = existing ?? await terminalHook.createTerminal();
+    if (!target?.id || target.error) return false;
+    terminalHook.setActiveTerminalId(target.id);
+    terminalHook.writeToTerminal(target.id, `${command}\r`);
+    return true;
+  }, [currentProject, terminalHook]);
+
   // Quick action: open Claude from dashboard
   const handleOpenClaude = useCallback(() => {
     if (!currentProject) return;
@@ -306,7 +320,15 @@ function Workspace() {
     }
 
     if (activeView === VIEWS.SETTINGS) {
-      return <SettingsPanel theme={theme} onSetTheme={setTheme} onReopenOnboarding={() => setOnboardingDone(false)} />;
+      return (
+        <SettingsPanel
+          theme={theme}
+          onSetTheme={setTheme}
+          onReopenOnboarding={() => setOnboardingDone(false)}
+          onRunInTerminal={handleRunInTerminal}
+          canRunInTerminal={Boolean(currentProject)}
+        />
+      );
     }
 
     if (activeView === VIEWS.PROJECTS) {

@@ -127,6 +127,47 @@
   gap: var(--space-md);
 }
 
+/* Una sesion cuyo shell no arranco no monta xterm: en su lugar se explica. */
+.terminal-panel__instance--error {
+  align-items: center;
+  justify-content: center;
+}
+
+/* Abrir una terminal nueva podia fallar en silencio si ya habia otra abierta. */
+.terminal-panel__banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--vc-danger-line);
+  background: var(--vc-danger-soft);
+  color: var(--vc-text-2);
+  font-size: var(--vc-text-xs);
+}
+
+.terminal-panel__banner strong {
+  color: var(--vc-danger);
+}
+
+.terminal-panel__banner-actions {
+  display: flex;
+  gap: var(--space-2);
+  flex: 0 0 auto;
+}
+
+.terminal-panel__tab-badge {
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--vc-danger-soft);
+  color: var(--vc-danger);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 /* Un fallo no puede verse igual que "todavia no abriste ninguna". */
 .terminal-panel__empty--error {
   padding: var(--space-6);

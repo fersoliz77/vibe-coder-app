@@ -6,6 +6,9 @@ import './SettingsPanel.css';
 
 const ACCESSIBILITY_KEY = 'vibe-accessibility';
 
+// Los que el asistente de creacion exige o usa para el backend.
+const DELIVERY_SERVICES = ['github', 'vercel', 'supabase'];
+
 const SETTINGS_TABS = [
   { id: 'services', labelKey: 'settings.tabs.services', descriptionKey: 'settings.tabs.servicesCopy' },
   { id: 'preferences', labelKey: 'settings.tabs.preferences', descriptionKey: 'settings.tabs.preferencesCopy' },
@@ -34,13 +37,68 @@ function ProviderStatus({ name, detail, connected, loading }) {
   );
 }
 
-export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding }) {
+/*
+ * GitHub y Vercel se comprobaban pero no se podian conectar desde ningun lado.
+ * El asistente de creacion bloqueaba en el paso 5 pidiendo ambas cuentas y
+ * mandaba a Configuracion, donde no habia ningun control. Aca esta el control:
+ * el comando oficial de cada CLI, para copiar o ejecutar en la terminal del
+ * proyecto abierto.
+ */
+function DeliveryProvider({ service, command, onRun, canRun }) {
+  const { t } = useI18n();
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(command);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* sin portapapeles queda el comando a la vista igual */ }
+  };
+
+  return (
+    <div className="settings-delivery__item">
+      <ProviderStatus
+        name={service.name}
+        loading={service.checking}
+        connected={service.connected}
+        detail={service.connected ? (service.user || t('settings.connected')) : t('settings.notConnected')}
+      />
+      {!service.connected && !service.checking && (
+        command ? (
+          <div className="settings-delivery__connect">
+            <button className="btn btn--small" type="button" aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+              {t('settings.connect')}
+            </button>
+            {open && (
+              <div className="settings-delivery__command">
+                <p className="settings-copy">{t('settings.connectManual')}</p>
+                <code>{command}</code>
+                <div className="settings-delivery__actions">
+                  <button className="btn btn--small" type="button" onClick={copy}>{copied ? t('settings.connectCopied') : t('settings.connectCopy')}</button>
+                  <button className="btn btn--small btn--ghost" type="button" disabled={!canRun} onClick={() => onRun(command)}>{t('settings.connectRun')}</button>
+                </div>
+                {!canRun && <small className="settings-delivery__hint">{t('settings.connectNeedsProject')}</small>}
+              </div>
+            )}
+          </div>
+        ) : (
+          <small className="settings-delivery__hint">{t('settings.connectNoCommand')}</small>
+        )
+      )}
+    </div>
+  );
+}
+
+export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, onRunInTerminal, canRunInTerminal = false }) {
   const { state, revalidate, logout } = useAuth();
   const { language, setLanguage, t, formatDate } = useI18n();
   const [busy, setBusy] = useState('');
   const [message, setMessage] = useState('');
   const [accessibility, setAccessibility] = useState(readAccessibility);
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
+  const [delivery, setDelivery] = useState({ loading: true, services: [], commands: {}, error: '' });
   const [activeTab, setActiveTab] = useState('services');
   const [exportState, setExportState] = useState({ busy: false, message: '' });
 
@@ -62,8 +120,27 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding })
     }
   };
 
+  const refreshDelivery = async () => {
+    setDelivery((current) => ({ ...current, loading: true, error: '' }));
+    try {
+      // Sin ruta de proyecto: lo que interesa aca es la cuenta, no el vinculo.
+      const results = await window.electronAPI.services.checkAll(null);
+      const commands = {};
+      await Promise.all(DELIVERY_SERVICES.map(async (id) => {
+        try {
+          const { command } = await window.electronAPI.services.connect(id, null) ?? {};
+          commands[id] = command || '';
+        } catch { commands[id] = ''; }
+      }));
+      setDelivery({ loading: false, services: results ?? [], commands, error: '' });
+    } catch {
+      setDelivery({ loading: false, services: [], commands: {}, error: t('settings.deliveryUnavailable') });
+    }
+  };
+
   useEffect(() => {
     refreshProviders();
+    refreshDelivery();
   }, [t]);
 
   useEffect(() => {
@@ -122,6 +199,26 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding })
                   <ProviderStatus name="OpenCode" loading={providers.loading} connected={providers.opencode?.authenticated} detail={!providers.opencode?.installed ? t('settings.optionalNotInstalled') : !providers.opencode?.usable ? t('settings.repairRequired') : providers.opencode?.authenticated ? `${providers.opencode.providers.join(', ')}${providers.opencode.version ? ` · ${providers.opencode.version}` : ''}` : t('settings.connectInTerminal')} />
                 </div>
                 {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
+              </section>
+              <section className="settings-card">
+                <div className="settings-card__heading"><div><span>{t('settings.deliveryEyebrow')}</span><h2>{t('settings.deliveryTitle')}</h2></div><button className="btn btn--small" type="button" disabled={delivery.loading} onClick={refreshDelivery}>{t('settings.refreshStatuses')}</button></div>
+                <p className="settings-copy">{t('settings.deliveryCopy')}</p>
+                <div className="settings-delivery">
+                  {DELIVERY_SERVICES.map((id) => {
+                    const service = delivery.services.find((item) => item.id === id)
+                      ?? { id, name: id === 'github' ? 'GitHub' : id === 'vercel' ? 'Vercel' : 'Supabase', connected: false, checking: delivery.loading };
+                    return (
+                      <DeliveryProvider
+                        key={id}
+                        service={{ ...service, checking: delivery.loading || service.checking }}
+                        command={delivery.commands[id]}
+                        canRun={Boolean(canRunInTerminal && onRunInTerminal)}
+                        onRun={onRunInTerminal}
+                      />
+                    );
+                  })}
+                </div>
+                {delivery.error && <p className="settings-provider-error" role="status">{delivery.error}</p>}
               </section>
               <section className="settings-card settings-card--setup">
                 <div className="settings-card__heading"><div><span>{t('settings.localTools')}</span><h2>{t('settings.devEnvironment')}</h2></div><button className="btn btn--small btn--ghost" type="button" onClick={onReopenOnboarding}>{t('settings.openGuidedSetup')}</button></div>

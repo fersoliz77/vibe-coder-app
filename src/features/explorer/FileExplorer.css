@@ -745,14 +745,37 @@
   border-radius: 3px;
 }
 
+/*
+ * Con la ventana angosta —o con escalado de Windows al 150/175%, que reduce el
+ * viewport en DIPs por debajo del minWidth de la ventana— el editor se ocultaba
+ * por completo y quedaba solo el arbol de archivos: la funcion principal del
+ * panel desaparecia sin aviso. Ahora se apilan: arbol arriba, editor abajo.
+ */
 @media (max-width: 900px) {
+  .file-explorer {
+    flex-direction: column;
+  }
+
   .file-explorer__sidebar {
     width: 100%;
+    min-width: 0;
     max-width: none;
+    height: auto;
+    max-height: 40%;
+    border-right: 0;
+    border-bottom: 1px solid var(--glass-border);
   }
 
   .file-explorer__workspace {
-    display: none;
+    flex: 1;
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .file-explorer__editor-shell,
+  .file-explorer__preview,
+  .file-explorer__workspace-card {
+    border-radius: 14px;
   }
 }
 

@@ -7,6 +7,11 @@ export function useTerminal(projectPath) {
   const xtermRefs = useRef(new Map());
 
   const [openCodeTerminal, setOpenCodeTerminal] = useState(null);
+  const [openCodeError, setOpenCodeError] = useState('');
+  const [openCodeStarting, setOpenCodeStarting] = useState(false);
+  // Evita que la precarga en segundo plano y el click del usuario lancen dos
+  // arranques a la vez.
+  const openCodeRequestRef = useRef(false);
   // Ultimo fallo al abrir una terminal. Sin esto, el panel mostraba el mismo
   // vacio que cuando todavia no abriste ninguna.
   const [lastError, setLastError] = useState('');
@@ -45,29 +50,50 @@ export function useTerminal(projectPath) {
     return newTerm;
   }, [terminals.length, projectPath]);
 
+  /*
+   * OpenCode tiene su propio error y su propio "arrancando".
+   *
+   * Antes compartia `lastError` con las terminales comunes —un fallo previo de
+   * otra pestana se mostraba como si fuera de OpenCode— y, sobre todo, cuando
+   * la creacion fallaba nadie lo miraba: el panel se quedaba con el spinner
+   * para siempre porque solo sabia si existia o no la terminal.
+   */
   const createOpenCodeTerminal = useCallback(async () => {
-    if (!window.electronAPI?.terminal) return null;
     if (openCodeTerminal) return openCodeTerminal;
+    if (openCodeRequestRef.current) return null;
 
-    const { ok, data: result, error } = await callIpc(window.electronAPI.terminal.create, {
-      cwd: projectPath,
-      name: 'OpenCode',
-      mode: 'opencode'
-    });
-
-    if (!ok || !result?.id || result.error) {
-      setLastError(result?.error || error || 'No se pudo abrir OpenCode.');
+    if (!window.electronAPI?.terminal) {
+      setOpenCodeError('Terminal no disponible fuera de Electron.');
       return null;
     }
 
-    const newTerm = {
-      id: result.id,
-      name: 'OpenCode',
-      shell: result.shell,
-      error: result.error,
-    };
-    setOpenCodeTerminal(newTerm);
-    return newTerm;
+    openCodeRequestRef.current = true;
+    setOpenCodeStarting(true);
+    setOpenCodeError('');
+    try {
+      const { ok, data: result, error } = await callIpc(window.electronAPI.terminal.create, {
+        cwd: projectPath,
+        name: 'OpenCode',
+        mode: 'opencode'
+      });
+
+      if (!ok || !result?.id || result.error) {
+        setOpenCodeError(result?.error || error || 'No se pudo abrir OpenCode.');
+        return null;
+      }
+
+      const newTerm = {
+        id: result.id,
+        name: 'OpenCode',
+        shell: result.shell,
+        error: result.error,
+      };
+      setOpenCodeTerminal(newTerm);
+      return newTerm;
+    } finally {
+      openCodeRequestRef.current = false;
+      setOpenCodeStarting(false);
+    }
   }, [openCodeTerminal, projectPath]);
 
   const closeTerminal = useCallback((id) => {
@@ -115,6 +141,7 @@ export function useTerminal(projectPath) {
       xtermRefs.current.delete(openCodeTerminal.id);
       setOpenCodeTerminal(null);
     }
+    setOpenCodeError('');
   }, [terminals, openCodeTerminal]);
 
   const getXterm = useCallback((id) => {
@@ -133,6 +160,7 @@ export function useTerminal(projectPath) {
     const unsubscribeExit = window.electronAPI.terminal.onExit((id) => {
       if (openCodeTerminal && id === openCodeTerminal.id) {
         setOpenCodeTerminal(null);
+        setOpenCodeError('');
       } else {
         closeTerminal(id);
       }
@@ -157,6 +185,9 @@ export function useTerminal(projectPath) {
     closeAllTerminals,
     openCodeTerminal,
     createOpenCodeTerminal,
+    openCodeError,
+    openCodeStarting,
+    clearOpenCodeError: () => setOpenCodeError(''),
     lastError,
     clearLastError: () => setLastError(''),
   };

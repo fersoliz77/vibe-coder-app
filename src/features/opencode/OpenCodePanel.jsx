@@ -10,8 +10,22 @@ export default function OpenCodePanel({ activeView, project, terminalHook }) {
   const fitAddonRef = useRef(null);
   const resizeObserverRef = useRef(null);
 
-  const { openCodeTerminal, registerXterm, writeToTerminal, resizeTerminal } = terminalHook;
+  const {
+    openCodeTerminal,
+    registerXterm,
+    writeToTerminal,
+    resizeTerminal,
+    openCodeError,
+    openCodeStarting,
+    createOpenCodeTerminal,
+    clearOpenCodeError,
+  } = terminalHook;
   const terminalId = openCodeTerminal?.id;
+
+  const retry = () => {
+    clearOpenCodeError?.();
+    createOpenCodeTerminal?.();
+  };
 
   // Initialize xterm when openCodeTerminal is available
   useEffect(() => {
@@ -132,13 +146,28 @@ export default function OpenCodePanel({ activeView, project, terminalHook }) {
         </div>
       </div>
       <div className="opencode-panel__content">
-        {!terminalId ? (
-          <div className="opencode-panel__loading">
+        {/* El spinner solo cubre el arranque real. Si la creacion falla se dice
+            por que y se ofrece reintentar: antes la vista se activaba igual y
+            este panel giraba para siempre porque nadie miraba el error. */}
+        {terminalId && <div className="opencode-panel__terminal-container" ref={containerRef} />}
+        {!terminalId && openCodeError && (
+          <div className="opencode-panel__failure" role="alert">
+            <strong>{t('opencode.failedTitle')}</strong>
+            <p className="opencode-panel__failure-detail">{openCodeError}</p>
+            <button className="btn btn--primary" type="button" onClick={retry}>{t('opencode.retry')}</button>
+          </div>
+        )}
+        {!terminalId && !openCodeError && openCodeStarting && (
+          <div className="opencode-panel__loading" role="status">
             <div className="opencode-panel__spinner" />
             <span>{t('opencode.starting')}</span>
           </div>
-        ) : (
-          <div className="opencode-panel__terminal-container" ref={containerRef} />
+        )}
+        {!terminalId && !openCodeError && !openCodeStarting && (
+          <div className="opencode-panel__failure">
+            <p className="opencode-panel__failure-detail">{t('opencode.idle')}</p>
+            <button className="btn btn--primary" type="button" onClick={retry}>{t('opencode.start')}</button>
+          </div>
         )}
       </div>
     </div>
