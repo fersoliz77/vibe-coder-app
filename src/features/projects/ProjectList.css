@@ -35,6 +35,9 @@
 .project-setup-banner span { color: var(--text-secondary); font-size: 12px; }
 .project-setup-banner button { padding: 8px 12px; border: 1px solid rgba(var(--vc-warning-rgb), .35); border-radius: 8px; color: var(--vc-warning); background: transparent; cursor: pointer; }
 .project-error { padding: 12px 12px; border: 1px solid rgba(var(--vc-danger-rgb), .3); border-radius: 10px; color: var(--vc-danger); background: rgba(var(--vc-danger-rgb), .08); font-size: 13px; }
+/* Un listado que fallo tiene que ofrecer salida, no solo el color rojo. */
+.project-error--block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0; padding: 16px; }
+.project-error--block p { margin: 4px 0 0; color: var(--vc-text-2); }
 
 @media (max-width: 900px) {
   .project-list-sidebar { display: none; }

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import { useI18n } from '../../i18n/I18nContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import CopyButton from '../../components/CopyButton';
 import './ClaudePanel.css';
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -184,6 +185,9 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
             {msg.role === 'error' && <div className="claude-panel__message-avatar claude-panel__message-avatar--error">!</div>}
             <div className="claude-panel__message-content">
               <pre className="claude-panel__message-text">{msg.content}</pre>
+              {/* Llevarse una respuesta al editor exigia seleccionarla a mano
+                  dentro de un <pre> con scroll. */}
+              {msg.role === 'assistant' && msg.content && <CopyButton value={msg.content} />}
             </div>
           </div>
         ))}

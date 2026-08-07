@@ -1,1 +1,37 @@
 /* App-level layout overrides */
+
+/* Copiar la respuesta de un agente: la accion mas repetida del chat, y no
+   existia. Aparece al pasar por el mensaje y con foco de teclado. */
+.copy-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: var(--vc-space-2);
+  padding: 3px 8px;
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-xs);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-2xs);
+  font-weight: 600;
+  cursor: pointer;
+  opacity: 0;
+  transition: var(--vc-transition-fast), opacity var(--vc-duration-fast) var(--vc-ease);
+}
+
+.claude-panel__message:hover .copy-button,
+.openai-panel__message:hover .copy-button,
+.copy-button:focus-visible,
+.copy-button.is-copied {
+  opacity: 1;
+}
+
+.copy-button:hover {
+  border-color: var(--vc-line-strong);
+  color: var(--vc-text-1);
+}
+
+.copy-button.is-copied {
+  border-color: var(--vc-success-line);
+  color: var(--vc-success);
+}

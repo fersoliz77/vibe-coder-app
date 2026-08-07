@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { useFocusTrap } from '../../hooks/useFocusTrap';
 import { getRemoteCleanupIdentifiers } from './remoteCleanup.mjs';
 import './CreateProjectWizard.css';
 
@@ -81,6 +82,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
   const steps = ['type', 'project', 'stack', 'backend', 'configuration', 'review', 'creation'].map((key) => t(`createProject.steps.${key}`));
   const radioId = useId();
   const dialogRef = useRef(null);
+  const confirmRef = useRef(null);
   const titleRef = useRef(null);
   const openerRef = useRef(document.activeElement);
   const passwordRef = useRef('');
@@ -180,35 +182,22 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
 
   useEffect(() => () => openerRef.current?.focus?.(), []);
 
-  const requestClose = () => {
+  const requestClose = useCallback(() => {
     if (!isRunning) onClose?.();
-  };
+  }, [isRunning, onClose]);
 
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        if (confirming) setConfirming(false);
-        else requestClose();
-        return;
-      }
-      if (event.key !== 'Tab') return;
-      const focusRoot = confirming ? dialogRef.current.querySelector('.cpw-confirm') : dialogRef.current;
-      const focusable = [...focusRoot.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')];
-      if (!focusable.length) return;
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [confirming, isRunning]);
+  /*
+   * El asistente tenia su propia trampa de foco, escrita a mano y colgada de
+   * `document`. Existiendo useFocusTrap —que ya esta probado y es el que usan
+   * los demas dialogos— tener dos implementaciones significaba que un arreglo
+   * en una no llegaba a la otra.
+   *
+   * Son dos capas reales, asi que son dos trampas: mientras la confirmacion
+   * esta abierta el foco vive dentro de ella, no del asistente.
+   */
+  const closeConfirm = useCallback(() => setConfirming(false), []);
+  useFocusTrap({ active: !confirming, containerRef: dialogRef, onEscape: requestClose, initialFocusRef: titleRef });
+  useFocusTrap({ active: confirming, containerRef: confirmRef, onEscape: closeConfirm, initialFocusRef: titleRef });
 
   const updateName = (value) => {
     setName(value);
@@ -445,7 +434,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
         {setupError && <div className="cpw-banner" role="status"><Icon name="alert" />{setupError}</div>}
         {fieldError && <div className="cpw-error" role="alert"><Icon name="alert" />{fieldError}</div>}
         {!loadingSetup && <footer className="cpw-footer"><span>{step < 6 ? t('createProject.stepCount', { current: step + 1, total: 6 }) : isRunning ? t('createProject.creationInProgress') : t('createProject.processComplete')}</span><div>{step > 0 && step < 6 && <button type="button" className="cpw-button cpw-button--secondary" onClick={goBack}>{t('createProject.back')}</button>}{step < 5 && <button type="button" className="cpw-button cpw-button--primary" onClick={goNext} disabled={!api}>{t('createProject.continue')} <Icon name="arrow" /></button>}{step === 5 && <button type="button" className="cpw-button cpw-button--primary" onClick={() => setConfirming(true)} disabled={!api}>{t('createProject.createProject')}</button>}{isRunning && <button type="button" className="cpw-button cpw-button--danger" onClick={cancelProvision} disabled={canceling}>{canceling ? t('createProject.cancelling') : t('createProject.cancelCreation')}</button>}{step === 6 && !isRunning && <button type="button" className="cpw-button cpw-button--primary" onClick={requestClose}>{t('createProject.close')}</button>}</div></footer>}
-        {confirming && <div className="cpw-confirm-layer"><div className="cpw-confirm" role="alertdialog" aria-modal="true" aria-labelledby="cpw-confirm-title" aria-describedby="cpw-confirm-description"><span className="cpw-confirm__icon"><Icon name="cloud" /></span><h3 id="cpw-confirm-title" ref={titleRef} tabIndex="-1">{t('createProject.confirmTitle', { name })}</h3><p id="cpw-confirm-description">{t('createProject.confirmCopy', { backend: backend === 'firebase' ? 'Firebase' : 'Supabase' })}</p><div><button type="button" className="cpw-button cpw-button--secondary" onClick={() => setConfirming(false)}>{t('createProject.back')}</button><button type="button" className="cpw-button cpw-button--primary" onClick={provision}>{t('createProject.confirmAndCreate')}</button></div></div></div>}
+        {confirming && <div className="cpw-confirm-layer"><div className="cpw-confirm" ref={confirmRef} role="alertdialog" aria-modal="true" aria-labelledby="cpw-confirm-title" aria-describedby="cpw-confirm-description"><span className="cpw-confirm__icon"><Icon name="cloud" /></span><h3 id="cpw-confirm-title" ref={titleRef} tabIndex="-1">{t('createProject.confirmTitle', { name })}</h3><p id="cpw-confirm-description">{t('createProject.confirmCopy', { backend: backend === 'firebase' ? 'Firebase' : 'Supabase' })}</p><div><button type="button" className="cpw-button cpw-button--secondary" onClick={() => setConfirming(false)}>{t('createProject.back')}</button><button type="button" className="cpw-button cpw-button--primary" onClick={provision}>{t('createProject.confirmAndCreate')}</button></div></div></div>}
       </div>
     </div>
   );

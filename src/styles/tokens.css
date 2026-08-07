@@ -15,7 +15,10 @@
   /* ─── Tipografia ──────────────────────────────────────────────────
      Interfaz humanista + mono compartida. 14px es el minimo operativo
      y 17px el tamano de lectura sostenida.                            */
-  --vc-font-sans: 'Manrope', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* IBM Plex Sans es la recomendacion de la auditoria: humanista, con una
+     cursiva real y numeros tabulares, que es lo que pide un producto lleno de
+     tablas de progreso. Manrope no tiene ninguna de las dos cosas. */
+  --vc-font-sans: 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --vc-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
   --vc-font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
 
