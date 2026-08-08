@@ -53,14 +53,14 @@ test('lease timers are scheduled only for authenticated future expiries', () => 
   assert.equal(getLeaseTimerDelay({ authenticated: true, leaseExpiresAt: 'invalid' }, now), null);
 });
 
-test('active students and admins receive productive access with a valid lease', () => {
+test('only active students receive productive access with a valid lease', () => {
   const base = { lastValidatedAt: validatedAt, now: Date.parse('2026-07-02T00:00:00.000Z') };
   assert.equal(getEffectivePolicy({ ...base, role: 'student', accountStatus: 'active' }), 'active');
   assert.equal(getEffectivePolicy({ ...base, role: 'student', accountStatus: 'pending' }), 'restricted');
   assert.equal(getEffectivePolicy({ ...base, role: 'student', accountStatus: 'restricted' }), 'restricted');
   assert.equal(getEffectivePolicy({ ...base, role: 'student', accountStatus: 'suspended' }), 'denied');
   assert.equal(getEffectivePolicy({ ...base, role: 'student', accountStatus: 'archived' }), 'denied');
-  assert.equal(getEffectivePolicy({ ...base, role: 'admin', accountStatus: 'active' }), 'active');
+  assert.equal(getEffectivePolicy({ ...base, role: 'admin', accountStatus: 'active' }), 'denied');
   assert.equal(getEffectivePolicy({ ...base, role: 'admin', accountStatus: 'pending' }), 'denied');
   assert.equal(getEffectivePolicy({ ...base, role: 'admin', accountStatus: 'restricted' }), 'denied');
   assert.equal(getEffectivePolicy({ ...base, role: 'admin', accountStatus: 'suspended' }), 'denied');
@@ -74,7 +74,7 @@ test('active students and admins receive productive access with a valid lease', 
 test('expired leases restrict access while malformed leases deny access', () => {
   assert.equal(getEffectivePolicy({ role: 'student', accountStatus: 'active', lastValidatedAt: validatedAt, now: Date.parse('2026-07-08T00:00:00.000Z') }), 'restricted');
   assert.equal(getEffectivePolicy({ role: 'student', accountStatus: 'active', lastValidatedAt: validatedAt, now: Date.parse('2026-07-08T00:00:00.001Z') }), 'restricted');
-  assert.equal(getEffectivePolicy({ role: 'admin', accountStatus: 'active', lastValidatedAt: validatedAt, now: Date.parse('2026-07-08T00:00:00.000Z') }), 'restricted');
+  assert.equal(getEffectivePolicy({ role: 'admin', accountStatus: 'active', lastValidatedAt: validatedAt, now: Date.parse('2026-07-08T00:00:00.000Z') }), 'denied');
   assert.equal(getEffectivePolicy({ role: 'student', accountStatus: 'active', lastValidatedAt: 'bad date' }), 'denied');
 });
 
@@ -129,7 +129,7 @@ test('auth state exposes the complete plan and progress contract', () => {
     totalLessons: 10,
     progressPercentage: 70,
   });
-  assert.equal(service.getState().policy, 'active');
+  assert.equal(service.getState().policy, 'denied');
 });
 
 test('request classifies 401 and 403 as authoritative revocation, but not 5xx', async () => {
@@ -208,14 +208,14 @@ test('RPC revalidation moves an active student to restricted', async () => {
   assert.equal(result.state.policy, 'restricted');
 });
 
-test('RPC revalidation grants productive access to an active admin', async () => {
+test('RPC revalidation denies productive access to an active admin', async () => {
   const service = createRevalidationService({ role: 'admin', status: 'active' });
 
   const result = await service.performRevalidation(0);
 
   assert.equal(result.ok, true);
   assert.equal(result.state.account.role, 'admin');
-  assert.equal(result.state.policy, 'active');
+  assert.equal(result.state.policy, 'denied');
 });
 
 test('empty successful access responses invalidate an active local record', async () => {

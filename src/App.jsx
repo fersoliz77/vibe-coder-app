@@ -1,32 +1,34 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './layouts/sidebar/Sidebar';
 import Dashboard from './features/dashboard/Dashboard';
 import ProjectList from './features/projects/ProjectList';
 import FileExplorer from './features/explorer/FileExplorer';
 import TerminalPanel from './features/terminal/TerminalPanel';
-import ClaudePanel from './features/claude/ClaudePanel';
-import OpenAIPanel from './features/openai/OpenAIPanel';
 import { useServices } from './hooks/useServices';
 import { useTerminal } from './hooks/useTerminal';
 import { useClaude } from './hooks/useClaude';
 import { useAppStore } from './store/useAppStore';
 import AuthGate from './features/auth/AuthGate';
 import { useAuth } from './features/auth/AuthContext';
-import SettingsPanel from './features/settings/SettingsPanel';
 import OpenCodeSetupDialog from './features/opencode/OpenCodeSetupDialog';
 import OpenCodePanel from './features/opencode/OpenCodePanel';
-import OnboardingWizard from './features/setup/OnboardingWizard';
-import PreviewCenter from './features/preview/PreviewCenter';
 import { useI18n } from './i18n/I18nContext';
 import './styles/App.css';
 import { VIEWS, restoreView } from './utils/viewRestore';
 import AppSplash from './components/AppSplash';
+import { applyAccessibility, readAccessibility } from './utils/accessibility';
+
+const ClaudePanel = lazy(() => import('./features/claude/ClaudePanel'));
+const OpenAIPanel = lazy(() => import('./features/openai/OpenAIPanel'));
+const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'));
+const OnboardingWizard = lazy(() => import('./features/setup/OnboardingWizard'));
+const PreviewCenter = lazy(() => import('./features/preview/PreviewCenter'));
 
 
 const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
 
 
-function Workspace() {
+function Workspace({ setCloseCheck }) {
   const { state: authState } = useAuth();
   const { t } = useI18n();
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
@@ -39,6 +41,7 @@ function Workspace() {
 
   // Onboarding: null = not yet loaded from store, false = needs onboarding, true = done
   const [onboardingDone, setOnboardingDone] = useState(null);
+  const [onboardingError, setOnboardingError] = useState('');
   const {
     currentProject,
     theme,
@@ -63,10 +66,7 @@ function Workspace() {
     window.electronAPI?.window?.close();
   };
 
-  useEffect(() => window.electronAPI?.window?.onCloseRequested?.(async () => {
-    if (await explorerRef.current?.prepareToLeave?.() === false) return;
-    window.electronAPI.window.confirmClose();
-  }), []);
+  useEffect(() => setCloseCheck(async () => await explorerRef.current?.prepareToLeave?.() !== false), [setCloseCheck]);
   const handleOpenProjectParent = useCallback(async (event) => {
     event?.preventDefault?.();
     event?.stopPropagation?.();
@@ -77,20 +77,19 @@ function Workspace() {
     }
   }, [currentProject]);
 
-  useEffect(() => {
-    // Load onboarding flag from persistent store
+  const loadOnboarding = useCallback(async () => {
+    setOnboardingError('');
     if (!window.electronAPI?.store) { setOnboardingDone(true); return; }
-    window.electronAPI.store.get('onboardingCompleted', false).then((done) => {
+    try {
+      const done = await window.electronAPI.store.get('onboardingCompleted', false);
       setOnboardingDone(Boolean(done));
-    });
-  }, []);
+    } catch (error) {
+      setOnboardingError(error?.message || t('app.initializationFailed'));
+    }
+  }, [t]);
 
   useEffect(() => {
-    try {
-      const accessibility = JSON.parse(localStorage.getItem('vibe-accessibility') || '{}');
-      document.body.classList.toggle('high-contrast', Boolean(accessibility.highContrast));
-      document.body.classList.toggle('reduced-motion', Boolean(accessibility.reducedMotion));
-    } catch {}
+    loadOnboarding();
   }, []);
 
   useEffect(() => {
@@ -212,13 +211,6 @@ function Workspace() {
       setOpenCodeSetup({ open: true, phase: 'error', progress: '', error: error?.message || t('app.openCodeInstallFailed') });
     }
   }, [terminalHook.createOpenCodeTerminal, t]);
-
-  // Preload OpenCode in background when project is selected and OpenCode is usable
-  useEffect(() => {
-    if (currentProject && openCodeStatus?.usable) {
-      terminalHook.createOpenCodeTerminal();
-    }
-  }, [currentProject, openCodeStatus, terminalHook.createOpenCodeTerminal]);
 
   // Check OpenAI connection status to show green check badge in sidebar
   useEffect(() => {
@@ -374,7 +366,7 @@ function Workspace() {
   };
 
   // Mientras se lee la bandera de onboarding se muestra la marca, no un vacio.
-  if (onboardingDone === null) return <AppSplash />;
+  if (onboardingDone === null) return <AppSplash error={onboardingError} onRetry={loadOnboarding} />;
 
   // Show full-screen onboarding wizard on first launch
   if (!onboardingDone) {
@@ -409,17 +401,17 @@ function Workspace() {
           </div>
         )}
         <div className="titlebar__controls">
-          <button className="titlebar__btn" onClick={handleMinimize} title={t('common.minimize')}>
+          <button className="titlebar__btn" onClick={handleMinimize} title={t('common.minimize')} aria-label={t('common.minimize')}>
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 8h10v1H3z"/></svg>
           </button>
-          <button className="titlebar__btn" onClick={handleMaximize} title={t('common.maximize')}>
+          <button className="titlebar__btn" onClick={handleMaximize} title={t('common.maximize')} aria-label={t('common.maximize')}>
             {isMaximized ? (
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 5v8h8V5H3zm7 7H4V6h6v6zm1-8v1h2v6h-2v1h3V4h-3z"/></svg>
             ) : (
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V3H3zm9 9H4V4h8v8z"/></svg>
             )}
           </button>
-          <button className="titlebar__btn titlebar__btn--close" onClick={handleClose} title={t('common.close')}>
+          <button className="titlebar__btn titlebar__btn--close" onClick={handleClose} title={t('common.close')} aria-label={t('common.close')}>
             <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 7.293l3.646-3.647.708.708L8.707 8l3.647 3.646-.708.708L8 8.707l-3.646 3.647-.708-.708L7.293 8 3.646 4.354l.708-.708L8 7.293z"/></svg>
           </button>
         </div>
@@ -471,5 +463,21 @@ function Workspace() {
 }
 
 export default function App() {
-  return <AuthGate><Workspace /></AuthGate>;
+  const { initialized, initializationError, init } = useAppStore();
+  const closeCheckRef = useRef(null);
+  const setCloseCheck = useCallback((check) => {
+    closeCheckRef.current = check;
+    return () => { if (closeCheckRef.current === check) closeCheckRef.current = null; };
+  }, []);
+
+  useEffect(() => {
+    applyAccessibility(readAccessibility());
+    return window.electronAPI?.window?.onCloseRequested?.(async () => {
+      if (closeCheckRef.current && await closeCheckRef.current() === false) return;
+      window.electronAPI.window.confirmClose();
+    });
+  }, []);
+
+  if (!initialized) return <AppSplash error={initializationError} onRetry={init} />;
+  return <Suspense fallback={<AppSplash />}><AuthGate><Workspace setCloseCheck={setCloseCheck} /></AuthGate></Suspense>;
 }

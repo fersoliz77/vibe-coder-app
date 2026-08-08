@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
 import SetupCenter from '../setup/SetupCenter';
 import { useI18n } from '../../i18n/I18nContext';
+import { readAccessibility, saveAccessibility } from '../../utils/accessibility';
 import './SettingsPanel.css';
-
-const ACCESSIBILITY_KEY = 'vibe-accessibility';
 
 // Los que el asistente de creacion exige o usa para el backend.
 const DELIVERY_SERVICES = ['github', 'vercel', 'supabase'];
@@ -15,14 +14,6 @@ const SETTINGS_TABS = [
   { id: 'account', labelKey: 'settings.tabs.account', descriptionKey: 'settings.tabs.accountCopy' },
   { id: 'support', labelKey: 'settings.tabs.support', descriptionKey: 'settings.tabs.supportCopy' },
 ];
-
-function readAccessibility() {
-  try {
-    return { highContrast: false, reducedMotion: false, ...JSON.parse(localStorage.getItem(ACCESSIBILITY_KEY) || '{}') };
-  } catch {
-    return { highContrast: false, reducedMotion: false };
-  }
-}
 
 function ProviderStatus({ name, detail, connected, loading }) {
   const { t } = useI18n();
@@ -100,6 +91,20 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
   const [delivery, setDelivery] = useState({ loading: true, services: [], commands: {}, error: '' });
   const [activeTab, setActiveTab] = useState('services');
+  const tabsRef = useRef(null);
+
+  const handleTabKeyDown = (event) => {
+    const current = SETTINGS_TABS.findIndex((tab) => tab.id === activeTab);
+    let next = null;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = SETTINGS_TABS.length - 1;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % SETTINGS_TABS.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+    if (next === null) return;
+    event.preventDefault();
+    setActiveTab(SETTINGS_TABS[next].id);
+    requestAnimationFrame(() => tabsRef.current?.querySelectorAll('[role="tab"]')[next]?.focus());
+  };
   const [exportState, setExportState] = useState({ busy: false, message: '' });
 
   const refreshProviders = async () => {
@@ -144,9 +149,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   }, [t]);
 
   useEffect(() => {
-    localStorage.setItem(ACCESSIBILITY_KEY, JSON.stringify(accessibility));
-    document.body.classList.toggle('high-contrast', accessibility.highContrast);
-    document.body.classList.toggle('reduced-motion', accessibility.reducedMotion);
+    saveAccessibility(accessibility);
   }, [accessibility]);
 
   const runAccountAction = async (action) => {
@@ -183,8 +186,8 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
       </header>
 
       <div className="settings-shell">
-        <nav className="settings-tabs" aria-label={t('settings.sections')} role="tablist">
-          {SETTINGS_TABS.map((tab) => <button key={tab.id} id={`settings-tab-${tab.id}`} className={activeTab === tab.id ? 'is-active' : ''} type="button" role="tab" aria-selected={activeTab === tab.id} aria-controls={`settings-panel-${tab.id}`} onClick={() => setActiveTab(tab.id)}><strong>{t(tab.labelKey)}</strong><span>{t(tab.descriptionKey)}</span></button>)}
+        <nav ref={tabsRef} className="settings-tabs" aria-label={t('settings.sections')} role="tablist" onKeyDown={handleTabKeyDown}>
+          {SETTINGS_TABS.map((tab) => <button key={tab.id} id={`settings-tab-${tab.id}`} className={activeTab === tab.id ? 'is-active' : ''} type="button" role="tab" tabIndex={activeTab === tab.id ? 0 : -1} aria-selected={activeTab === tab.id} aria-controls={`settings-panel-${tab.id}`} onClick={() => setActiveTab(tab.id)}><strong>{t(tab.labelKey)}</strong><span>{t(tab.descriptionKey)}</span></button>)}
         </nav>
 
         <div className="settings-content">

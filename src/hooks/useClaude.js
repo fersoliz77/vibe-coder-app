@@ -29,37 +29,6 @@ export function useClaude(projectPath) {
   const activeRunRef = useRef(null);
   const projectPathRef = useRef(projectPath);
 
-  const saveTimerRef = useRef(null);
-  const storageKey = `chat:claude:${projectPath || 'global'}`;
-
-  const saveHistory = useCallback((msgs) => {
-    if (!window.electronAPI?.store) return;
-    clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const toSave = limitChatMessages(msgs);
-      window.electronAPI.store.set(storageKey, toSave);
-    }, 1000);
-  }, [storageKey]);
-
-  const clearHistory = useCallback(() => {
-    if (!window.electronAPI?.store) return;
-    clearTimeout(saveTimerRef.current);
-    window.electronAPI.store.delete(storageKey);
-  }, [storageKey]);
-
-  // Load history on mount or project change
-  useEffect(() => {
-    if (!window.electronAPI?.store) return;
-    let cancelled = false;
-    setMessages([]); // Clear current UI state first
-    window.electronAPI.store.get(storageKey, []).then((saved) => {
-      if (!cancelled && Array.isArray(saved) && saved.length > 0) {
-        setMessages(limitChatMessages(saved));
-      }
-    });
-    return () => { cancelled = true; };
-  }, [storageKey]);
-
   useEffect(() => {
     const previous = projectPathRef.current;
     projectPathRef.current = projectPath;
@@ -68,6 +37,7 @@ export function useClaude(projectPath) {
       activeRunRef.current = null;
       streamRef.current = '';
       setCurrentResponse('');
+      setMessages([]);
       setIsRunning(false);
     }
   }, [projectPath]);
@@ -114,16 +84,17 @@ export function useClaude(projectPath) {
     if (!window.electronAPI?.claude) return null;
     setIsLoggingIn(true);
     setLoginLog([]);
-    const { ok, data: result, error } = await callIpc(window.electronAPI.claude.login);
-    setIsLoggingIn(false);
-    if (!ok) {
-      setStatus((prev) => ({ ...prev, error }));
-      return { success: false, error };
+    try {
+      const { ok, data: result, error } = await callIpc(window.electronAPI.claude.login);
+      if (!ok) {
+        setStatus((prev) => ({ ...prev, error }));
+        return { success: false, error };
+      }
+      if (result?.success) await refreshStatus();
+      return result;
+    } finally {
+      setIsLoggingIn(false);
     }
-    if (result?.success) {
-      await refreshStatus();
-    }
-    return result;
   }, [refreshStatus]);
 
   // ─── Logout ───────────────────────────────────────────────────────────────
@@ -136,9 +107,8 @@ export function useClaude(projectPath) {
       return;
     }
     setMessages([]);
-    clearHistory();
     await refreshStatus();
-  }, [refreshStatus, clearHistory]);
+  }, [refreshStatus]);
 
   // ─── Chat ─────────────────────────────────────────────────────────────────
 
@@ -148,16 +118,20 @@ export function useClaude(projectPath) {
     const userMessage = { role: 'user', content: prompt, timestamp: Date.now() };
     setMessages((prev) => {
       const next = limitChatMessages([...prev, userMessage]);
-      saveHistory(next);
       return next;
     });
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
-    const run = await window.electronAPI.claude.sendPrompt(prompt, cwd || projectPath, model, history);
-    if (run?.success && run.projectPath === projectPathRef.current) activeRunRef.current = run.runId;
-    else if (!run?.success) setIsRunning(false);
-  }, [projectPath, saveHistory, messages]);
+    try {
+      const run = await window.electronAPI.claude.sendPrompt(prompt, cwd || projectPath, model, history);
+      if (run?.success && run.projectPath === projectPathRef.current) activeRunRef.current = run.runId;
+      else setIsRunning(false);
+    } catch (error) {
+      setMessages((prev) => limitChatMessages([...prev, { role: 'error', content: error?.message || 'No se pudo iniciar la respuesta.', timestamp: Date.now() }]));
+      setIsRunning(false);
+    }
+  }, [projectPath, messages]);
 
   const cancel = useCallback(() => {
     if (!window.electronAPI?.claude) return;
@@ -170,20 +144,18 @@ export function useClaude(projectPath) {
           ...prev,
           { role: 'assistant', content: streamRef.current + '\n\n*[Cancelled]*', timestamp: Date.now() },
         ]);
-        saveHistory(next);
         return next;
       });
       setCurrentResponse('');
       streamRef.current = '';
     }
-  }, [saveHistory]);
+  }, []);
 
   const clear = useCallback(() => {
     setMessages([]);
     setCurrentResponse('');
     streamRef.current = '';
-    clearHistory();
-  }, [clearHistory]);
+  }, []);
 
   useEffect(() => {
     if (!window.electronAPI?.claude) return;
@@ -207,7 +179,6 @@ export function useClaude(projectPath) {
               ...prev,
               { role: 'assistant', content: finalContent, timestamp: Date.now() },
             ]);
-            saveHistory(next);
             return next;
           });
         }
@@ -223,7 +194,6 @@ export function useClaude(projectPath) {
             ...prev,
             { role: 'error', content: error, timestamp: Date.now() },
           ]);
-          saveHistory(next);
           return next;
         });
         setCurrentResponse('');
@@ -238,10 +208,9 @@ export function useClaude(projectPath) {
     ];
 
     return () => unsubs.forEach((u) => u?.());
-  }, [saveHistory]);
+  }, []);
 
   useEffect(() => () => {
-    clearTimeout(saveTimerRef.current);
     if (activeRunRef.current != null) window.electronAPI?.claude?.cancel(activeRunRef.current, projectPathRef.current);
   }, []);
 

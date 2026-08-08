@@ -21,16 +21,20 @@ const COPY = {
     slowTitle: 'El espacio de trabajo esta tardando en abrir',
     slowCopy: 'Podes esperar un momento mas o reiniciar la ventana.',
     retry: 'Reiniciar ventana',
+    failedTitle: 'No se pudo abrir el espacio de trabajo',
+    close: 'Cerrar',
   },
   en: {
     loading: 'Preparing your workspace...',
     slowTitle: 'The workspace is taking a while to open',
     slowCopy: 'You can wait a moment longer or reload the window.',
     retry: 'Reload window',
+    failedTitle: 'The workspace could not be opened',
+    close: 'Close',
   },
 };
 
-export default function AppSplash({ message }) {
+export default function AppSplash({ message, error = '', onRetry, onClose }) {
   const [isSlow, setIsSlow] = useState(false);
   const lang = typeof navigator !== 'undefined' && navigator.language?.startsWith('en') ? 'en' : 'es';
   const copy = COPY[lang];
@@ -47,13 +51,14 @@ export default function AppSplash({ message }) {
         <span className="app-splash__name">Vibe IDE Code</span>
       </div>
 
-      {isSlow ? (
+      {error || isSlow ? (
         <div className="app-splash__slow">
-          <strong>{copy.slowTitle}</strong>
-          <p>{copy.slowCopy}</p>
-          <button className="btn btn--primary" type="button" onClick={() => window.location.reload()}>
+          <strong>{error ? copy.failedTitle : copy.slowTitle}</strong>
+          <p>{error || copy.slowCopy}</p>
+          <button className="btn btn--primary" type="button" onClick={onRetry || (() => window.location.reload())}>
             {copy.retry}
           </button>
+          <button className="btn" type="button" onClick={onClose || (() => window.electronAPI?.window?.close())}>{copy.close}</button>
         </div>
       ) : (
         <>

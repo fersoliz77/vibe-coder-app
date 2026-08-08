@@ -1,10 +1,14 @@
 import { create } from 'zustand';
 import { getSystemLocale, SUPPORTED_LOCALES } from '../i18n/locales';
 
+let initializationPromise = null;
+
 // Simple store that syncs with Electron local DB
 export const useAppStore = create((set, get) => ({
   // State
   initialized: false,
+  initializationStatus: 'idle',
+  initializationError: '',
   currentProject: null,
   recentProjects: [],
   theme: 'dark',
@@ -15,20 +19,32 @@ export const useAppStore = create((set, get) => ({
 
   // Actions
   init: async () => {
-    if (window.electronAPI?.store) {
-      const config = await window.electronAPI.store.getAll();
-      set({
-        initialized: true,
-        currentProject: config.currentProject || null,
-        recentProjects: config.recentProjects || [],
-        theme: config.theme || 'dark',
-        language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
-        lastView: typeof config.lastView === 'string' ? config.lastView : null,
-      });
-      return;
-    }
-
-    set({ initialized: true });
+    if (initializationPromise) return initializationPromise;
+    set({ initializationStatus: 'loading', initializationError: '' });
+    initializationPromise = (async () => {
+      try {
+        if (window.electronAPI?.store) {
+          const config = await window.electronAPI.store.getAll();
+          set({
+            initialized: true,
+            initializationStatus: 'ready',
+            initializationError: '',
+            currentProject: config.currentProject || null,
+            recentProjects: config.recentProjects || [],
+            theme: config.theme || 'dark',
+            language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
+            lastView: typeof config.lastView === 'string' ? config.lastView : null,
+          });
+          return;
+        }
+        set({ initialized: true, initializationStatus: 'ready', initializationError: '' });
+      } catch (error) {
+        set({ initialized: false, initializationStatus: 'error', initializationError: error?.message || 'No se pudo leer la configuracion local.' });
+      } finally {
+        initializationPromise = null;
+      }
+    })();
+    return initializationPromise;
   },
 
   setCurrentProject: async (project) => {

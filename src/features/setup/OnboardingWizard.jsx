@@ -32,7 +32,7 @@ function StepWelcome() {
 }
 
 // ─── Step 2: Environment ──────────────────────────────────────────────────────
-function StepEnvironment({ environment, checking, installing, progress, log, onInstall, onCancel, onCheck }) {
+function StepEnvironment({ environment, checking, installing, progress, log, error, onInstall, onCancel, onCheck }) {
   const { t } = useI18n();
   const rawItems = environment?.items || [];
   // Override firebase and supabase to be optional since database selection is done during project creation
@@ -57,6 +57,7 @@ function StepEnvironment({ environment, checking, installing, progress, log, onI
       <p className="onboarding-wizard__subtitle">
         {t('onboarding.toolsCopy')}
       </p>
+      {error && <p className="auth-error" role="alert">{error}</p>}
 
       {installing && (
         <div className="onboarding-wizard__progress">
@@ -144,7 +145,7 @@ function StepEnvironment({ environment, checking, installing, progress, log, onI
 // ─── Step 3: AI Agents ────────────────────────────────────────────────────────
 // This step installs the necessary CLI tools for each AI agent.
 // Authentication/login is intentionally left for later inside the app.
-function StepAgents({ openCode, claudeStatus, codexReady }) {
+function StepAgents({ openCode, claudeStatus, codexReady, onInstallClaude }) {
   const { t } = useI18n();
   return (
     <div className="onboarding-wizard__content" key="step-agents">
@@ -200,7 +201,7 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
                   ? t('onboarding.installing')
                   : claudeStatus?.installed
                     ? t('onboarding.cliInstalled')
-                    : t('onboarding.installingClaudeCli')}
+                    : claudeStatus?.error || t('onboarding.claudeOptional')}
             </p>
           </div>
           <div>
@@ -211,7 +212,9 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
             ) : claudeStatus?.installed ? (
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--vc-success)', fontWeight: 600 }}><CheckIcon /> {t('onboarding.ready')}</span>
             ) : (
-              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-warning)' }}><AlertIcon /> {t('onboarding.error')}</span>
+              <button className="onboarding-wizard__btn onboarding-wizard__btn--secondary" type="button" onClick={onInstallClaude}>
+                {t('onboarding.installClaude')}
+              </button>
             )}
           </div>
         </div>
@@ -234,7 +237,9 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
           <div>
             {codexReady
               ? <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 14, color: 'var(--vc-success)', fontWeight: 600 }}><CheckIcon /> {t('onboarding.ready')}</span>
-              : <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-accent)' }}><span className="onboarding-wizard__spinner" /> {t('onboarding.checkingBundledBinary')}</span>
+               : codexReady === null
+                 ? <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-accent)' }}><span className="onboarding-wizard__spinner" /> {t('onboarding.checkingBundledBinary')}</span>
+                 : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--vc-warning)' }}><AlertIcon /> {t('onboarding.notInstalled')}</span>
             }
           </div>
         </div>
@@ -317,10 +322,12 @@ export default function OnboardingWizard({ onComplete }) {
   const [installing, setInstalling] = useState(false);
   const [progress, setProgress] = useState(null);
   const [log, setLog] = useState([]);
+  const [environmentError, setEnvironmentError] = useState('');
+  const [completionError, setCompletionError] = useState('');
 
   // Step 3 agents
   const [openCode, setOpenCode] = useState({ loading: true, installing: false, status: null, error: '', progress: '' });
-  const [claudeStatus, setClaudeStatus] = useState({ loading: true, installing: false, installed: false });
+  const [claudeStatus, setClaudeStatus] = useState({ loading: true, installing: false, installed: false, error: '' });
   const [codexReady, setCodexReady] = useState(null); // null = checking, true/false = result
 
   const options = { includeMobile, backend };
@@ -330,11 +337,14 @@ export default function OnboardingWizard({ onComplete }) {
     if (!window.electronAPI?.setup?.check) { setChecking(false); return; }
     const seq = ++checkSequence.current;
     setChecking(true);
+    setEnvironmentError('');
     try {
       const result = await window.electronAPI.setup.check(options);
       if (seq !== checkSequence.current) return;
       setEnvironment(result);
-    } catch {}
+    } catch (error) {
+      if (seq === checkSequence.current) setEnvironmentError(error?.message || t('onboarding.environmentCheckFailed'));
+    }
     finally { if (seq === checkSequence.current) setChecking(false); }
   };
 
@@ -353,16 +363,17 @@ export default function OnboardingWizard({ onComplete }) {
     setInstalling(true);
     setLog([]);
     setProgress(null);
+    setEnvironmentError('');
     try {
       const result = await window.electronAPI.setup.install(options);
       if (result?.environment) setEnvironment(result.environment);
       else await doCheck();
-    } catch {}
+    } catch (error) { setEnvironmentError(error?.message || t('onboarding.environmentInstallFailed')); }
     finally { setInstalling(false); }
   };
 
   const doCancel = async () => {
-    try { await window.electronAPI?.setup?.cancel?.(); } catch {}
+    try { await window.electronAPI?.setup?.cancel?.(); } catch (error) { setEnvironmentError(error?.message || t('onboarding.cancelFailed')); }
   };
 
   // ── Agents check ─────────────────────────────────────────────────────────
@@ -402,44 +413,44 @@ export default function OnboardingWizard({ onComplete }) {
   // Check/install Claude CLI — only the binary, no auth
   const installClaude = async () => {
     if (!window.electronAPI?.claude?.install) {
-      setClaudeStatus({ loading: false, installing: false, installed: false });
+      setClaudeStatus({ loading: false, installing: false, installed: false, error: t('onboarding.notInstalled') });
       return;
     }
-    setClaudeStatus({ loading: false, installing: true, installed: false });
+    setClaudeStatus({ loading: false, installing: true, installed: false, error: '' });
     try {
       const result = await window.electronAPI.claude.install();
       const installed = result?.success === true || result?.status?.installed === true;
-      setClaudeStatus({ loading: false, installing: false, installed });
-    } catch {
-      setClaudeStatus({ loading: false, installing: false, installed: false });
+      setClaudeStatus({ loading: false, installing: false, installed, error: installed ? '' : (result?.error || t('onboarding.installErrorLater')) });
+    } catch (error) {
+      setClaudeStatus({ loading: false, installing: false, installed: false, error: error?.message || t('onboarding.installErrorLater') });
     }
   };
 
   const checkClaudeInstalled = async () => {
     if (!window.electronAPI?.claude?.getStatus) {
-      setClaudeStatus({ loading: false, installing: false, installed: false });
+      setClaudeStatus({ loading: false, installing: false, installed: false, error: t('onboarding.notInstalled') });
       return false;
     }
     setClaudeStatus((s) => ({ ...s, loading: true }));
     try {
       const result = await window.electronAPI.claude.getStatus();
       const installed = Boolean(result?.installed);
-      setClaudeStatus({ loading: false, installing: false, installed });
+      setClaudeStatus({ loading: false, installing: false, installed, error: '' });
       return installed;
-    } catch {
-      setClaudeStatus({ loading: false, installing: false, installed: false });
+    } catch (error) {
+      setClaudeStatus({ loading: false, installing: false, installed: false, error: error?.message || t('onboarding.environmentCheckFailed') });
       return false;
     }
   };
 
   // Check Codex binary (bundled in app, no download needed)
   const checkCodexReady = async () => {
-    if (!window.electronAPI?.openai?.getStatus) { setCodexReady(true); return; }
+    if (!window.electronAPI?.openai?.getStatus) { setCodexReady(false); return; }
     try {
-      await window.electronAPI.openai.getStatus();
-      setCodexReady(true);
+      const status = await window.electronAPI.openai.getStatus();
+      setCodexReady(status?.installed === true);
     } catch {
-      setCodexReady(true); // Codex is bundled, always available
+      setCodexReady(false);
     }
   };
 
@@ -453,10 +464,7 @@ export default function OnboardingWizard({ onComplete }) {
           installOpenCode();
         }
       });
-      // Auto-install Claude CLI if not installed
-      checkClaudeInstalled().then((installed) => {
-        if (!installed) installClaude();
-      });
+      checkClaudeInstalled();
     }
   }, [step]);
 
@@ -466,8 +474,13 @@ export default function OnboardingWizard({ onComplete }) {
       setStep((s) => s + 1);
     } else {
       // Persist completion flag and hand off to App
-      await window.electronAPI?.store?.set('onboardingCompleted', true);
-      onComplete();
+      setCompletionError('');
+      try {
+        await window.electronAPI?.store?.set('onboardingCompleted', true);
+        onComplete();
+      } catch (error) {
+        setCompletionError(error?.message || t('onboarding.completionSaveFailed'));
+      }
     }
   };
 
@@ -482,7 +495,7 @@ export default function OnboardingWizard({ onComplete }) {
     <div className="onboarding-wizard">
       <div className="onboarding-wizard__container">
         {/* Step indicators */}
-        <div className="onboarding-wizard__steps" role="tablist">
+        <div className="onboarding-wizard__steps" role="list" aria-label={t('onboarding.progress')}>
           {stepLabels.map((label, i) => {
             const num = i + 1;
             const isActive = num === step;
@@ -491,8 +504,9 @@ export default function OnboardingWizard({ onComplete }) {
               <div
                 key={num}
                 className={`onboarding-wizard__step-indicator ${isActive ? 'is-active' : ''} ${isCompleted ? 'is-completed' : ''}`}
-                role="tab"
-                aria-selected={isActive}
+                role="listitem"
+                aria-current={isActive ? 'step' : undefined}
+                aria-label={`${num}. ${label}`}
                 title={label}
               >
                 {isCompleted ? <CheckIcon size={14} /> : num}
@@ -512,6 +526,7 @@ export default function OnboardingWizard({ onComplete }) {
             installing={installing}
             progress={progress}
             log={log}
+            error={environmentError}
             onInstall={doInstall}
             onCancel={doCancel}
             onCheck={doCheck}
@@ -522,6 +537,7 @@ export default function OnboardingWizard({ onComplete }) {
             openCode={openCode}
             claudeStatus={claudeStatus}
             codexReady={codexReady}
+            onInstallClaude={installClaude}
           />
         )}
         {step === 4 && (
@@ -534,6 +550,7 @@ export default function OnboardingWizard({ onComplete }) {
 
         {/* Footer */}
         <div className="onboarding-wizard__footer">
+          {completionError && <span className="auth-error" role="alert">{completionError}</span>}
           {step > 1 && step < 4 ? (
             <span className="onboarding-wizard__footer-text">{t('onboarding.skipHint')}</span>
           ) : (

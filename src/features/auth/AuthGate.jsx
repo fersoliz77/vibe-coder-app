@@ -3,6 +3,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import AppSplash from '../../components/AppSplash';
 import { AuthProvider } from './AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
+import { readAccessibility, saveAccessibility } from '../../utils/accessibility';
 import './AuthGate.css';
 
 function AuthTitlebar() {
@@ -11,9 +12,9 @@ function AuthTitlebar() {
     <div className="titlebar">
       <div className="titlebar__brand"><div className="titlebar__logo">V</div><span className="titlebar__name">Vibe IDE Code</span></div>
       <div className="titlebar__controls">
-        <button className="titlebar__btn" type="button" onClick={() => window.electronAPI.window.minimize()} title={t('common.minimize')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 8h10v1H3z" /></svg></button>
-        <button className="titlebar__btn" type="button" onClick={() => window.electronAPI.window.maximize()} title={t('common.maximize')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V3H3zm9 9H4V4h8v8z" /></svg></button>
-        <button className="titlebar__btn titlebar__btn--close" type="button" onClick={() => window.electronAPI.window.close()} title={t('common.close')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 7.293l3.646-3.647.708.708L8.707 8l3.647 3.646-.708.708L8 8.707l-3.646 3.647-.708-.708L7.293 8 3.646 4.354l.708-.708L8 7.293z" /></svg></button>
+        <button className="titlebar__btn" type="button" onClick={() => window.electronAPI.window.minimize()} title={t('common.minimize')} aria-label={t('common.minimize')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 8h10v1H3z" /></svg></button>
+        <button className="titlebar__btn" type="button" onClick={() => window.electronAPI.window.maximize()} title={t('common.maximize')} aria-label={t('common.maximize')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3v10h10V3H3zm9 9H4V4h8v8z" /></svg></button>
+        <button className="titlebar__btn titlebar__btn--close" type="button" onClick={() => window.electronAPI.window.close()} title={t('common.close')} aria-label={t('common.close')}><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 7.293l3.646-3.647.708.708L8.707 8l3.647 3.646-.708.708L8 8.707l-3.646 3.647-.708-.708L7.293 8 3.646 4.354l.708-.708L8 7.293z" /></svg></button>
       </div>
     </div>
   );
@@ -21,20 +22,20 @@ function AuthTitlebar() {
 
 function AccessibilityControls() {
   const { t } = useI18n();
-  const [highContrast, setHighContrast] = useState(false);
-  const [reducedMotion, setReducedMotion] = useState(false);
+  const [accessibility, setAccessibility] = useState(readAccessibility);
 
-  const toggle = (className, value, setter) => {
-    document.body.classList.toggle(className, !value);
-    setter(!value);
+  const toggle = (key) => {
+    const next = { ...accessibility, [key]: !accessibility[key] };
+    setAccessibility(next);
+    saveAccessibility(next);
   };
 
   return (
     <div className="auth-accessibility" aria-label={t('auth.accessibilityOptions')}>
-      <button type="button" onClick={() => toggle('high-contrast', highContrast, setHighContrast)} aria-pressed={highContrast}>
+      <button type="button" onClick={() => toggle('highContrast')} aria-pressed={accessibility.highContrast}>
         {t('auth.highContrast')}
       </button>
-      <button type="button" onClick={() => toggle('reduced-motion', reducedMotion, setReducedMotion)} aria-pressed={reducedMotion}>
+      <button type="button" onClick={() => toggle('reducedMotion')} aria-pressed={accessibility.reducedMotion}>
         {t('auth.reduceMotion')}
       </button>
     </div>
@@ -255,6 +256,17 @@ function RestrictedOverlay({ state, onState }) {
 export default function AuthGate({ children }) {
   const { t } = useI18n();
   const [state, setState] = useState(null);
+  const [loadError, setLoadError] = useState('');
+
+  const refreshState = async () => {
+    try {
+      const nextState = await window.electronAPI.auth.getState();
+      setState(nextState);
+      setLoadError('');
+    } catch (error) {
+      setLoadError(error?.message || t('auth.accessUnavailable'));
+    }
+  };
 
   const runAuthAction = async (action) => {
     const result = await window.electronAPI.auth[action]();
@@ -264,16 +276,16 @@ export default function AuthGate({ children }) {
   };
 
   useEffect(() => {
-    window.electronAPI.auth.getState().then(setState);
+    refreshState();
     const unsubscribe = window.electronAPI.auth.onStateChanged(setState);
-    const leaseCheck = window.setInterval(() => window.electronAPI.auth.getState().then(setState), 60_000);
+    const leaseCheck = window.setInterval(() => { refreshState(); }, 60_000);
     return () => {
       unsubscribe();
       window.clearInterval(leaseCheck);
     };
   }, []);
 
-  if (!state) return <AppSplash message={t('auth.checkingAccountAccess')} />;
+  if (!state) return <AppSplash message={t('auth.checkingAccountAccess')} error={loadError} onRetry={refreshState} />;
 
   const content = !state.authenticated
     ? <Login state={state} onState={setState} />

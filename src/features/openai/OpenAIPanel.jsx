@@ -200,39 +200,6 @@ export default function OpenAIPanel({ cwd }) {
   const inputRef = useRef(null);
   // Limpiar y cerrar sesion borran historial que no se puede recuperar.
   const [pendingAction, setPendingAction] = useState(null);
-  const saveTimerRef = useRef(null);
-
-  // ── Persistence helpers ──────────────────────────────────────────────────
-  const storageKey = `chat:openai:${cwd || 'global'}`;
-
-  const saveHistory = useCallback((msgs) => {
-    if (!window.electronAPI?.store) return;
-    clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const toSave = limitChatMessages(msgs);
-      window.electronAPI.store.set(storageKey, toSave);
-    }, 1000);
-  }, [storageKey]);
-
-  const clearHistory = useCallback(() => {
-    if (!window.electronAPI?.store) return;
-    clearTimeout(saveTimerRef.current);
-    window.electronAPI.store.delete(storageKey);
-  }, [storageKey]);
-
-  // ── Load persisted history on mount / project change ────────────────────
-  useEffect(() => {
-    if (!window.electronAPI?.store) return;
-    let cancelled = false;
-    setMessages([]);
-    window.electronAPI.store.get(storageKey, []).then((saved) => {
-      if (!cancelled && Array.isArray(saved) && saved.length > 0) {
-        setMessages(limitChatMessages(saved));
-      }
-    });
-    return () => { cancelled = true; };
-  }, [storageKey]);
-
   useEffect(() => {
     const previous = projectPathRef.current;
     projectPathRef.current = cwd;
@@ -241,13 +208,18 @@ export default function OpenAIPanel({ cwd }) {
       activeRunRef.current = null;
       streamRef.current = '';
       setCurrentResponse('');
+      setMessages([]);
       setIsRunning(false);
     }
   }, [cwd]);
 
   // ── Auth: optimistic load then background verify ─────────────────────────
   const refreshStatus = useCallback(async () => {
-    if (!window.electronAPI?.openai) return;
+    if (!window.electronAPI?.openai) {
+      setIsAuthLoading(false);
+      setStatusError('OpenAI no esta disponible en esta ejecucion.');
+      return;
+    }
     setStatusError('');
     const { ok, data, error } = await callIpc(window.electronAPI.openai.getStatus);
     setIsAuthLoading(false);
@@ -266,14 +238,17 @@ export default function OpenAIPanel({ cwd }) {
     if (!window.electronAPI) return;
     // Optimistically show chat if we were authenticated last session
     const runOptimistic = async () => {
-      const wasAuthenticated = await window.electronAPI.store?.get('openai:authenticated', false);
-      if (wasAuthenticated) {
-        setStatus({ authenticated: true, email: 'OpenAI account' });
+      try {
+        const wasAuthenticated = await window.electronAPI.store?.get('openai:authenticated', false);
+        if (wasAuthenticated) setStatus({ authenticated: true, email: 'OpenAI account' });
+      } finally {
+        await refreshStatus();
       }
-      // Always verify in background regardless
-      refreshStatus();
     };
-    runOptimistic();
+    runOptimistic().catch((error) => {
+      setIsAuthLoading(false);
+      setStatusError(error?.message || 'No se pudo comprobar el estado de la cuenta.');
+    });
   }, [refreshStatus]);
 
   useEffect(() => {
@@ -308,7 +283,6 @@ export default function OpenAIPanel({ cwd }) {
         if (finalContent) {
           setMessages(prev => {
             const next = limitChatMessages([...prev, { role: 'assistant', content: finalContent, timestamp: Date.now() }]);
-            saveHistory(next);
             return next;
           });
         }
@@ -328,29 +302,35 @@ export default function OpenAIPanel({ cwd }) {
       }),
     ];
     return () => unsubs.forEach(u => u?.());
-  }, [saveHistory]);
+  }, []);
 
   const handleLogin = async () => {
     setIsLoggingIn(true);
     setLoginLog([]);
-    const result = await window.electronAPI.openai.login();
-    setIsLoggingIn(false);
-    if (result.success) {
+    try {
+      const result = await window.electronAPI.openai.login();
+      if (result.success) {
         setLoginLog(appendProgress([], { type: 'info', text: t('ai.loginSuccess') }));
-      await refreshStatus();
-    } else {
-      setLoginLog(appendProgress([], { type: 'error', text: result.error }));
+        await refreshStatus();
+      } else {
+        setLoginLog(appendProgress([], { type: 'error', text: result.error }));
+      }
+    } catch (error) {
+      setLoginLog(appendProgress([], { type: 'error', text: error?.message || t('settings.actionFailed') }));
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const handleLogout = async () => {
-    await window.electronAPI.openai.logout();
-    setMessages([]);
-    clearHistory();
-    if (window.electronAPI?.store) {
-      window.electronAPI.store.set('openai:authenticated', false);
+    try {
+      await window.electronAPI.openai.logout();
+      setMessages([]);
+      if (window.electronAPI?.store) await window.electronAPI.store.set('openai:authenticated', false);
+      await refreshStatus();
+    } catch (error) {
+      setStatusError(error?.message || t('settings.actionFailed'));
     }
-    await refreshStatus();
   };
 
   const handleSend = async () => {
@@ -359,14 +339,18 @@ export default function OpenAIPanel({ cwd }) {
     const history = messages.filter(m => m.role !== 'error').map(m => ({ role: m.role, content: m.content }));
     const newMessages = limitChatMessages([...messages, { role: 'user', content: trimmed, timestamp: Date.now() }]);
     setMessages(newMessages);
-    saveHistory(newMessages);
     setInput('');
     setIsRunning(true);
     setCurrentResponse('');
     streamRef.current = '';
-    const run = await window.electronAPI.openai.sendPrompt(trimmed, history, model, reasoning, cwd);
-    if (run?.success && run.projectPath === projectPathRef.current) activeRunRef.current = run.runId;
-    else if (!run?.cancelled) setIsRunning(false);
+    try {
+      const run = await window.electronAPI.openai.sendPrompt(trimmed, history, model, reasoning, cwd);
+      if (run?.success && run.projectPath === projectPathRef.current) activeRunRef.current = run.runId;
+      else setIsRunning(false);
+    } catch (error) {
+      setMessages((prev) => limitChatMessages([...prev, { role: 'error', content: error?.message || t('settings.actionFailed'), timestamp: Date.now() }]));
+      setIsRunning(false);
+    }
   };
 
   const handleCancel = () => {
@@ -376,7 +360,6 @@ export default function OpenAIPanel({ cwd }) {
     if (streamRef.current) {
       setMessages(prev => {
         const next = limitChatMessages([...prev, { role: 'assistant', content: `${streamRef.current}\n\n*[${t('ai.cancelledResponse')}]*`, timestamp: Date.now() }]);
-        saveHistory(next);
         return next;
       });
       setCurrentResponse('');
@@ -388,11 +371,9 @@ export default function OpenAIPanel({ cwd }) {
     setMessages([]);
     setCurrentResponse('');
     streamRef.current = '';
-    clearHistory();
   };
 
   useEffect(() => () => {
-    clearTimeout(saveTimerRef.current);
     window.electronAPI?.openai?.cancel(activeRunRef.current, projectPathRef.current);
   }, []);
 
@@ -414,18 +395,20 @@ export default function OpenAIPanel({ cwd }) {
             <button className="btn btn--small" onClick={() => setPendingAction('clear')}>{t('ai.clear')}</button>
           )}
           {status.authenticated && (
-            <button className="btn btn--small btn--ghost" onClick={() => setPendingAction('logout')} title={t('ai.logout')}>
+            <button className="btn btn--small btn--ghost" onClick={() => setPendingAction('logout')} title={t('ai.logout')} aria-label={t('ai.logout')}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
             </button>
           )}
-          <button className="btn btn--small btn--ghost" onClick={refreshStatus} title={t('ai.refresh')}>
+          <button className="btn btn--small btn--ghost" onClick={refreshStatus} title={t('ai.refresh')} aria-label={t('ai.refresh')}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
         </div>
       </div>
 
       <div className="openai-panel__body">
-        {statusError && !status.authenticated ? (
+        {isAuthLoading ? (
+          <div className="openai-setup-screen" role="status">{t('ai.checking')}</div>
+        ) : statusError && !status.authenticated ? (
           <div className="openai-setup-screen" role="alert">
             <h3>{t('ai.statusFailed')}</h3>
             <p className="text-secondary">{t('ai.statusFailedCopy')}</p>

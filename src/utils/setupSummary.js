@@ -6,8 +6,8 @@
  * igual— pero el resultado no se resumia en ningun lado. Si OpenCode fallaba o
  * Claude seguia instalandose, el usuario se enteraba mucho despues.
  *
- * Esto no bloquea nada: solo describe. La instalacion automatica y el boton
- * para empezar a crear siguen exactamente igual.
+ * Esto no bloquea nada: solo describe. Los agentes opcionales requieren una
+ * accion explicita cuando su instalacion modifica el entorno global.
  */
 
 export const SETUP_STATES = Object.freeze({ READY: 'ready', PENDING: 'pending', MISSING: 'missing' });
@@ -49,7 +49,7 @@ export function summarizeSetup({ environment, openCode, claudeStatus, codexReady
       working: Boolean(claudeStatus?.loading || claudeStatus?.installing),
       ok: Boolean(claudeStatus?.installed),
     }),
-    detail: '',
+    detail: claudeStatus?.error || '',
     required: false,
   });
 

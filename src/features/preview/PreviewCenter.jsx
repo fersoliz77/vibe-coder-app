@@ -27,6 +27,21 @@ export default function PreviewCenter({ project }) {
   const { language, t } = useI18n();
   const api = window.electronAPI?.preview;
   const [tab, setTab] = useState('web');
+  const tabsRef = useRef(null);
+
+  const handleTabKeyDown = (event) => {
+    const tabs = ['web', 'android'];
+    const current = tabs.indexOf(tab);
+    let next = null;
+    if (event.key === 'Home') next = 0;
+    if (event.key === 'End') next = tabs.length - 1;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % tabs.length;
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + tabs.length) % tabs.length;
+    if (next === null) return;
+    event.preventDefault();
+    setTab(tabs[next]);
+    requestAnimationFrame(() => tabsRef.current?.querySelectorAll('[role="tab"]')[next]?.focus());
+  };
   const [viewport, setViewport] = useState('desktop');
   const [web, setWeb] = useState(INITIAL_WEB);
   const [android, setAndroid] = useState(INITIAL_ANDROID);
@@ -103,16 +118,16 @@ export default function PreviewCenter({ project }) {
           <h1>{t('preview.title')}</h1>
           <p>{t('preview.subtitle')}</p>
         </div>
-        <div className="preview-tabs" role="tablist" aria-label={t('preview.title')}>
-          <button className={tab === 'web' ? 'is-active' : ''} onClick={() => setTab('web')} role="tab" aria-selected={tab === 'web'}>{t('preview.web')}</button>
-          <button className={tab === 'android' ? 'is-active' : ''} onClick={() => setTab('android')} role="tab" aria-selected={tab === 'android'}>{t('preview.android')}</button>
+        <div ref={tabsRef} className="preview-tabs" role="tablist" aria-label={t('preview.title')} onKeyDown={handleTabKeyDown}>
+          <button id="preview-tab-web" className={tab === 'web' ? 'is-active' : ''} onClick={() => setTab('web')} role="tab" tabIndex={tab === 'web' ? 0 : -1} aria-selected={tab === 'web'} aria-controls="preview-panel-web">{t('preview.web')}</button>
+          <button id="preview-tab-android" className={tab === 'android' ? 'is-active' : ''} onClick={() => setTab('android')} role="tab" tabIndex={tab === 'android' ? 0 : -1} aria-selected={tab === 'android'} aria-controls="preview-panel-android">{t('preview.android')}</button>
         </div>
       </header>
 
       {actionError && <div className="preview-alert" role="alert">{actionError}<button onClick={() => setActionError('')} aria-label={t('common.close')}>×</button></div>}
 
       {tab === 'web' ? (
-        <div className="preview-workspace">
+        <div id="preview-panel-web" className="preview-workspace" role="tabpanel" aria-labelledby="preview-tab-web">
           <div className="preview-toolbar">
             <div className="preview-status"><StateDot state={web.state} /><span>{t(`preview.webStates.${web.state}`)}</span></div>
             <div className="preview-viewport-switcher" role="group" aria-label={t('preview.viewport')}>
@@ -162,7 +177,7 @@ export default function PreviewCenter({ project }) {
           </div>
         </div>
       ) : (
-        <div className="preview-workspace android-workspace">
+        <div id="preview-panel-android" className="preview-workspace android-workspace" role="tabpanel" aria-labelledby="preview-tab-android">
           <div className="android-device-card">
             <div className="android-device-visual"><Icon name="device" /><span>API 35</span></div>
             <div className="android-device-copy">

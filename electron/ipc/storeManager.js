@@ -3,6 +3,14 @@ const fs = require('fs');
 const path = require('path');
 const { writeJsonAtomic } = require('../services/atomicJson');
 
+function purgeLegacyChatHistory(data) {
+  const next = { ...data };
+  for (const key of Object.keys(next)) {
+    if (key.startsWith('chat:')) delete next[key];
+  }
+  return next;
+}
+
 class StoreManager {
   constructor() {
     // userData maps to %APPDATA%/vibe-ide-coder on Windows
@@ -11,15 +19,27 @@ class StoreManager {
   }
 
   readData() {
+    let parsed;
     try {
       if (fs.existsSync(this.storePath)) {
         const fileContent = fs.readFileSync(this.storePath, 'utf8');
-        return JSON.parse(fileContent);
+        parsed = JSON.parse(fileContent);
       }
     } catch (error) {
       console.error('Error reading config.json:', error);
+      return {};
     }
-    return {};
+    if (!parsed) return {};
+
+    const data = purgeLegacyChatHistory(parsed);
+    if (Object.keys(data).length !== Object.keys(parsed).length) {
+      try {
+        this.writeData(data);
+      } catch (error) {
+        console.error('Error removing legacy chat history:', error);
+      }
+    }
+    return data;
   }
 
   writeData(data) {
@@ -79,5 +99,6 @@ function getStore() {
 
 module.exports = {
   setupStoreHandlers,
-  getStore
+  getStore,
+  purgeLegacyChatHistory,
 };

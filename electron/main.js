@@ -435,6 +435,7 @@ if (isSandboxSmokeTest) {
     adminSignupAlerts?.sync().catch(() => {});
     studentBroadcastAlerts?.sync().catch(() => {});
   };
+  installIpcAuthorization(ipcMain, () => authService.getPolicy(), () => mainWindow);
   notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState);
   authRealtime = new AuthRealtime(authService, revalidateAndNotify);
   adminSignupAlerts = new AdminSignupAlerts(authService);
@@ -443,7 +444,6 @@ if (isSandboxSmokeTest) {
   for (const callbackUrl of pendingAuthCallbacks.splice(0)) {
     handleAuthCallback(callbackUrl).catch(() => {});
   }
-  installIpcAuthorization(ipcMain, () => authService.getPolicy());
   setupDiagnosticsHandlers(ipcMain, () => mainWindow, diagnostics, authService);
   const authRefreshTimer = setInterval(async () => {
     if (!authService.getState().authenticated) return;
