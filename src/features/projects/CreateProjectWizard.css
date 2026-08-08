@@ -242,3 +242,21 @@
   .cpw-overlay, .cpw-dialog, .cpw-step, .cpw-confirm { animation: none; }
   .cpw-button, .cpw-choice, .cpw-progressbar span { transition: none; }
 }
+
+/* Los requisitos de cuenta se anunciaban en el paso 6, cuando ya habias
+   configurado todo. Ahora se ven desde el primero. */
+.cpw-requirements {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-2);
+  font-size: var(--vc-text-xs);
+}
+
+.cpw-requirements--pending { border-color: var(--vc-warning-line); }
+.cpw-requirements strong { display: block; margin-bottom: 8px; color: var(--vc-text-1); }
+.cpw-requirements ul { display: grid; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.cpw-requirements li { color: var(--vc-text-3); }
+.cpw-requirements li.is-ready { color: var(--vc-success); }
+.cpw-requirements p { margin: 10px 0 0; color: var(--vc-warning); }

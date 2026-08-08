@@ -4,11 +4,14 @@ import CreateProjectWizard from './CreateProjectWizard';
 import './ProjectList.css';
 import { useI18n } from '../../i18n/I18nContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import { ASYNC_STATES, loading, runAsync } from '../../utils/asyncState';
 
 export default function ProjectList({ onProjectSelect, onOpenSetup, services = [], claudeAvailable = false, onRefreshServices }) {
   const { t, formatDate } = useI18n();
-  const [projects, setProjects] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Antes: `isLoading` mas una lista vacia. Listar podia fallar, el error se
+  // escribia en la consola y la pantalla quedaba en blanco, indistinguible de
+  // "todavia no creaste ningun proyecto".
+  const [listing, setListing] = useState(loading([]));
   const [wizardOpen, setWizardOpen] = useState(false);
   const [createdProject, setCreatedProject] = useState(null);
   const [environmentMissing, setEnvironmentMissing] = useState(false);
@@ -24,16 +27,11 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
   }, []);
 
   const loadProjects = async () => {
-    setIsLoading(true);
-    try {
-      if (window.electronAPI && window.electronAPI.projects) {
-        const data = await window.electronAPI.projects.list();
-        setProjects(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    setIsLoading(false);
+    setListing((current) => loading(current.data ?? []));
+    setListing(await runAsync(
+      async () => (window.electronAPI?.projects ? await window.electronAPI.projects.list() : []),
+      { fallbackError: t('projects.listFailed') },
+    ));
   };
 
   const handleImport = async () => {
@@ -95,10 +93,32 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         {environmentMissing && <div className="project-setup-banner"><div><strong>{t('projects.environmentNeeded')}</strong><span>{t('projects.environmentCopy')}</span></div><button type="button" onClick={onOpenSetup}>{t('projects.reviewEnvironment')}</button></div>}
         {projectError && <div className="project-error" role="alert">{projectError}</div>}
 
-      {/* Project Cards Grid */}
-      {!isLoading && projects.length > 0 ? (
+      {/* Los cuatro estados que esta pantalla puede tener, cada uno con su cara. */}
+      {listing.state === ASYNC_STATES.LOADING && (
+        <div className="project-empty" role="status">
+          <p className="text-tertiary">{t('projects.loading')}</p>
+        </div>
+      )}
+
+      {listing.state === ASYNC_STATES.ERROR && (
+        <div className="project-error project-error--block" role="alert">
+          <div>
+            <strong>{t('projects.listFailed')}</strong>
+            <p>{listing.error}</p>
+          </div>
+          <button className="btn btn--primary" type="button" onClick={loadProjects}>{t('projects.retry')}</button>
+        </div>
+      )}
+
+      {listing.state === ASYNC_STATES.EMPTY && (
+        <div className="project-empty">
+          <p className="text-tertiary">{t('projects.empty')}</p>
+        </div>
+      )}
+
+      {listing.state === ASYNC_STATES.SUCCESS && (
         <div className="project-grid">
-          {projects.map(proj => (
+          {listing.data.map(proj => (
             <div key={proj.id} className="glass-card project-card" role="button" tabIndex="0" onClick={() => handleSelect(proj)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleSelect(proj); } }}>
               <div className="project-card__header">
                 <div className="project-card__icon-wrapper project-card__icon-wrapper--folder">
@@ -132,11 +152,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
             </div>
           ))}
         </div>
-      ) : !isLoading ? (
-        <div className="project-empty">
-          <p className="text-tertiary">{t('projects.empty')}</p>
-        </div>
-      ) : null}
+      )}
 
         {/* Text Links: Create / Import */}
         <div className="project-actions-bar">

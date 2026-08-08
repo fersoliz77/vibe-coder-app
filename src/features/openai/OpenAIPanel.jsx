@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import CopyButton from '../../components/CopyButton';
 import { callIpc } from '../../utils/callIpc';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { useI18n } from '../../i18n/I18nContext';
@@ -122,6 +123,8 @@ function ChatScreen({ email, messages, currentResponse, isRunning, input, setInp
             {msg.role === 'error' && <div className="openai-panel__message-avatar openai-panel__message-avatar--error">!</div>}
             <div className="openai-panel__message-content">
               <pre className="openai-panel__message-text">{msg.content}</pre>
+              {/* La misma accion que en Claude: los dos chats se comportan igual. */}
+              {msg.role === 'assistant' && msg.content && <CopyButton value={msg.content} />}
             </div>
           </div>
         ))}

@@ -15,7 +15,10 @@
   /* ─── Tipografia ──────────────────────────────────────────────────
      Interfaz humanista + mono compartida. 14px es el minimo operativo
      y 17px el tamano de lectura sostenida.                            */
-  --vc-font-sans: 'Manrope', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  /* IBM Plex Sans es la recomendacion de la auditoria: humanista, con una
+     cursiva real y numeros tabulares, que es lo que pide un producto lleno de
+     tablas de progreso. Manrope no tiene ninguna de las dos cosas. */
+  --vc-font-sans: 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --vc-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
   --vc-font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
 
@@ -46,7 +49,10 @@
   /* ─── Lineas ──────────────────────────────────────────────────────
      Siempre 1px. El grosor no comunica jerarquia; el contraste si.    */
   --vc-line: #262c37;
-  --vc-line-strong: #38414f;
+  /* 3.25:1 sobre el fondo. No es solo decoracion: marca el hover de botones
+     y tarjetas, y el punto que distingue un idioma escrito de uno vacio. A
+     1.77:1 ese borde era invisible para baja vision. */
+  --vc-line-strong: #59647a;
 
   /* ─── Acento unico ────────────────────────────────────────────────
      Un solo acento de marca. Los colores semanticos no compiten.      */
@@ -148,7 +154,7 @@ body.light-mode,
   --vc-text-3: #5f6675;  /*  5.2:1 */
 
   --vc-line: #dcd8cf;
-  --vc-line-strong: #bdb8ac;
+  --vc-line-strong: #8b8577;  /* 3.28:1 sobre el fondo claro */
 
   --vc-accent: #4d5edb;  /* 4.8:1 sobre surface-0 */
   --vc-accent-hover: #3f4fc4;

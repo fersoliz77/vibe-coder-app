@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import { useI18n } from '../../i18n/I18nContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
+import CopyButton from '../../components/CopyButton';
 import './ClaudePanel.css';
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ const CLAUDE_MODELS = [
   { id: 'claude-opus-4-6', label: 'Claude Opus 4.6' },
 ];
 
-function ChatScreen({ status, messages, currentResponse, isRunning, input, setInput, onSend, onCancel, onLogout, inputRef, model, setModel }) {
+function ChatScreen({ status, messages, currentResponse, isRunning, input, setInput, onSend, onCancel, onLogout, inputRef }) {
   const { t } = useI18n();
   const messagesEndRef = useRef(null);
 
@@ -145,28 +146,6 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
               {t('ai.claudeWelcomeCopy')}
             </p>
             
-            <div className="claude-panel__model-selector" style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>{t('ai.model')}:</label>
-              <select 
-                value={model} 
-                onChange={(e) => setModel(e.target.value)}
-                style={{
-                  background: 'var(--glass-bg)',
-                  border: '1px solid var(--glass-border)',
-                  color: 'var(--text-primary)',
-                  padding: '6px 12px',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: '13px',
-                  outline: 'none',
-                  cursor: 'pointer'
-                }}
-              >
-                {CLAUDE_MODELS.map(m => (
-                  <option key={m.id} value={m.id}>{m.label}</option>
-                ))}
-              </select>
-            </div>
-
             <div className="claude-panel__suggestions" style={{ marginTop: '24px' }}>
               {['react', 'debug', 'explainCode', 'tests'].map((key) => (
                 <button key={key} className="claude-panel__suggestion btn btn--small" onClick={() => { setInput(t(`ai.suggestions.${key}`)); inputRef.current?.focus(); }}>
@@ -184,6 +163,9 @@ function ChatScreen({ status, messages, currentResponse, isRunning, input, setIn
             {msg.role === 'error' && <div className="claude-panel__message-avatar claude-panel__message-avatar--error">!</div>}
             <div className="claude-panel__message-content">
               <pre className="claude-panel__message-text">{msg.content}</pre>
+              {/* Llevarse una respuesta al editor exigia seleccionarla a mano
+                  dentro de un <pre> con scroll. */}
+              {msg.role === 'assistant' && msg.content && <CopyButton value={msg.content} />}
             </div>
           </div>
         ))}
@@ -285,6 +267,16 @@ export default function ClaudePanel({
           </div>
         </div>
         <div className="claude-panel__header-actions">
+          {/* El modelo vive en la cabecera, no en la bienvenida: al primer
+              mensaje desaparecia y ya no sabias con cual estabas hablando. */}
+          {isAvailable && (
+            <label className="claude-panel__header-model">
+              <span className="sr-only">{t('ai.model')}</span>
+              <select value={model} onChange={(event) => setModel(event.target.value)} disabled={isRunning}>
+                {CLAUDE_MODELS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </label>
+          )}
           {isAvailable && messages.length > 0 && (
             <button className="btn btn--small" onClick={() => setPendingAction('clear')}>{t('ai.clear')}</button>
           )}
@@ -326,8 +318,6 @@ export default function ClaudePanel({
             onCancel={cancel}
             onLogout={() => setPendingAction('logout')}
             inputRef={inputRef}
-            model={model}
-            setModel={setModel}
           />
         )}
       </div>

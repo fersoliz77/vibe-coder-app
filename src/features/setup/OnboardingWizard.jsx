@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
 import { CheckIcon, AlertIcon, DashIcon, BoltIcon, HintIcon } from '../../components/icons/StatusIcons';
+import { summarizeSetup } from '../../utils/setupSummary';
 import './OnboardingWizard.css';
 
 const TOTAL_STEPS = 4;
@@ -247,18 +248,26 @@ function StepAgents({ openCode, claudeStatus, codexReady }) {
 }
 
 // ─── Step 4: Done ─────────────────────────────────────────────────────────────
-function StepDone({ environment }) {
+/*
+ * Antes esta pantalla afirmaba "todo listo" aunque un agente hubiera fallado o
+ * siguiera instalandose. El avance sigue sin depender de eso —la app funciona
+ * igual—, pero ahora el resultado se dice y se puede reintentar.
+ */
+function StepDone({ summary, onRetry, retrying }) {
   const { t } = useI18n();
-  const items = environment?.items || [];
-  const readyCount = items.filter((i) => i.installed).length;
+  const { items, pending, missing, readyCount, complete } = summary;
 
   return (
     <div className="onboarding-wizard__content" key="step-done">
       <div className="onboarding-wizard__success-hero">
-        <div className="onboarding-wizard__success-icon"><CheckIcon size={28} /></div>
-        <h2 className="onboarding-wizard__title" style={{ textAlign: 'center' }}>{t('onboarding.doneTitle')}</h2>
+        <div className={`onboarding-wizard__success-icon${complete ? '' : ' onboarding-wizard__success-icon--partial'}`}>
+          {complete ? <CheckIcon size={28} /> : <AlertIcon size={28} />}
+        </div>
+        <h2 className="onboarding-wizard__title" style={{ textAlign: 'center' }}>
+          {complete ? t('onboarding.doneTitle') : t('onboarding.donePartialTitle')}
+        </h2>
         <p className="onboarding-wizard__subtitle" style={{ textAlign: 'center', maxWidth: 440 }}>
-          {t('onboarding.doneCopy')}
+          {complete ? t('onboarding.doneCopy') : t('onboarding.donePartialCopy')}
         </p>
         {items.length > 0 && (
           <p style={{ fontSize: 14, color: 'var(--vc-text-3)', textAlign: 'center' }}>
@@ -266,6 +275,28 @@ function StepDone({ environment }) {
           </p>
         )}
       </div>
+
+      {!complete && (
+        <div className="onboarding-wizard__outcome">
+          <ul className="onboarding-wizard__outcome-list">
+            {[...pending, ...missing].map((item) => (
+              <li key={item.id}>
+                <span className={`onboarding-wizard__status-indicator onboarding-wizard__status-indicator--${item.state === 'pending' ? 'ready' : 'missing'}`} aria-hidden="true" />
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.state === 'pending' ? t('onboarding.stillInstalling') : (item.detail || t('onboarding.notInstalled'))}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <div className="onboarding-wizard__outcome-actions">
+            <button className="onboarding-wizard__btn onboarding-wizard__btn--secondary" onClick={onRetry} disabled={retrying}>
+              {retrying ? t('onboarding.checking') : t('onboarding.checkAgain')}
+            </button>
+            <span className="onboarding-wizard__footer-text">{t('onboarding.fixLaterHint')}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -443,6 +474,7 @@ export default function OnboardingWizard({ onComplete }) {
   const handleBack = () => setStep((s) => Math.max(1, s - 1));
 
   const canProceedFromStep2 = !installing && !checking;
+  const setupSummary = summarizeSetup({ environment, openCode, claudeStatus, codexReady });
 
   const stepLabels = ['welcome', 'tools', 'agents', 'finish'].map((key) => t(`onboarding.steps.${key}`));
 
@@ -492,7 +524,13 @@ export default function OnboardingWizard({ onComplete }) {
             codexReady={codexReady}
           />
         )}
-        {step === 4 && <StepDone environment={environment} />}
+        {step === 4 && (
+          <StepDone
+            summary={setupSummary}
+            retrying={checking || openCode.loading || claudeStatus.loading}
+            onRetry={() => { doCheck(); checkOpenCode(); checkClaudeInstalled(); checkCodexReady(); }}
+          />
+        )}
 
         {/* Footer */}
         <div className="onboarding-wizard__footer">

@@ -42,6 +42,14 @@
 .settings-provider strong { font-size: 13px; }
 .settings-provider span:not(.status-dot) { color: var(--text-tertiary); font-size: 12px; }
 .settings-provider-error { margin-top: var(--space-sm); color: var(--status-warning); font-size: 12px; }
+/* Conectar GitHub/Vercel: el estado solo no alcanzaba, hacia falta la accion. */
+.settings-delivery { display: grid; gap: var(--space-md); }
+.settings-delivery__item { display: grid; gap: var(--space-sm); }
+.settings-delivery__connect { display: grid; gap: var(--space-sm); }
+.settings-delivery__command { display: grid; gap: var(--space-sm); padding: var(--space-md); border: 1px solid var(--glass-border); border-radius: var(--radius-md); background: var(--bg-deepest); }
+.settings-delivery__command code { padding: 8px 10px; border-radius: var(--radius-sm); background: var(--bg-base); color: var(--text-primary); font-family: var(--font-mono, monospace); font-size: 12px; overflow-wrap: anywhere; }
+.settings-delivery__actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.settings-delivery__hint { color: var(--text-tertiary); font-size: 11px; }
 .settings-card--setup { padding: var(--space-lg); }
 .settings-card--setup .setup-center { margin: 0; }
 .settings-privacy-note { padding: var(--space-md); color: var(--text-secondary); font-size: 12px; line-height: 1.6; border: 1px solid var(--glass-border); border-radius: var(--radius-md); background: var(--bg-deepest); }

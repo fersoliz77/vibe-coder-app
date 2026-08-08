@@ -165,9 +165,10 @@
   border-color: var(--vc-success) !important;
 }
 
+/* Ni gradiente en un boton operativo ni halo verde de 20px: elevacion real. */
 .openai-btn:hover {
-  background: linear-gradient(135deg, var(--vc-success), #047857) !important;
-  box-shadow: 0 8px 20px rgba(var(--vc-success-rgb), 0.3);
+  background: var(--vc-success) !important;
+  box-shadow: var(--vc-shadow-sm);
 }
 
 .openai-btn-send {

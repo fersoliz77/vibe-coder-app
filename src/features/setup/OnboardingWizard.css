@@ -430,6 +430,58 @@
   margin-bottom: 24px;
 }
 
+/* Un cierre con pendientes no puede verse igual que uno completo. */
+.onboarding-wizard__success-icon--partial {
+  background: rgba(var(--vc-warning-rgb), 0.1);
+  border-color: var(--vc-warning);
+  color: var(--vc-warning);
+}
+
+.onboarding-wizard__outcome {
+  display: grid;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 16px;
+  border: 1px solid var(--vc-line);
+  border-radius: 14px;
+  background: var(--vc-surface-2);
+}
+
+.onboarding-wizard__outcome-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.onboarding-wizard__outcome-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.onboarding-wizard__outcome-list div {
+  display: grid;
+  gap: 2px;
+}
+
+.onboarding-wizard__outcome-list strong {
+  font-size: 13px;
+}
+
+.onboarding-wizard__outcome-list span {
+  color: var(--vc-text-3);
+  font-size: 12px;
+}
+
+.onboarding-wizard__outcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
 .onboarding-wizard__spinner {
   width: 14px;
   height: 14px;

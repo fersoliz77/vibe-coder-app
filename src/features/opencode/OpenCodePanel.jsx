@@ -1,17 +1,32 @@
 import { useEffect, useRef } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
 import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
+import { xtermTheme } from '../terminal/xtermTheme';
 import './OpenCodePanel.css';
 
-export default function OpenCodePanel({ activeView, project, terminalHook }) {
+export default function OpenCodePanel({ activeView, project, terminalHook, isDark = true }) {
   const { t } = useI18n();
   const containerRef = useRef(null);
   const xtermInstanceRef = useRef(null);
   const fitAddonRef = useRef(null);
   const resizeObserverRef = useRef(null);
 
-  const { openCodeTerminal, registerXterm, writeToTerminal, resizeTerminal } = terminalHook;
+  const {
+    openCodeTerminal,
+    registerXterm,
+    writeToTerminal,
+    resizeTerminal,
+    openCodeError,
+    openCodeStarting,
+    createOpenCodeTerminal,
+    clearOpenCodeError,
+  } = terminalHook;
   const terminalId = openCodeTerminal?.id;
+
+  const retry = () => {
+    clearOpenCodeError?.();
+    createOpenCodeTerminal?.();
+  };
 
   // Initialize xterm when openCodeTerminal is available
   useEffect(() => {
@@ -33,28 +48,7 @@ export default function OpenCodePanel({ activeView, project, terminalHook }) {
           lineHeight: 1.4,
           cursorBlink: true,
           cursorStyle: 'bar',
-          theme: {
-            background: '#0d1117',
-            foreground: '#e6edf3',
-            cursor: '#58a6ff',
-            selectionBackground: 'rgba(56, 139, 253, 0.3)',
-            black: '#0d1117',
-            red: '#ff7b72',
-            green: '#3fb950',
-            yellow: '#d29922',
-            blue: '#58a6ff',
-            magenta: '#bc8cff',
-            cyan: '#39d353',
-            white: '#e6edf3',
-            brightBlack: '#484f58',
-            brightRed: '#ffa198',
-            brightGreen: '#56d364',
-            brightYellow: '#e3b341',
-            brightBlue: '#79c0ff',
-            brightMagenta: '#d2a8ff',
-            brightCyan: '#56d364',
-            brightWhite: '#f0f6fc',
-          },
+          theme: xtermTheme(isDark),
         });
 
         xterm.loadAddon(fitAddon);
@@ -110,6 +104,12 @@ export default function OpenCodePanel({ activeView, project, terminalHook }) {
     }
   }, [activeView, terminalId, resizeTerminal]);
 
+  useEffect(() => {
+    const xterm = xtermInstanceRef.current;
+    if (!xterm) return;
+    try { xterm.options.theme = xtermTheme(isDark); } catch {}
+  }, [isDark]);
+
   // Cleanup on unmount
   useEffect(() => {
     return () => {
@@ -132,13 +132,28 @@ export default function OpenCodePanel({ activeView, project, terminalHook }) {
         </div>
       </div>
       <div className="opencode-panel__content">
-        {!terminalId ? (
-          <div className="opencode-panel__loading">
+        {/* El spinner solo cubre el arranque real. Si la creacion falla se dice
+            por que y se ofrece reintentar: antes la vista se activaba igual y
+            este panel giraba para siempre porque nadie miraba el error. */}
+        {terminalId && <div className="opencode-panel__terminal-container" ref={containerRef} />}
+        {!terminalId && openCodeError && (
+          <div className="opencode-panel__failure" role="alert">
+            <strong>{t('opencode.failedTitle')}</strong>
+            <p className="opencode-panel__failure-detail">{openCodeError}</p>
+            <button className="btn btn--primary" type="button" onClick={retry}>{t('opencode.retry')}</button>
+          </div>
+        )}
+        {!terminalId && !openCodeError && openCodeStarting && (
+          <div className="opencode-panel__loading" role="status">
             <div className="opencode-panel__spinner" />
             <span>{t('opencode.starting')}</span>
           </div>
-        ) : (
-          <div className="opencode-panel__terminal-container" ref={containerRef} />
+        )}
+        {!terminalId && !openCodeError && !openCodeStarting && (
+          <div className="opencode-panel__failure">
+            <p className="opencode-panel__failure-detail">{t('opencode.idle')}</p>
+            <button className="btn btn--primary" type="button" onClick={retry}>{t('opencode.start')}</button>
+          </div>
         )}
       </div>
     </div>

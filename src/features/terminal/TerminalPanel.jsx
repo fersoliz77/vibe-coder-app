@@ -1,6 +1,7 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
 import { tabAction, nextTabIndex } from '../../utils/tablist';
+import { xtermTheme } from './xtermTheme';
 import './TerminalPanel.css';
 
 export default function TerminalPanel({
@@ -14,6 +15,7 @@ export default function TerminalPanel({
   registerXterm,
   lastError,
   clearLastError,
+  isDark = true,
 }) {
   const { t } = useI18n();
   const containerRef = useRef(null);
@@ -65,28 +67,7 @@ export default function TerminalPanel({
           lineHeight: 1.4,
           cursorBlink: true,
           cursorStyle: 'bar',
-          theme: {
-            background: '#0d1117',
-            foreground: '#e6edf3',
-            cursor: '#58a6ff',
-            selectionBackground: 'rgba(56, 139, 253, 0.3)',
-            black: '#0d1117',
-            red: '#ff7b72',
-            green: '#3fb950',
-            yellow: '#d29922',
-            blue: '#58a6ff',
-            magenta: '#bc8cff',
-            cyan: '#39d353',
-            white: '#e6edf3',
-            brightBlack: '#484f58',
-            brightRed: '#ffa198',
-            brightGreen: '#56d364',
-            brightYellow: '#e3b341',
-            brightBlue: '#79c0ff',
-            brightMagenta: '#d2a8ff',
-            brightCyan: '#56d364',
-            brightWhite: '#f0f6fc',
-          },
+          theme: xtermTheme(isDark),
         });
 
         xterm.loadAddon(fitAddon);
@@ -148,6 +129,15 @@ export default function TerminalPanel({
 
     tryInit();
   }, [activeTerminalId, terminals]);
+
+  // Cambiar el tema no puede exigir cerrar y reabrir la terminal: xterm pinta
+  // sobre canvas, asi que hay que repintarle la paleta a las que ya existen.
+  useEffect(() => {
+    const theme = xtermTheme(isDark);
+    xtermInstancesRef.current.forEach((xterm) => {
+      try { xterm.options.theme = theme; } catch { /* instancia ya descartada */ }
+    });
+  }, [isDark]);
 
   useEffect(() => {
     return () => {
@@ -227,6 +217,7 @@ export default function TerminalPanel({
                 <line x1="12" y1="19" x2="20" y2="19" />
               </svg>
               <span>{term.name}</span>
+              {term.error && <span className="terminal-panel__tab-badge" title={term.error}>{t('terminal.failedTab')}</span>}
               <button
                 className="terminal-panel__tab-close"
                 onClick={(e) => handleCloseTab(e, term.id)}
@@ -246,17 +237,53 @@ export default function TerminalPanel({
         </button>
       </div>
 
+      {/* Abrir una terminal nueva podia fallar sin que se viera nada: el error
+          solo se mostraba cuando no habia ninguna abierta. */}
+      {terminals.length > 0 && lastError && (
+        <div className="terminal-panel__banner" role="alert">
+          <span><strong>{t('terminal.failedTitle')}</strong> {lastError}</span>
+          <div className="terminal-panel__banner-actions">
+            <button className="btn btn--small" type="button" onClick={() => { clearLastError?.(); createTerminal(); }}>{t('terminal.retry')}</button>
+            <button className="btn btn--small btn--ghost" type="button" onClick={() => clearLastError?.()}>{t('terminal.dismiss')}</button>
+          </div>
+        </div>
+      )}
+
       {/* Terminal Container */}
       <div className="terminal-panel__content" ref={containerRef}>
         {terminals.map((term) => (
-          <div
-            key={term.id}
-            id={`terminal-container-${term.id}`}
-            className="terminal-panel__instance"
-            role="tabpanel"
-            aria-labelledby={`terminal-tab-${term.id}`}
-            style={{ display: term.id === activeTerminalId ? 'block' : 'none' }}
-          />
+          term.error ? (
+            // El shell no arranco: la pestana existe pero no hay PTY detras.
+            // Antes se montaba un xterm vacio y parecia una terminal colgada.
+            <div
+              key={term.id}
+              className="terminal-panel__instance terminal-panel__instance--error"
+              role="tabpanel"
+              aria-labelledby={`terminal-tab-${term.id}`}
+              style={{ display: term.id === activeTerminalId ? 'flex' : 'none' }}
+            >
+              <div className="terminal-panel__empty terminal-panel__empty--error">
+                <strong>{t('terminal.sessionFailed')}</strong>
+                <p className="terminal-panel__error-detail">{term.error}</p>
+                <button
+                  className="btn btn--primary"
+                  type="button"
+                  onClick={() => { closeTerminal(term.id); clearLastError?.(); createTerminal(); }}
+                >
+                  {t('terminal.retry')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div
+              key={term.id}
+              id={`terminal-container-${term.id}`}
+              className="terminal-panel__instance"
+              role="tabpanel"
+              aria-labelledby={`terminal-tab-${term.id}`}
+              style={{ display: term.id === activeTerminalId ? 'block' : 'none' }}
+            />
+          )
         ))}
         {terminals.length === 0 && lastError && (
           <div className="terminal-panel__empty terminal-panel__empty--error" role="alert">

@@ -9,6 +9,8 @@ import './Dashboard.css';
 const INITIAL_WEB = { available: null, state: 'loading', issues: [], diagnostics: { status: 'idle' }, sync: { history: [] }, activity: [] };
 const INITIAL_ANDROID = { available: null, emulatorState: 'loading', appState: 'stopped' };
 
+const DENSITY_KEY = 'vibe-dashboard-density';
+
 const QUICK_ACTIONS = [
   {
     id: 'terminal',
@@ -115,6 +117,25 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const issueCount = Array.isArray(web.issues) ? web.issues.length : 0;
   const previewHasProblems = web.state === 'stopped' || web.state === 'error' || issueCount > 0 || web.diagnostics?.status === 'error';
   const deliveryNeedsSetup = deliveryState === 'attention';
+  /*
+   * Capa basica y capa completa.
+   *
+   * El tablero mostraba a la vez salud del preview, estado de Git, servicios,
+   * entrega, actividad reciente, accesos rapidos y la tarjeta de cuenta. Para
+   * alguien que recien termino el onboarding son siete conceptos antes de
+   * poder abrir un archivo.
+   *
+   * No se saca nada: la capa completa sigue teniendo todo, a un click. Lo que
+   * cambia es con que arranca alguien que todavia no sabe que necesita.
+   */
+  const [detailed, setDetailed] = useState(() => {
+    try { return localStorage.getItem(DENSITY_KEY) === 'detailed'; } catch { return false; }
+  });
+
+  useEffect(() => {
+    try { localStorage.setItem(DENSITY_KEY, detailed ? 'detailed' : 'basic'); } catch { /* sin storage se pierde la preferencia, no la funcion */ }
+  }, [detailed]);
+
   const revealServices = () => document.querySelector('.dashboard__sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   let nextAction = { title: t('dashboard.nextReviewTitle'), copy: t('dashboard.nextReviewCopy'), cta: t('dashboard.openPreview'), onClick: onOpenPreview, tone: 'ready' };
@@ -168,22 +189,22 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                 <button className="project-outcome__cta" type="button" onClick={onOpenPreview}>{t('dashboard.openPreview')}<ArrowIcon /></button>
               </section>
 
-              <section className="health-strip" aria-label={t('dashboard.projectHealth')}>
+              {detailed && <section className="health-strip" aria-label={t('dashboard.projectHealth')}>
                 <button type="button" onClick={onOpenPreview} className={`health-item is-${previewHasProblems ? 'attention' : web.state === 'ready' ? 'ready' : 'neutral'}`}><span>{t('dashboard.previewHealth')}</span><strong>{issueCount ? t('dashboard.issueCount', { count: issueCount }) : statusLabel(web.state, 'webStates')}</strong></button>
                 <button type="button" onClick={onOpenFiles} className={`health-item is-${git.state === 'ready' && !git.entries.length ? 'ready' : git.state === 'ready' ? 'attention' : 'neutral'}`}><span>{t('dashboard.gitHealth')}</span><strong>{git.state === 'loading' ? t('dashboard.checking') : git.state === 'unavailable' ? t('dashboard.statusUnavailable') : git.entries.length ? t('dashboard.changeCount', { count: git.entries.length }) : t('dashboard.clean')}</strong></button>
                 <button type="button" onClick={revealServices} className="health-item"><span>{t('dashboard.servicesHealth')}</span><strong>{t('dashboard.connectedCount', { connected: connectedCount, total: serviceList.length })}</strong></button>
                 <button type="button" onClick={revealServices} className={`health-item is-${deliveryState}`}><span>{t('dashboard.deliveryHealth')}</span><strong>{deliveryState === 'loading' ? t('dashboard.checking') : deliveryState === 'ready' ? t('dashboard.deliveryReady') : t('dashboard.deliveryNotReady')}</strong></button>
-              </section>
+              </section>}
 
               <div className="dashboard__outcome-grid">
                 <section className={`next-action is-${nextAction.tone}`}>
                   <div><span className="dashboard-card-eyebrow">{t('dashboard.nextAction')}</span><h2>{nextAction.title}</h2><p>{nextAction.copy}</p></div>
                   <button type="button" onClick={nextAction.onClick}>{nextAction.cta}<ArrowIcon /></button>
                 </section>
-                <section className="recent-activity glass-card">
+                {detailed && <section className="recent-activity glass-card">
                   <div className="recent-activity__header"><span className="dashboard-card-eyebrow">{t('dashboard.recentActivity')}</span><strong>{t('dashboard.latestUpdates')}</strong></div>
                   {previewActivity.length ? <ol>{previewActivity.map((item, index) => <li key={`${item.type}-${item.timestamp}-${index}`}><i /><span>{activityLabel(item)}</span><time>{formatDate(item.timestamp, { dateStyle: 'medium', timeStyle: 'short' })}</time></li>)}</ol> : <p className="recent-activity__empty">{t('dashboard.noRecentActivity')}</p>}
-                </section>
+                </section>}
               </div>
 
               <section className="dashboard__section dashboard__section--quiet">
@@ -193,12 +214,17 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                   return <button key={action.id} className="action-card glass-card" onClick={handleClick} type="button"><div className="action-card__icon">{action.icon}</div><div className="action-card__text"><span className="action-card__title">{action.titleKey ? t(action.titleKey) : action.title}</span><span className="action-card__desc text-secondary">{t(action.descriptionKey)}</span></div></button>;
                 })}</div>
               </section>
-              <AccountCard compact {...{ authState, account, progress, completedLessons, totalLessons, t, formatDate }} />
+              {detailed && <AccountCard compact {...{ authState, account, progress, completedLessons, totalLessons, t, formatDate }} />}
+
+              {/* Nada se retira: la capa completa esta a un click. */}
+              <button type="button" className="dashboard__density-toggle" onClick={() => setDetailed((value) => !value)} aria-pressed={detailed}>
+                {detailed ? t('dashboard.showBasic') : t('dashboard.showDetailed')}
+              </button>
             </>
           )}
         </div>
 
-        <div className="dashboard__sidebar">
+        <div className="dashboard__sidebar" hidden={Boolean(currentProject) && !detailed}>
           <div className="dashboard__sidebar-header">{t('dashboard.providerStatus')}</div>
           <GlobalServices
             services={serviceList}
