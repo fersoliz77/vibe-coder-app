@@ -293,3 +293,27 @@
   .recent-activity li { grid-template-columns: 8px minmax(0, 1fr); }
   .recent-activity time { grid-column: 2; }
 }
+
+/* Nada se retira del tablero: la capa completa esta a un click. */
+.dashboard__density-toggle {
+  justify-self: start;
+  margin-top: var(--vc-space-2);
+  padding: 7px 12px;
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: transparent;
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--vc-transition-fast);
+}
+
+.dashboard__density-toggle:hover {
+  border-color: var(--vc-line-strong);
+  color: var(--vc-text-1);
+}
+
+.dashboard__inner:has(.dashboard__sidebar[hidden]) {
+  grid-template-columns: minmax(0, 1fr);
+}

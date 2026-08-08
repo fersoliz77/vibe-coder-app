@@ -316,6 +316,8 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
     }
   };
 
+  const missingProviders = [options.githubUser ? null : 'github', options.vercelUser ? null : 'vercel'].filter(Boolean);
+
   const renderStep = () => {
     if (step === 0) return (
       <section className="cpw-step" aria-labelledby="cpw-step-title">
@@ -323,6 +325,23 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
         <div className="cpw-choice-grid cpw-choice-grid--large">
           <ChoiceCard name={`${radioId}-type`} value="web" checked={projectType === 'web'} onChange={() => setProjectType('web')} icon="globe" title={t('createProject.webApp')} description={t('createProject.webAppCopy')} />
           <ChoiceCard name={`${radioId}-type`} value="mobile-suite" checked={projectType === 'mobile-suite'} onChange={() => { setProjectType('mobile-suite'); setWebStack('next-ts'); }} icon="mobile" title={t('createProject.mobileSuite')} badge={t('createProject.webAndroid')} description={t('createProject.mobileSuiteCopy')} />
+        </div>
+
+        {/* Los requisitos se comunicaban recien en el paso 6, despues de que ya
+            hubieras elegido stack, backend y contrasena de base. Se anticipan:
+            el asistente sigue teniendo los mismos pasos y las mismas
+            exigencias, pero ahora sabes desde el principio si vas a llegar. */}
+        <div className={`cpw-requirements${missingProviders.length ? ' cpw-requirements--pending' : ''}`}>
+          <strong>{t('createProject.requirementsTitle')}</strong>
+          <ul>
+            <li className={options.githubUser ? 'is-ready' : ''}>
+              GitHub — {options.githubUser || t('createProject.githubDisconnected')}
+            </li>
+            <li className={options.vercelUser ? 'is-ready' : ''}>
+              Vercel — {options.vercelUser || t('createProject.accountDisconnected')}
+            </li>
+          </ul>
+          {missingProviders.length > 0 && <p>{t('createProject.requirementsPending')}</p>}
         </div>
       </section>
     );

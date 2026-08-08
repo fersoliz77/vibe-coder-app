@@ -505,3 +505,27 @@
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* El modelo vive en la cabecera: antes estaba en la bienvenida y desaparecia
+   al primer mensaje, justo cuando empieza a importar con cual estas hablando. */
+.claude-panel__header-model select {
+  max-width: 190px;
+  padding: 3px 8px;
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-xs);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-2);
+  font-family: inherit;
+  font-size: var(--vc-text-xs);
+  cursor: pointer;
+}
+
+.claude-panel__header-model select:hover:not(:disabled) {
+  border-color: var(--vc-line-strong);
+  color: var(--vc-text-1);
+}
+
+.claude-panel__header-model select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

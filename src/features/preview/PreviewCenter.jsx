@@ -119,10 +119,18 @@ export default function PreviewCenter({ project }) {
               {Object.keys(VIEWPORTS).map((name) => <button key={name} className={viewport === name ? 'is-active' : ''} onClick={() => setViewport(name)} title={t(`preview.${name}`)}>{t(`preview.${name}`)}</button>)}
             </div>
             <div className="preview-actions">
-              <button className="preview-button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.audit(project.path))}>{t('preview.runAudit')}</button>
-              <button className="preview-button" disabled={web.state !== 'ready'} onClick={() => act(snapshot)}>{t('preview.snapshot')}</button>
-              <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => setFrameKey((key) => key + 1)} title={t('preview.reload')}><Icon name="reload" /></button>
-              <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.openExternal(project.path))} title={t('preview.openBrowser')}><Icon name="external" /></button>
+              <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => setFrameKey((key) => key + 1)} title={t('preview.reload')} aria-label={t('preview.reload')}><Icon name="reload" /></button>
+              <button className="preview-icon-button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.openExternal(project.path))} title={t('preview.openBrowser')} aria-label={t('preview.openBrowser')}><Icon name="external" /></button>
+              {/* Auditar y capturar competian visualmente con arrancar la vista,
+                  que es lo unico que el usuario viene a hacer aca. Siguen
+                  estando, un click mas adentro. */}
+              <details className="preview-more">
+                <summary aria-label={t('preview.moreActions')}>{t('preview.moreActions')}</summary>
+                <div className="preview-more__menu">
+                  <button type="button" disabled={web.state !== 'ready'} onClick={() => act(() => api.web.audit(project.path))}>{t('preview.runAudit')}</button>
+                  <button type="button" disabled={web.state !== 'ready'} onClick={() => act(snapshot)}>{t('preview.snapshot')}</button>
+                </div>
+              </details>
               {['starting', 'ready', 'stopping'].includes(web.state)
                 ? <button className="preview-button is-danger" disabled={web.state === 'stopping'} onClick={() => act(() => api.web.stop(project.path))}><Icon name="stop" />{t('preview.stop')}</button>
                 : <button className="preview-button is-primary" disabled={webBusy || web.state === 'loading' || !web.available} onClick={() => act(() => api.web.start(project.path))}><Icon name="play" />{t('preview.startWeb')}</button>}

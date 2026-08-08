@@ -345,7 +345,7 @@ function Workspace() {
 
     switch (activeView) {
       case VIEWS.TERMINAL:
-        return <TerminalPanel {...terminalHook} />;
+        return <TerminalPanel {...terminalHook} isDark={isDarkMode} />;
       case VIEWS.CLAUDE:
         return <ClaudePanel {...claudeHook} />;
       case VIEWS.OPENAI:
@@ -458,6 +458,7 @@ function Workspace() {
                 activeView={activeView}
                 project={currentProject}
                 terminalHook={terminalHook}
+                isDark={isDarkMode}
               />
             </div>
           )}

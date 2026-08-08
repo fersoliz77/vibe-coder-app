@@ -184,3 +184,19 @@ Object.assign(dictionaries.es.settings, {
 // arriba reescriben `ai` varias veces y borrarian cualquier clave anterior.
 Object.assign(dictionaries.en.ai, { copy: 'Copy', copied: 'Copied', copyMessage: 'Copy this answer' });
 Object.assign(dictionaries.es.ai, { copy: 'Copiar', copied: 'Copiado', copyMessage: 'Copiar esta respuesta' });
+
+// Cancelar la busqueda del explorador: se podia escribir pero no salir.
+Object.assign(dictionaries.en.explorer, { clearSearch: 'Clear search' });
+Object.assign(dictionaries.es.explorer, { clearSearch: 'Limpiar búsqueda' });
+
+// Requisitos de cuenta anticipados al primer paso del asistente.
+Object.assign(createProjectEn, { requirementsTitle: 'What this needs', requirementsPending: 'Connect them from Settings, Services, Code and delivery before the last step.' });
+Object.assign(createProjectEs, { requirementsTitle: 'Qué hace falta', requirementsPending: 'Conectalos en Configuración, Servicios, Código y entrega antes del último paso.' });
+
+// La toolbar de preview competia consigo misma: lo secundario pasa a un menu.
+Object.assign(dictionaries.en.preview, { moreActions: 'More' });
+Object.assign(dictionaries.es.preview, { moreActions: 'Más' });
+
+// Capa basica y capa completa del tablero.
+Object.assign(dictionaries.en.dashboard, { showDetailed: 'Show project details', showBasic: 'Show the essentials only' });
+Object.assign(dictionaries.es.dashboard, { showDetailed: 'Ver el detalle del proyecto', showBasic: 'Ver solo lo esencial' });

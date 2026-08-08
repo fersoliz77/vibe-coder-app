@@ -985,3 +985,29 @@
 .file-tree-list:focus-within .file-tree-item[tabindex="0"] {
   background: var(--vc-surface-3);
 }
+
+/* Salir de la busqueda exigia borrar letra por letra. */
+.file-explorer__search-wrap { position: relative; }
+
+.file-explorer__search-clear {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border: none;
+  border-radius: var(--vc-radius-xs);
+  background: transparent;
+  color: var(--vc-text-3);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.file-explorer__search-clear:hover {
+  background: var(--vc-surface-3);
+  color: var(--vc-text-1);
+}

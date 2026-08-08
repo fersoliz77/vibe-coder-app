@@ -272,23 +272,43 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
         <div className="file-explorer__header">
           <span className="file-explorer__eyebrow">{t('explorer.title')}</span>
           <div className="file-explorer__actions">
-            <button className="file-explorer__icon-btn" type="button" title={t('explorer.newFile')} onClick={() => actions.openCreateAction('new-file')}>
+            <button className="file-explorer__icon-btn" type="button" title={t('explorer.newFile')} aria-label={t('explorer.newFile')} onClick={() => actions.openCreateAction('new-file')}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8.5 1.75a.75.75 0 0 0-1.5 0v5h-5a.75.75 0 0 0 0 1.5h5v5a.75.75 0 0 0 1.5 0v-5h5a.75.75 0 0 0 0-1.5h-5v-5z"/></svg>
             </button>
-            <button className="file-explorer__icon-btn" type="button" title={t('explorer.newFolder')} onClick={() => actions.openCreateAction('new-folder')}>
+            <button className="file-explorer__icon-btn" type="button" title={t('explorer.newFolder')} aria-label={t('explorer.newFolder')} onClick={() => actions.openCreateAction('new-folder')}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 2A1.75 1.75 0 0 0 0 3.75v6.5C0 11.216.784 12 1.75 12h5.5a.75.75 0 0 0 0-1.5h-5.5a.25.25 0 0 1-.25-.25v-6.5A.25.25 0 0 1 1.75 3.5h2.534a.25.25 0 0 1 .177.073l1.216 1.216A1.75 1.75 0 0 0 6.914 5.3H10.25a.25.25 0 0 1 .25.25V7a.75.75 0 0 0 1.5 0V5.55A1.75 1.75 0 0 0 10.25 3.8H6.914a.25.25 0 0 1-.177-.073L5.52 2.51A1.75 1.75 0 0 0 4.284 2H1.75z"/><path d="M12.25 8.5a.75.75 0 0 1 .75.75v1.5h1.5a.75.75 0 0 1 0 1.5H13v1.5a.75.75 0 0 1-1.5 0V12.25H10a.75.75 0 0 1 0-1.5h1.5v-1.5a.75.75 0 0 1 .75-.75z"/></svg>
             </button>
-            <button className="file-explorer__icon-btn" type="button" title={t('explorer.refreshTree')} onClick={refreshTree}>
+            <button className="file-explorer__icon-btn" type="button" title={t('explorer.refreshTree')} aria-label={t('explorer.refreshTree')} onClick={refreshTree}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 3a5 5 0 1 0 4.546 2.917.5.5 0 1 0-.908.418A4 4 0 1 1 8 4c1.226 0 2.324.55 3.058 1.416H9.5a.5.5 0 0 0 0 1H12a.5.5 0 0 0 .5-.5V3.5a.5.5 0 0 0-1 0v1.163A4.982 4.982 0 0 0 8 3z"/></svg>
             </button>
-            <button className="file-explorer__icon-btn" type="button" title={t('explorer.openProjectFolder')} onClick={() => actions.revealFolder(project.path)}>
+            <button className="file-explorer__icon-btn" type="button" title={t('explorer.openProjectFolder')} aria-label={t('explorer.openProjectFolder')} onClick={() => actions.revealFolder(project.path)}>
               <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1.75 3A1.75 1.75 0 0 0 0 4.75v6.5C0 12.216.784 13 1.75 13h8.5A1.75 1.75 0 0 0 12 11.25V5.5h2.793l-2.147 2.146a.5.5 0 1 0 .708.708l3-3a.5.5 0 0 0 0-.708l-3-3a.5.5 0 1 0-.708.708L14.793 4.5H12v-.75A1.75 1.75 0 0 0 10.25 2h-3.5L5.646.896A1.75 1.75 0 0 0 4.409.25H1.75z"/></svg>
             </button>
           </div>
         </div>
 
         <div className="file-explorer__search-wrap">
-          <input className="file-explorer__search" type="text" placeholder={t('explorer.search')} value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
+          <input
+            className="file-explorer__search"
+            type="search"
+            aria-label={t('explorer.search')}
+            placeholder={t('explorer.search')}
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onKeyDown={(event) => { if (event.key === 'Escape' && searchQuery) { event.stopPropagation(); setSearchQuery(''); } }}
+          />
+          {/* Salir de la busqueda exigia borrar letra por letra. */}
+          {searchQuery && (
+            <button
+              type="button"
+              className="file-explorer__search-clear"
+              aria-label={t('explorer.clearSearch')}
+              title={t('explorer.clearSearch')}
+              onClick={() => setSearchQuery('')}
+            >
+              &times;
+            </button>
+          )}
           {actions.clipboardEntry && <div className="file-explorer__clipboard">{t('explorer.clipboard', actions.clipboardEntry)}</div>}
           {dragState && <div className="file-explorer__drag-hint">{t('explorer.dragging', dragState)}</div>}
           {treeState.selectedPaths.length > 1 && <div className="file-explorer__multi-count">{t('explorer.selected', { count: treeState.selectedPaths.length })}</div>}
