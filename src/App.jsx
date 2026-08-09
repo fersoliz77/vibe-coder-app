@@ -10,6 +10,7 @@ import { useClaude } from './hooks/useClaude';
 import { useAppStore } from './store/useAppStore';
 import AuthGate from './features/auth/AuthGate';
 import { useAuth } from './features/auth/AuthContext';
+import { applyDocumentTheme } from './utils/theme';
 import OpenCodeSetupDialog from './features/opencode/OpenCodeSetupDialog';
 import OpenCodePanel from './features/opencode/OpenCodePanel';
 import { useI18n } from './i18n/I18nContext';
@@ -29,13 +30,14 @@ const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
 
 
 function Workspace({ setCloseCheck }) {
-  const { state: authState } = useAuth();
+  const { state: authState, logout } = useAuth();
   const { t } = useI18n();
   const [activeView, setActiveView] = useState(VIEWS.DASHBOARD);
   const [isMaximized, setIsMaximized] = useState(false);
   const [openCodeStatus, setOpenCodeStatus] = useState(null);
   const [openCodeSetup, setOpenCodeSetup] = useState({ open: false, phase: 'idle', progress: '', error: '' });
   const [openAIAvailable, setOpenAIAvailable] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const openCodeRequest = useRef(0);
   const explorerRef = useRef(null);
 
@@ -297,14 +299,16 @@ function Workspace({ setCloseCheck }) {
     setTheme(isDarkMode ? 'light' : 'dark');
   }, [isDarkMode, setTheme]);
 
-  // Apply theme class to body
-  useEffect(() => {
-    if (isDarkMode) {
-      document.body.classList.remove('light-theme');
-    } else {
-      document.body.classList.add('light-theme');
+  const handleLogout = useCallback(async () => {
+    if (loggingOut) return;
+    if (await explorerRef.current?.prepareToLeave?.() === false) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
     }
-  }, [isDarkMode]);
+  }, [loggingOut, logout]);
 
   const renderView = () => {
     if (!initialized) {
@@ -428,6 +432,8 @@ function Workspace({ setCloseCheck }) {
           openAIAvailable={openAIAvailable}
           isDarkMode={isDarkMode}
           onToggleTheme={toggleTheme}
+          onLogout={handleLogout}
+          loggingOut={loggingOut}
           currentProject={currentProject}
           onBackToProjects={handleBackToProjects}
           authState={authState}
@@ -463,7 +469,7 @@ function Workspace({ setCloseCheck }) {
 }
 
 export default function App() {
-  const { initialized, initializationError, init } = useAppStore();
+  const { initialized, initializationError, init, theme } = useAppStore();
   const closeCheckRef = useRef(null);
   const setCloseCheck = useCallback((check) => {
     closeCheckRef.current = check;
@@ -477,6 +483,10 @@ export default function App() {
       window.electronAPI.window.confirmClose();
     });
   }, []);
+
+  useEffect(() => {
+    applyDocumentTheme(document, theme);
+  }, [theme]);
 
   if (!initialized) return <AppSplash error={initializationError} onRetry={init} />;
   return <Suspense fallback={<AppSplash />}><AuthGate><Workspace setCloseCheck={setCloseCheck} /></AuthGate></Suspense>;

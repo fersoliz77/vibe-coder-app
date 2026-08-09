@@ -67,7 +67,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, currentProject, onBackToProjects, authState }) {
+export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, onLogout, loggingOut, currentProject, onBackToProjects, authState }) {
   const { t } = useI18n();
   return (
     <aside className="sidebar">
@@ -162,6 +162,24 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
             )}
           </span>
           <span className="sidebar__label">{t('sidebar.toggleTheme')}</span>
+        </button>
+        <button
+          className="sidebar__item sidebar__item--logout"
+          onClick={onLogout}
+          title={t('auth.logout')}
+          aria-label={t('auth.logout')}
+          aria-busy={loggingOut}
+          disabled={loggingOut}
+          type="button"
+        >
+          <span className="sidebar__icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M10 17l5-5-5-5" />
+              <path d="M15 12H3" />
+              <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+            </svg>
+          </span>
+          <span className="sidebar__label">{t('auth.logout')}</span>
         </button>
         <div className="sidebar__version">
           <span className="text-tertiary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>v1.0.0</span>

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { getSystemLocale, SUPPORTED_LOCALES } from '../i18n/locales';
+import { normalizeTheme } from '../utils/theme';
 
 let initializationPromise = null;
 
@@ -31,7 +32,7 @@ export const useAppStore = create((set, get) => ({
             initializationError: '',
             currentProject: config.currentProject || null,
             recentProjects: config.recentProjects || [],
-            theme: config.theme || 'dark',
+            theme: normalizeTheme(config.theme),
             language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
             lastView: typeof config.lastView === 'string' ? config.lastView : null,
           });
@@ -91,9 +92,10 @@ export const useAppStore = create((set, get) => ({
   },
   
   setTheme: async (theme) => {
-    set({ theme });
+    const normalized = normalizeTheme(theme);
+    set({ theme: normalized });
     if (window.electronAPI?.store) {
-      await window.electronAPI.store.set('theme', theme);
+      await window.electronAPI.store.set('theme', normalized);
     }
   },
 

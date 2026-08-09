@@ -43,6 +43,15 @@
   color: var(--text-secondary);
 }
 
+.sidebar__item--logout:hover {
+  color: var(--status-error);
+}
+
+.sidebar__item:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
 .sidebar__item--active {
   background: var(--accent-gradient-soft);
   color: var(--accent-primary);
