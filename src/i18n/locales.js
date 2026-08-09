@@ -52,13 +52,11 @@ export const dictionaries = {
 Object.assign(dictionaries.en.auth, {
   highContrastHelp: 'Strengthens text and borders for easier reading.',
   reduceMotionHelp: 'Disables non-essential animations and transitions.',
-  adminDesktopWebOnly: 'This administrator account is active, but administration is available on the web only. Sign in with an active student account to use the desktop workspace.',
   instructorDesktopWebOnly: 'Instructor access is available on the web only. Sign in with an active student account to use the desktop workspace.',
 });
 Object.assign(dictionaries.es.auth, {
   highContrastHelp: 'Refuerza el texto y los bordes para facilitar la lectura.',
   reduceMotionHelp: 'Desactiva animaciones y transiciones no esenciales.',
-  adminDesktopWebOnly: 'Esta cuenta de administrador está activa, pero la administración se realiza únicamente desde la web. Iniciá sesión con una cuenta de estudiante activa para usar el espacio de trabajo desktop.',
   instructorDesktopWebOnly: 'El acceso de instructor está disponible únicamente en la web. Iniciá sesión con una cuenta de estudiante activa para usar el espacio de trabajo desktop.',
 });
 

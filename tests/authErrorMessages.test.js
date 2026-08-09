@@ -21,11 +21,11 @@ test('unknown authentication errors use a professional generic message', () => {
   assert.equal(localizedAuthError({ code: 'SOMETHING_NEW', message: 'internal detail' }, t), 'Error inesperado');
 });
 
-test('credential and role guidance is available in both supported languages', () => {
+test('credential and instructor guidance is available in both supported languages', () => {
   assert.match(dictionaries.es.auth.errors.invalidCredentials, /correo.*contraseña.*incorrectos/i);
   assert.match(dictionaries.en.auth.errors.invalidCredentials, /email.*password.*incorrect/i);
-  assert.match(dictionaries.es.auth.adminDesktopWebOnly, /administrador.*web.*estudiante/i);
-  assert.match(dictionaries.en.auth.adminDesktopWebOnly, /administrator.*web.*student/i);
+  assert.match(dictionaries.es.auth.instructorDesktopWebOnly, /instructor.*web.*estudiante/i);
+  assert.match(dictionaries.en.auth.instructorDesktopWebOnly, /instructor.*web.*student/i);
   assert.match(dictionaries.es.auth.highContrastHelp, /texto.*bordes/i);
   assert.match(dictionaries.en.auth.reduceMotionHelp, /animations.*transitions/i);
 });

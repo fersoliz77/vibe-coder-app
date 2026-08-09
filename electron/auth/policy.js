@@ -23,8 +23,8 @@ function getLeaseExpiry(lastValidatedAt, requestedExpiry) {
 
 function getEffectivePolicy({ role, accountStatus, lastValidatedAt, leaseExpiresAt, now = Date.now() } = {}) {
   if (!ACCOUNT_ROLES.includes(role) || !ACCOUNT_STATUSES.includes(accountStatus)) return 'denied';
-  if (role !== 'student') return 'denied';
-  if (role === 'student' && (accountStatus === 'suspended' || accountStatus === 'archived')) return 'denied';
+  if (role === 'instructor') return 'denied';
+  if (accountStatus === 'suspended' || accountStatus === 'archived') return 'denied';
 
   const expiry = Date.parse(getLeaseExpiry(lastValidatedAt, leaseExpiresAt));
   const currentTime = typeof now === 'number' ? now : Date.parse(now);

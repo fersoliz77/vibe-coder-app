@@ -199,11 +199,9 @@ function Login({ state, onState }) {
 function Denied({ state, onState }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState('');
-  const deniedCopy = state.account?.role === 'admin'
-    ? t('auth.adminDesktopWebOnly')
-    : state.account?.role === 'instructor'
-      ? t('auth.instructorDesktopWebOnly')
-      : t('auth.deniedCopy');
+  const deniedCopy = state.account?.role === 'instructor'
+    ? t('auth.instructorDesktopWebOnly')
+    : t('auth.deniedCopy');
   return (
     <div className="auth-page">
       <AuthTitlebar />
