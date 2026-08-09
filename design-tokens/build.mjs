@@ -191,10 +191,18 @@ if (targets.length === 0) {
   process.exit(1);
 }
 
+/*
+ * La comparacion ignora el tipo de salto de linea. Git convierte a CRLF al
+ * clonar en Windows y el generador escribe LF, asi que comparar bytes hacia
+ * fallar el gate en el runner de Windows y pasar en el de Linux, sin que
+ * hubiera ninguna diferencia real de contenido.
+ */
+const sameContent = (a, b) => a !== null && a.replaceAll('\r\n', '\n') === b.replaceAll('\r\n', '\n');
+
 const stale = [];
 for (const target of targets) {
   const current = await readFile(target, 'utf8').catch(() => null);
-  if (current === css) continue;
+  if (sameContent(current, css)) continue;
   if (check) stale.push(target);
   else await writeFile(target, css, 'utf8');
 }

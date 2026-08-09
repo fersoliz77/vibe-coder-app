@@ -126,6 +126,13 @@ for (const { label, css } of sources) {
  * salta: es la verificacion que hace el desarrollador, y la que la Fase 1
  * vuelve innecesaria al generar ambos desde una fuente unica.
  */
+/*
+ * Las comparaciones entre productos ignoran el tipo de salto de linea: si un
+ * repositorio se clono con CRLF y el otro con LF, la diferencia no es de
+ * contenido y no deberia fallar el gate.
+ */
+const sameText = (a, b) => a.replaceAll('\r\n', '\n') === b.replaceAll('\r\n', '\n');
+
 if (siblingRoot) {
   // 1. La capa de tokens tiene que ser literalmente la misma en los dos
   //    productos: si se bifurca, la paridad visual se pierde sin que se note.
@@ -135,7 +142,7 @@ if (siblingRoot) {
     failures.push('no se encontro la capa de tokens en alguno de los dos productos');
   } else {
     const [a, b] = await Promise.all([readFile(ownTokens, 'utf8'), readFile(siblingTokens, 'utf8')]);
-    if (a !== b) failures.push('la capa de tokens difiere entre los dos productos; debe ser identica');
+    if (!sameText(a, b)) failures.push('la capa de tokens difiere entre los dos productos; debe ser identica');
   }
 
   // 2. Los gates estan duplicados en los dos repositorios porque cada CI clona
@@ -161,7 +168,7 @@ if (siblingRoot) {
       continue;
     }
     const [a, b] = await Promise.all([readFile(here, 'utf8'), readFile(there, 'utf8')]);
-    if (a !== b) failures.push(`${name} difiere entre los dos productos; debe ser identico`);
+    if (!sameText(a, b)) failures.push(`${name} difiere entre los dos productos; debe ser identico`);
   }
 }
 
