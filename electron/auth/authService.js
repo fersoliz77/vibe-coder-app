@@ -3,11 +3,14 @@ const path = require('path');
 const { app, safeStorage, shell } = require('electron');
 const { ACCOUNT_ROLES, ACCOUNT_STATUSES, getEffectivePolicy, getLeaseExpiry } = require('./policy');
 const {
+  createOAuthAuthorizeUrl,
   createPkceTransaction,
   getOAuthRedirectUri,
   isPendingTransactionExpired,
   parseOAuthCallback,
 } = require('./oauth');
+
+const AUTH_REQUEST_TIMEOUT_MS = 15_000;
 
 class AuthError extends Error {
   constructor(code, message) {
@@ -53,7 +56,7 @@ function isValidRecord(record) {
 }
 
 class AuthService {
-  constructor() {
+  constructor({ protocolRegistered = true } = {}) {
     this.config = readConfig();
     this.sessionPath = path.join(app.getPath('userData'), 'auth-session.bin');
     this.oauthTransactionPath = path.join(app.getPath('userData'), 'auth-oauth.bin');
@@ -62,6 +65,9 @@ class AuthService {
     this.lastError = null;
     this.sessionGeneration = 0;
     this.revalidationPromise = null;
+    this.protocolRegistered = protocolRegistered;
+    this.isPackaged = app.isPackaged;
+    this.openExternal = (url) => shell.openExternal(url);
   }
 
   initialize() {
@@ -99,7 +105,8 @@ class AuthService {
       if (isPendingTransactionExpired(transaction)
         || typeof transaction.codeVerifier !== 'string'
         || typeof transaction.nonce !== 'string'
-        || typeof transaction.redirectUri !== 'string') {
+        || typeof transaction.redirectUri !== 'string'
+        || typeof transaction.authorizeUrl !== 'string') {
         this.clearPendingOAuthTransaction();
         return;
       }
@@ -188,6 +195,9 @@ class AuthService {
   }
 
   getState() {
+    const oauthTransaction = this.pendingOAuthTransaction;
+    const oauthPending = Boolean(oauthTransaction && !isPendingTransactionExpired(oauthTransaction));
+    if (oauthTransaction && !oauthPending) this.clearPendingOAuthTransaction(oauthTransaction);
     const policy = this.getPolicy();
     const leaseExpired = this.record?.leaseExpiresAt && Date.now() > Date.parse(this.record.leaseExpiresAt);
     return {
@@ -211,6 +221,10 @@ class AuthService {
       } : null,
       leaseExpiresAt: this.record?.leaseExpiresAt || null,
       configurationReady: this.config.missing.length === 0,
+      oauth: {
+        pending: oauthPending,
+        expiresAt: oauthPending ? oauthTransaction.expiresAt : null,
+      },
       error: this.lastError,
     };
   }
@@ -232,22 +246,42 @@ class AuthService {
   }
 
   async request(pathname, options = {}) {
-    const response = await fetch(`${this.config.supabaseUrl}${pathname}`, {
-      ...options,
-      headers: {
-        apikey: this.config.anonKey,
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      const code = response.status === 401 || response.status === 403
-        ? 'AUTH_ACCESS_REVOKED'
-        : 'AUTH_REMOTE_REJECTED';
-      throw new AuthError(code, body.msg || body.message || body.error_description || `Authentication service returned ${response.status}.`);
+    const { timeoutMs = AUTH_REQUEST_TIMEOUT_MS, signal, ...fetchOptions } = options;
+    const controller = new AbortController();
+    let timedOut = false;
+    const abortFromCaller = () => controller.abort(signal?.reason);
+    if (signal?.aborted) abortFromCaller();
+    else signal?.addEventListener('abort', abortFromCaller, { once: true });
+    const timer = setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, timeoutMs);
+    timer.unref?.();
+    try {
+      const response = await fetch(`${this.config.supabaseUrl}${pathname}`, {
+        ...fetchOptions,
+        signal: controller.signal,
+        headers: {
+          apikey: this.config.anonKey,
+          'Content-Type': 'application/json',
+          ...fetchOptions.headers,
+        },
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const code = response.status === 401 || response.status === 403
+          ? 'AUTH_ACCESS_REVOKED'
+          : 'AUTH_REMOTE_REJECTED';
+        throw new AuthError(code, body.msg || body.message || body.error_description || `Authentication service returned ${response.status}.`);
+      }
+      return body;
+    } catch (error) {
+      if (timedOut) throw new AuthError('AUTH_REQUEST_TIMEOUT', 'The authentication service timed out.');
+      throw error;
+    } finally {
+      clearTimeout(timer);
+      signal?.removeEventListener('abort', abortFromCaller);
     }
-    return body;
   }
 
   normalizeAccess(payload) {
@@ -340,30 +374,49 @@ class AuthService {
 
   async loginWithGoogle() {
     let transaction;
+    let created = false;
     try {
       this.requireConfig();
-      const redirectUri = getOAuthRedirectUri(app.isPackaged);
-      transaction = { ...createPkceTransaction(), redirectUri };
-      const authorizeUrl = new URL(`${this.config.supabaseUrl}/auth/v1/authorize`);
-      authorizeUrl.searchParams.set('provider', 'google');
-      authorizeUrl.searchParams.set('redirect_to', redirectUri);
-      authorizeUrl.searchParams.set('code_challenge', transaction.codeChallenge);
-      authorizeUrl.searchParams.set('code_challenge_method', 'S256');
-      authorizeUrl.searchParams.set('nonce', transaction.nonce);
-      this.persistPendingOAuthTransaction(transaction);
-      await shell.openExternal(authorizeUrl.toString());
+      if (!this.protocolRegistered) {
+        throw new AuthError('AUTH_OAUTH_PROTOCOL_UNAVAILABLE', 'This installation could not register the Google sign-in callback protocol. Reinstall the application or contact support.');
+      }
+      transaction = this.pendingOAuthTransaction;
+      if (transaction && isPendingTransactionExpired(transaction)) {
+        this.clearPendingOAuthTransaction(transaction);
+        transaction = null;
+      }
+      if (!transaction) {
+        const pending = createPkceTransaction();
+        const redirectUri = new URL(getOAuthRedirectUri(this.isPackaged));
+        redirectUri.searchParams.set('oauth_attempt', pending.nonce);
+        transaction = { ...pending, redirectUri: redirectUri.toString() };
+        transaction.authorizeUrl = createOAuthAuthorizeUrl(this.config.supabaseUrl, transaction);
+        this.persistPendingOAuthTransaction(transaction);
+        created = true;
+      }
+      await this.openExternal(transaction.authorizeUrl);
       this.lastError = null;
-      return { ok: true, pending: true, state: this.getState() };
+      return { ok: true, pending: true, reopened: !created, state: this.getState() };
     } catch (error) {
-      this.clearPendingOAuthTransaction(transaction);
+      if (created) this.clearPendingOAuthTransaction(transaction);
       this.lastError = publicError(error);
       return { ok: false, error: this.lastError, state: this.getState() };
     }
   }
 
+  cancelOAuth() {
+    const transaction = this.pendingOAuthTransaction;
+    this.sessionGeneration += 1;
+    this.clearPendingOAuthTransaction(transaction);
+    this.lastError = null;
+    return { ok: true, state: this.getState() };
+  }
+
   async handleOAuthCallback(rawUrl) {
     const generation = ++this.sessionGeneration;
     let transaction;
+    let outcome;
+    let consumeTransaction = false;
     try {
       this.requireConfig();
       transaction = this.pendingOAuthTransaction;
@@ -373,7 +426,11 @@ class AuthService {
       let callback;
       try {
         callback = parseOAuthCallback(rawUrl, transaction.redirectUri);
-      } catch {
+        consumeTransaction = true;
+      } catch (error) {
+        if (error.message === 'OAuth callback transaction does not match.') {
+          throw new AuthError('AUTH_OAUTH_CALLBACK_STALE', error.message);
+        }
         throw new AuthError('AUTH_OAUTH_CALLBACK_INVALID', 'The Google sign-in callback is invalid.');
       }
       if (callback.error) {
@@ -384,26 +441,37 @@ class AuthService {
         body: JSON.stringify({ auth_code: callback.code, code_verifier: transaction.codeVerifier }),
       });
       const account = await this.validateAccess(session);
-      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
-      const lastValidatedAt = new Date().toISOString();
-      const record = {
-        session,
-        account,
-        lastValidatedAt,
-        leaseExpiresAt: getLeaseExpiry(lastValidatedAt, account.requestedLeaseExpiry),
-      };
-      this.persist(record);
-      this.record = record;
-      this.lastError = null;
-      return { ok: true, state: this.getState() };
+      if (generation !== this.sessionGeneration) {
+        outcome = { ok: false, stale: true };
+      } else {
+        const lastValidatedAt = new Date().toISOString();
+        const record = {
+          session,
+          account,
+          lastValidatedAt,
+          leaseExpiresAt: getLeaseExpiry(lastValidatedAt, account.requestedLeaseExpiry),
+        };
+        this.persist(record);
+        this.record = record;
+        this.lastError = null;
+        outcome = { ok: true };
+      }
     } catch (error) {
-      if (generation !== this.sessionGeneration) return { ok: false, stale: true, state: this.getState() };
-      if (error.code === 'AUTH_ACCESS_INVALID') this.invalidateRecord();
-      this.lastError = publicError(error);
-      return { ok: false, error: this.lastError, state: this.getState() };
+      if (generation !== this.sessionGeneration) {
+        outcome = { ok: false, stale: true };
+      } else {
+        if (error.code === 'AUTH_OAUTH_CALLBACK_STALE') {
+          outcome = { ok: false, stale: true };
+        } else {
+          if (error.code === 'AUTH_ACCESS_INVALID') this.invalidateRecord();
+          this.lastError = publicError(error);
+          outcome = { ok: false, error: this.lastError };
+        }
+      }
     } finally {
-      this.clearPendingOAuthTransaction(transaction);
+      if (consumeTransaction) this.clearPendingOAuthTransaction(transaction);
     }
+    return { ...outcome, state: this.getState() };
   }
 
   async revalidate() {
@@ -483,6 +551,11 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
     notify();
     return result;
   });
+  ipcMain.handle('auth:cancel-oauth', () => {
+    const result = authService.cancelOAuth();
+    notify();
+    return result;
+  });
   ipcMain.handle('auth:revalidate', async () => {
     const result = await authService.revalidate();
     notify();
@@ -497,4 +570,4 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
   return notify;
 }
 
-module.exports = { AuthService, setupAuthHandlers };
+module.exports = { AUTH_REQUEST_TIMEOUT_MS, AuthService, setupAuthHandlers };

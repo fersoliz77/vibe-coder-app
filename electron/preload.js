@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getState: () => ipcRenderer.invoke('auth:get-state'),
     login: (email, password) => ipcRenderer.invoke('auth:login', { email, password }),
     google: () => ipcRenderer.invoke('auth:google'),
+    cancelOAuth: () => ipcRenderer.invoke('auth:cancel-oauth'),
     revalidate: () => ipcRenderer.invoke('auth:revalidate'),
     logout: () => ipcRenderer.invoke('auth:logout'),
     openHelp: () => ipcRenderer.invoke('auth:open-help'),

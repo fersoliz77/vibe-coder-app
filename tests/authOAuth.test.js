@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const {
   OAUTH_TRANSACTION_TTL_MS,
+  createOAuthAuthorizeUrl,
   createPkceTransaction,
   getOAuthRedirectUri,
   isPendingTransactionExpired,
@@ -26,6 +27,17 @@ test('PKCE uses an S256 challenge and a cryptographic nonce', () => {
 test('OAuth redirect URI differs between packaged and development runs', () => {
   assert.equal(getOAuthRedirectUri(true), 'vibeidecode://auth/callback');
   assert.equal(getOAuthRedirectUri(false), 'vibeidecode-dev://auth/callback');
+});
+
+test('Supabase authorize URL uses the exact lowercase s256 contract', () => {
+  assert.equal(
+    createOAuthAuthorizeUrl('https://project.supabase.co', {
+      redirectUri: 'vibeidecode://auth/callback',
+      codeChallenge: 'challenge_value',
+      nonce: 'nonce_value',
+    }),
+    'https://project.supabase.co/auth/v1/authorize?provider=google&redirect_to=vibeidecode%3A%2F%2Fauth%2Fcallback&code_challenge=challenge_value&code_challenge_method=s256&nonce=nonce_value',
+  );
 });
 
 test('OAuth callback parser accepts only the exact callback contract', () => {

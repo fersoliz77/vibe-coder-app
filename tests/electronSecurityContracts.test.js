@@ -51,6 +51,10 @@ test('Google OAuth stays in main and uses explicit protocol and IPC contracts', 
   assert.match(auth, /\/auth\/v1\/token\?grant_type=pkce/);
   assert.match(auth, /auth_code: callback\.code, code_verifier: transaction\.codeVerifier/);
   assert.match(preload, /google: \(\) => ipcRenderer\.invoke\('auth:google'\)/);
+  assert.match(preload, /cancelOAuth: \(\) => ipcRenderer\.invoke\('auth:cancel-oauth'\)/);
+  assert.match(auth, /ipcMain\.handle\('auth:cancel-oauth'/);
+  assert.match(auth, /clearPendingOAuthTransaction\(transaction\)/);
+  assert.match(main, /protocolRegistered: authProtocolRegistered/);
   assert.doesNotMatch(preload, /codeVerifier|code_verifier|access_token|refresh_token/);
   assert.deepEqual(packageJson.build.protocols[0].schemes, ['vibeidecode']);
 });

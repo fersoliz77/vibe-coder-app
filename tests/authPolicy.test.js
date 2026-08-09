@@ -147,6 +147,21 @@ test('request classifies 401 and 403 as authoritative revocation, but not 5xx', 
   }
 });
 
+test('authentication requests abort after their bounded timeout', async () => {
+  const service = Object.create(AuthService.prototype);
+  service.config = { supabaseUrl: 'https://example.test', anonKey: 'anon' };
+  const originalFetch = global.fetch;
+  global.fetch = async (_url, { signal }) => new Promise((_resolve, reject) => {
+    signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+  });
+
+  try {
+    await assert.rejects(service.request('/test', { timeoutMs: 5 }), (error) => error.code === 'AUTH_REQUEST_TIMEOUT');
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('legacy student records migrate to the persisted account shape', () => {
   for (const [leaseExpiresAt, expectedLease] of [
     ['2026-07-03T00:00:00.000Z', '2026-07-03T00:00:00.000Z'],
@@ -322,6 +337,7 @@ test('restricted IPC permits state reads but denies productive actions', () => {
   assert.equal(canAccessChannel('denied', 'projects:list'), false);
   assert.equal(canAccessChannel('denied', 'auth:logout'), true);
   assert.equal(canAccessChannel('denied', 'auth:google'), true);
+  assert.equal(canAccessChannel('denied', 'auth:cancel-oauth'), true);
   assert.equal(canAccessChannel('denied', 'auth:unknown'), false);
   assert.equal(canAccessChannel('active', 'fs:write-file'), true);
 });

@@ -11,6 +11,7 @@ const AUTH_CHANNELS = new Set([
   'auth:get-state',
   'auth:login',
   'auth:google',
+  'auth:cancel-oauth',
   'auth:revalidate',
   'auth:logout',
   'auth:open-help',

@@ -8,6 +8,11 @@ const CODE_KEYS = {
   AUTH_ACCESS_REVOKED: 'auth.errors.accessRevoked',
   AUTH_CONFIG_MISSING: 'auth.errors.configuration',
   AUTH_ACCESS_INVALID: 'auth.errors.invalidAccess',
+  AUTH_OAUTH_CALLBACK_INVALID: 'auth.errors.oauthCallbackInvalid',
+  AUTH_OAUTH_DENIED: 'auth.errors.oauthDenied',
+  AUTH_OAUTH_PROTOCOL_UNAVAILABLE: 'auth.errors.oauthProtocolUnavailable',
+  AUTH_OAUTH_TRANSACTION_EXPIRED: 'auth.errors.oauthExpired',
+  AUTH_REQUEST_TIMEOUT: 'auth.errors.serviceUnavailable',
   AUTH_UNEXPECTED: 'auth.errors.unexpected',
 };
 

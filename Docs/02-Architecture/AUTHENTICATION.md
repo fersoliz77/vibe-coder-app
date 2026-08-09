@@ -17,7 +17,13 @@ The Supabase URL and anon key are required. Missing values return the explicit `
 
 ## Supabase contract
 
-The desktop client uses standard Supabase Auth endpoints for password login and refresh. It then calls:
+The desktop client uses standard Supabase Auth endpoints for password login, Google OAuth, and refresh. Google login is initiated by Electron main with PKCE; the authorize request uses `code_challenge_method=s256`, and the verifier, nonce, authorize URL, and ten-minute expiry remain encrypted in `auth-oauth.bin`. The renderer receives only whether OAuth is pending and its expiry.
+
+Packaged builds register `vibeidecode://auth/callback`; development registers `vibeidecode-dev://auth/callback`. OAuth does not start when Electron reports that protocol registration failed. Reopening a pending login opens the same authorize URL instead of replacing its transaction. Cancel invalidates the transaction in main. Each redirect carries an opaque attempt identifier derived from the OAuth nonce, and callback completion clears only the matching transaction, so an older callback cannot erase a newer login.
+
+Password and Google token exchanges have a bounded request timeout. Transport failures and timeouts retain an otherwise valid offline session under the same lease rules described below.
+
+After authentication, the client calls:
 
 ```http
 POST /rest/v1/rpc/get_desktop_access
@@ -54,8 +60,8 @@ The renderer receives only the normalized `account` (`role`, `status`, plan and 
 ## Effective policy
 
 - `active`: `student` + `active` or `admin` + `active` while the lease is valid.
-- `restricted`: a student with `pending` or `restricted` status, or an expired lease; the shell is visible but productive UI and mutating/execution IPC are blocked.
-- `denied`: no valid session, invalid account data, `instructor`, any non-active `admin`, or a student with `suspended`/`archived` status.
+- `restricted`: a student or administrator with `pending` or `restricted` status, or an expired lease; the shell is visible but productive UI and mutating/execution IPC are blocked.
+- `denied`: no valid session, invalid account data, `instructor`, an administrator with `suspended`/`archived` status, or a student with `suspended`/`archived` status.
 - An expired seven-day offline lease produces `restricted`, not `denied`.
 
 Restricted mode permits logout, revalidation, help, accessibility, and read-only IPC needed to render the existing shell. Authorization is enforced again in main, not only with a renderer overlay.

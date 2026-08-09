@@ -34,6 +34,16 @@ function getOAuthRedirectUri(isPackaged) {
   return `${scheme}://auth/callback`;
 }
 
+function createOAuthAuthorizeUrl(supabaseUrl, transaction) {
+  const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/authorize`);
+  authorizeUrl.searchParams.set('provider', 'google');
+  authorizeUrl.searchParams.set('redirect_to', transaction.redirectUri);
+  authorizeUrl.searchParams.set('code_challenge', transaction.codeChallenge);
+  authorizeUrl.searchParams.set('code_challenge_method', 's256');
+  authorizeUrl.searchParams.set('nonce', transaction.nonce);
+  return authorizeUrl.toString();
+}
+
 function parseOAuthCallback(rawUrl, expectedRedirectUri) {
   if (typeof rawUrl !== 'string' || rawUrl.length === 0 || rawUrl.length > 4096) {
     throw new Error('Invalid OAuth callback URL.');
@@ -58,7 +68,11 @@ function parseOAuthCallback(rawUrl, expectedRedirectUri) {
     throw new Error('OAuth callback target does not match.');
   }
 
-  const allowed = new Set(['code', 'error', 'error_code', 'error_description']);
+  if (callback.searchParams.get('oauth_attempt') !== expected.searchParams.get('oauth_attempt')) {
+    throw new Error('OAuth callback transaction does not match.');
+  }
+
+  const allowed = new Set(['code', 'error', 'error_code', 'error_description', 'oauth_attempt']);
   for (const key of callback.searchParams.keys()) {
     if (!allowed.has(key) || callback.searchParams.getAll(key).length !== 1) {
       throw new Error('OAuth callback contains invalid parameters.');
@@ -95,6 +109,7 @@ function parseOAuthCallback(rawUrl, expectedRedirectUri) {
 module.exports = {
   CALLBACK_SCHEMES,
   OAUTH_TRANSACTION_TTL_MS,
+  createOAuthAuthorizeUrl,
   createPkceTransaction,
   getOAuthRedirectUri,
   isPendingTransactionExpired,

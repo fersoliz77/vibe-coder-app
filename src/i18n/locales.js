@@ -54,10 +54,22 @@ Object.assign(dictionaries.en.auth, {
   reduceMotionHelp: 'Disables non-essential animations and transitions.',
   instructorDesktopWebOnly: 'Instructor access is available on the web only. Sign in with an active student account to use the desktop workspace.',
 });
+Object.assign(dictionaries.en.auth.errors, {
+  oauthCallbackInvalid: 'Google returned an invalid sign-in response. Start the sign-in again.',
+  oauthDenied: 'Google sign-in was cancelled or denied.',
+  oauthExpired: 'The Google sign-in request expired. Start again to get a new link.',
+  oauthProtocolUnavailable: 'This installation cannot receive the Google sign-in response. Reinstall the app or contact support.',
+});
 Object.assign(dictionaries.es.auth, {
   highContrastHelp: 'Refuerza el texto y los bordes para facilitar la lectura.',
   reduceMotionHelp: 'Desactiva animaciones y transiciones no esenciales.',
   instructorDesktopWebOnly: 'El acceso de instructor está disponible únicamente en la web. Iniciá sesión con una cuenta de estudiante activa para usar el espacio de trabajo desktop.',
+});
+Object.assign(dictionaries.es.auth.errors, {
+  oauthCallbackInvalid: 'Google devolvió una respuesta de acceso inválida. Iniciá el acceso nuevamente.',
+  oauthDenied: 'El acceso con Google fue cancelado o rechazado.',
+  oauthExpired: 'La solicitud de acceso con Google venció. Empezá de nuevo para obtener otro enlace.',
+  oauthProtocolUnavailable: 'Esta instalación no puede recibir la respuesta de acceso de Google. Reinstalá la aplicación o contactá a soporte.',
 });
 
 // Feature dictionaries are kept structurally identical so a locale can never

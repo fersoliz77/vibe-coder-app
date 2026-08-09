@@ -8,6 +8,7 @@ const translations = {
   'auth.errors.remoteRejected': 'Solicitud rechazada',
   'auth.errors.accessRevoked': 'Sesión vencida',
   'auth.errors.unexpected': 'Error inesperado',
+  'auth.errors.oauthDenied': 'Acceso con Google cancelado',
 };
 const t = (key) => translations[key] || key;
 
@@ -19,6 +20,12 @@ test('authentication errors never expose backend codes or raw credential message
 
 test('unknown authentication errors use a professional generic message', () => {
   assert.equal(localizedAuthError({ code: 'SOMETHING_NEW', message: 'internal detail' }, t), 'Error inesperado');
+});
+
+test('important OAuth errors use localized stable messages', () => {
+  assert.equal(localizedAuthError({ code: 'AUTH_OAUTH_DENIED', message: 'raw provider detail' }, t), 'Acceso con Google cancelado');
+  assert.match(dictionaries.es.auth.errors.oauthProtocolUnavailable, /instalación.*Google/i);
+  assert.match(dictionaries.en.auth.errors.oauthCallbackInvalid, /Google.*invalid/i);
 });
 
 test('credential and instructor guidance is available in both supported languages', () => {

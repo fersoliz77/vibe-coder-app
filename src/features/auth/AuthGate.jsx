@@ -76,22 +76,26 @@ function Login({ state, onState }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState(state.error);
-  // El acceso con Google termina en otra aplicacion. Sin registrar esa espera,
-  // la ventana volvia a verse ociosa apenas se abria el navegador, como si el
-  // clic no hubiera hecho nada.
-  const [googleWait, setGoogleWait] = useState(null);
+  const [googleExpired, setGoogleExpired] = useState(false);
 
   useEffect(() => {
     setError(state.error || null);
   }, [state.error]);
 
-  // La solicitud vive 10 minutos del lado del proceso principal; pasado ese
-  // plazo el enlace ya no sirve y hay que decirlo, no seguir esperando.
   useEffect(() => {
-    if (googleWait !== 'waiting') return undefined;
-    const timer = setTimeout(() => setGoogleWait('expired'), 10 * 60 * 1000);
+    if (!state.oauth?.pending) {
+      setGoogleExpired(false);
+      return undefined;
+    }
+    const remaining = Date.parse(state.oauth.expiresAt) - Date.now();
+    if (!Number.isFinite(remaining) || remaining <= 0) {
+      setGoogleExpired(true);
+      return undefined;
+    }
+    setGoogleExpired(false);
+    const timer = setTimeout(() => setGoogleExpired(true), remaining);
     return () => clearTimeout(timer);
-  }, [googleWait]);
+  }, [state.oauth?.pending, state.oauth?.expiresAt]);
 
   const submit = async (event) => {
     event.preventDefault();
@@ -115,21 +119,28 @@ function Login({ state, onState }) {
       const result = await window.electronAPI.auth.google();
       setError(result.error || null);
       onState(result.state);
-      // `pending` significa que el navegador se abrio y falta que el usuario
-      // confirme alli. La espera queda visible hasta que vuelva el resultado.
-      setGoogleWait(result.ok && result.pending ? 'waiting' : null);
     } catch {
       setError({ code: 'AUTH_UNEXPECTED', message: t('auth.signInFailed') });
-      setGoogleWait(null);
     } finally {
       setBusy('');
     }
   };
 
-  // Mientras se espera al navegador, la tarjeta muestra solo eso: dejar el
-  // formulario detras invitaria a reintentar por otro camino y romper el flujo.
-  if (googleWait) {
-    const expired = googleWait === 'expired';
+  const cancelGoogle = async () => {
+    setBusy('cancelGoogle');
+    try {
+      const result = await window.electronAPI.auth.cancelOAuth();
+      setError(result.error || null);
+      onState(result.state);
+    } catch {
+      setError({ code: 'AUTH_UNEXPECTED', message: t('auth.signInFailed') });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  if (state.oauth?.pending) {
+    const expired = googleExpired;
     return (
       <div className="auth-page">
         <AuthTitlebar />
@@ -151,14 +162,15 @@ function Login({ state, onState }) {
             type="button"
             className="auth-button auth-button--primary auth-button--wide"
             disabled={Boolean(busy)}
-            onClick={() => { setGoogleWait(null); google(); }}
+            onClick={google}
           >
             {expired ? t('auth.googleRetry') : t('auth.googleReopen')}
           </button>
           <button
             type="button"
             className="auth-button auth-button--wide"
-            onClick={() => { setGoogleWait(null); setError(null); }}
+            disabled={Boolean(busy)}
+            onClick={cancelGoogle}
           >
             {t('auth.googleCancelWait')}
           </button>

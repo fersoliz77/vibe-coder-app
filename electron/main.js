@@ -56,6 +56,7 @@ let mainWindow;
 let authService;
 let notifyAuthState;
 const pendingAuthCallbacks = [];
+let authProtocolRegistered = false;
 
 const isEnvironmentInstaller = process.argv.includes('--install-environment');
 const isSandboxSmokeTest = process.argv.includes('--sandbox-smoke-test');
@@ -86,9 +87,9 @@ async function handleAuthCallback(callbackUrl) {
 
 if (isNormalExecution) {
   if (app.isPackaged) {
-    app.setAsDefaultProtocolClient('vibeidecode');
+    authProtocolRegistered = app.setAsDefaultProtocolClient('vibeidecode');
   } else if (process.argv[1]) {
-    app.setAsDefaultProtocolClient('vibeidecode-dev', process.execPath, [path.resolve(process.argv[1])]);
+    authProtocolRegistered = app.setAsDefaultProtocolClient('vibeidecode-dev', process.execPath, [path.resolve(process.argv[1])]);
   }
 
   hasSingleInstanceLock = app.requestSingleInstanceLock();
@@ -385,7 +386,7 @@ if (isSandboxSmokeTest) {
   session.defaultSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
   createWindow();
 
-  authService = new AuthService();
+  authService = new AuthService({ protocolRegistered: authProtocolRegistered });
   authService.initialize();
   let previousPolicy = null;
   let previousRestrictionReason = null;
