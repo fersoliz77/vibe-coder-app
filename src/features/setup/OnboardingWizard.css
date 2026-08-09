@@ -94,9 +94,7 @@
   font-size: 28px;
   font-weight: 700;
   margin: 0 0 12px 0;
-  background: linear-gradient(135deg, #ffffff 0%, var(--vc-text-3) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--vc-text-1);
 }
 
 .onboarding-wizard__subtitle {
@@ -239,9 +237,9 @@
 }
 
 .onboarding-wizard__badge--optional {
-  background: rgba(148, 163, 184, 0.1);
+  background: var(--vc-surface-3);
   color: var(--vc-text-2);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid var(--vc-line);
 }
 
 .onboarding-wizard__badge--installed {
@@ -295,7 +293,7 @@
 
 /* Installation Logs */
 .onboarding-wizard__progress {
-  background: rgba(var(--vc-ink-rgb), 0.8);
+  background: var(--vc-surface-2);
   border: 1px solid var(--vc-line);
   border-radius: 8px;
   padding: 16px;
@@ -350,7 +348,7 @@
 
 .onboarding-wizard__footer-text {
   font-size: 12px;
-  color: #64748b;
+  color: var(--vc-text-3);
   max-width: 320px;
 }
 
@@ -373,11 +371,11 @@
 
 .onboarding-wizard__btn--primary {
   background: var(--vc-accent);
-  color: var(--vc-surface-1);
+  color: var(--vc-on-accent);
 }
 
 .onboarding-wizard__btn--primary:hover:not(:disabled) {
-  background: #7dd3fc;
+  background: var(--vc-accent-hover);
 }
 
 .onboarding-wizard__btn--secondary {

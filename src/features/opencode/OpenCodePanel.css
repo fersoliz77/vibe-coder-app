@@ -4,7 +4,7 @@
   height: 100%;
   width: 100%;
   background: var(--vc-surface-1);
-  color: #e6edf3;
+  color: var(--vc-text-1);
   position: relative;
 }
 

@@ -441,7 +441,7 @@ function Workspace({ setCloseCheck }) {
         <main className="main-content">
           {currentProject && (
             <div style={{ display: activeView === VIEWS.FILES ? 'block' : 'none', height: '100%', width: '100%' }}>
-              <FileExplorer ref={explorerRef} project={currentProject} />
+              <FileExplorer ref={explorerRef} project={currentProject} isDark={isDarkMode} />
             </div>
           )}
           {currentProject && (

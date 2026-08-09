@@ -42,13 +42,13 @@ function getCodeMirrorExtensions(extension) {
   }
 }
 
-export default function CodeEditor({ extension, value, onChange }) {
+export default function CodeEditor({ extension, value, onChange, isDark = true }) {
   return (
     <CodeMirror
       className="file-explorer__codemirror"
       value={value}
       height="100%"
-      theme={oneDark}
+      theme={isDark ? oneDark : 'light'}
       extensions={getCodeMirrorExtensions(extension)}
       basicSetup={{
         lineNumbers: true,

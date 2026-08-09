@@ -26,6 +26,7 @@ export function prefetchCodeEditor() {
 }
 
 export function ExplorerWorkspace({
+  isDark,
   dirtyTabs,
   activePane,
   setPaneTabs,
@@ -194,6 +195,7 @@ export function ExplorerWorkspace({
                         ) : (
                           <Suspense fallback={<div className="file-tree-loading">{t('explorer.loadingEditor')}</div>}>
                             <CodeEditor
+                              isDark={isDark}
                               extension={paneTab.extension}
                               value={paneTab.draftContent ?? ''}
                               onChange={(value) => setTabs((prev) => prev.map((tab) => tab.id === paneTab.id ? { ...tab, draftContent: value } : tab))}

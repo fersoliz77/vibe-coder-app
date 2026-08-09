@@ -117,7 +117,7 @@
   align-items: center;
   justify-content: center;
   background: var(--accent-primary);
-  color: white;
+  color: var(--vc-on-accent);
   font-size: 12px;
   font-weight: 700;
   border-radius: var(--radius-full);

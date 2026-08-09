@@ -16,7 +16,7 @@ import { useExplorerTreeState } from './useExplorerTreeState';
 import { useI18n } from '../../i18n/I18nContext';
 import { resolveDirtyTabTransition } from './dirtyTabTransition.mjs';
 
-const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
+const FileExplorer = forwardRef(function FileExplorer({ project, isDark }, ref) {
   const { t } = useI18n();
   const [rootItems, setRootItems] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -360,6 +360,7 @@ const FileExplorer = forwardRef(function FileExplorer({ project }, ref) {
       </aside>
 
       <ExplorerWorkspace
+        isDark={isDark}
         dirtyTabs={tabsState.dirtyTabs}
         activePane={tabsState.activePane}
         setPaneTabs={tabsState.setPaneTabs}
