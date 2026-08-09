@@ -20,7 +20,11 @@
      tablas de progreso. Manrope no tiene ninguna de las dos cosas. */
   --vc-font-sans: 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --vc-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
-  --vc-font-editorial: 'Newsreader', Georgia, 'Times New Roman', serif;
+  /* No hay familia editorial. Hubo un --vc-font-editorial con Newsreader que
+     no uso ningun componente en ninguno de los dos productos, y que el
+     escritorio ni siquiera descargaba: en la practica era Georgia, o nada.
+     Si alguna vez hace falta una serif, entra como decision de diseno con su
+     evidencia visual, no como token declarado por las dudas. */
 
   --vc-text-2xs: 11px;  /* solo badges no informativos */
   --vc-text-xs: 12px;   /* metadatos secundarios */
