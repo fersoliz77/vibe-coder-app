@@ -1,98 +1,29 @@
 /* ═══════════════════════════════════════════════════════════════════
    Vibe IDE Code — Capa canonica de tokens (compartida web + escritorio)
-   Direccion: Workshop Editorial + Precision Studio
 
-   Este archivo es identico en:
-     vibe coder app/src/styles/tokens.css
-     vibe coder web/src/tokens.css
+   ARCHIVO GENERADO. No editar a mano: se regenera y se pierde el cambio.
+   Fuente:  design-tokens/tokens.json
+   Generar: npm run tokens
+   Contrato: v1.0.0 (2a12e0d2b43e)
 
-   Regla: aca solo viven tokens canonicos --vc-*.
-   Cada producto mapea sus nombres historicos sobre esta capa, de modo
-   que ningun componente necesita cambiar para adoptar el sistema.
+   Regla: aca solo viven tokens canonicos --vc-*. Cada producto mapea sus
+   nombres historicos sobre esta capa, de modo que ningun componente
+   necesita cambiar para adoptar el sistema.
    ═══════════════════════════════════════════════════════════════════ */
 
 :root {
-  /* ─── Tipografia ──────────────────────────────────────────────────
-     Interfaz humanista + mono compartida. 14px es el minimo operativo
-     y 17px el tamano de lectura sostenida.                            */
-  /* IBM Plex Sans es la recomendacion de la auditoria: humanista, con una
-     cursiva real y numeros tabulares, que es lo que pide un producto lleno de
-     tablas de progreso. Manrope no tiene ninguna de las dos cosas. */
+  /* ─── Tipografia ──────────────────────────────────────────────────*/
   --vc-font-sans: 'IBM Plex Sans', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --vc-font-mono: 'JetBrains Mono', 'Cascadia Code', 'Fira Code', ui-monospace, monospace;
-  /* No hay familia editorial. Hubo un --vc-font-editorial con Newsreader que
-     no uso ningun componente en ninguno de los dos productos, y que el
-     escritorio ni siquiera descargaba: en la practica era Georgia, o nada.
-     Si alguna vez hace falta una serif, entra como decision de diseno con su
-     evidencia visual, no como token declarado por las dudas. */
-
-  --vc-text-2xs: 11px;  /* solo badges no informativos */
-  --vc-text-xs: 12px;   /* metadatos secundarios */
+  --vc-text-2xs: 11px;
+  --vc-text-xs: 12px;
   --vc-text-sm: 13px;
-  --vc-text-base: 14px; /* minimo operativo */
+  --vc-text-base: 14px;
   --vc-text-md: 15px;
-  --vc-text-lg: 17px;   /* lectura */
+  --vc-text-lg: 17px;
   --vc-leading-tight: 1.25;
   --vc-leading-normal: 1.5;
   --vc-leading-read: 1.65;
-
-  /* ─── Superficies (oscuro por defecto) ────────────────────────────
-     Solidas. La jerarquia se construye con luminosidad, no con vidrio. */
-  --vc-surface-0: #0c0e12;
-  --vc-surface-1: #12151b;
-  --vc-surface-2: #181c24;
-  --vc-surface-3: #1f242e;
-  --vc-surface-4: #272d39;
-
-  /* ─── Texto ───────────────────────────────────────────────────────
-     Los tres niveles cumplen AA sobre surface-0 y surface-1.          */
-  --vc-text-1: #eef1f6;  /* 15.2:1 */
-  --vc-text-2: #b3bccb;  /* 10.1:1 */
-  --vc-text-3: #8b95a6;  /*  6.4:1 */
-
-  /* ─── Lineas ──────────────────────────────────────────────────────
-     Siempre 1px. El grosor no comunica jerarquia; el contraste si.    */
-  --vc-line: #262c37;
-  /* 3.25:1 sobre el fondo. No es solo decoracion: marca el hover de botones
-     y tarjetas, y el punto que distingue un idioma escrito de uno vacio. A
-     1.77:1 ese borde era invisible para baja vision. */
-  --vc-line-strong: #59647a;
-
-  /* ─── Acento unico ────────────────────────────────────────────────
-     Un solo acento de marca. Los colores semanticos no compiten.      */
-  --vc-accent: #7c8cff;         /* 6.5:1 sobre surface-0 */
-  --vc-accent-hover: #929fff;
-  --vc-accent-dim: #4d5cc4;
-  --vc-accent-soft: #1c2145;
-  --vc-accent-line: #39427e;
-  --vc-on-accent: #0b0d13;
-
-  /* Componentes RGB: permiten que un rgba() con alfa arbitrario siga
-     el tema activo, sin reescribir cada declaracion historica. */
-  --vc-accent-rgb: 124, 140, 255;
-  --vc-ink-rgb: 238, 241, 246;
-
-  /* ─── Semanticos ──────────────────────────────────────────────────*/
-  --vc-success: #44c58a;
-  --vc-success-soft: #12301f;
-  --vc-success-line: #1e5238;
-  --vc-warning: #e0a355;
-  --vc-warning-soft: #33230f;
-  --vc-warning-line: #5c421d;
-  --vc-danger: #eb6a6a;
-  --vc-danger-soft: #331617;
-  --vc-danger-line: #5e2a2c;
-  --vc-info: var(--vc-accent);
-
-  /* Texto e iconos sobre un fondo solido de estado. Sin estos, cada
-     componente elige su propio blanco o negro y deja de seguir el tema. */
-  --vc-on-success: #0b0d13;
-  --vc-on-warning: #0b0d13;
-  --vc-on-danger: #0b0d13;
-
-  --vc-success-rgb: 68, 197, 138;
-  --vc-warning-rgb: 224, 163, 85;
-  --vc-danger-rgb: 235, 106, 106;
 
   /* ─── Espaciado: escala base 4 ────────────────────────────────────*/
   --vc-space-1: 4px;
@@ -106,27 +37,18 @@
   --vc-space-24: 96px;
 
   /* ─── Radios ──────────────────────────────────────────────────────*/
-  --vc-radius-xs: 4px;   /* compacto: chips, celdas */
+  --vc-radius-xs: 4px;
   --vc-radius-sm: 6px;
-  --vc-radius-md: 8px;   /* controles */
-  --vc-radius-lg: 12px;  /* paneles */
-  --vc-radius-xl: 16px;  /* superficies especiales */
+  --vc-radius-md: 8px;
+  --vc-radius-lg: 12px;
+  --vc-radius-xl: 16px;
   --vc-radius-full: 9999px;
 
-  /* ─── Sombras ─────────────────────────────────────────────────────
-     Elevacion real, sin glow de color.                                */
-  --vc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
-  --vc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
-  --vc-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.44);
-
-  /* ─── Movimiento ──────────────────────────────────────────────────
-     Feedback 120-180ms, dialogos 180-240ms. Nunca `all`.              */
+  /* ─── Movimiento ──────────────────────────────────────────────────*/
   --vc-ease: cubic-bezier(0.2, 0, 0, 1);
   --vc-duration-fast: 120ms;
   --vc-duration-normal: 160ms;
   --vc-duration-dialog: 220ms;
-
-  /* Listas de propiedades explicitas, para reemplazar `transition: all` */
   --vc-transition-fast:
     background-color var(--vc-duration-fast) var(--vc-ease),
     border-color var(--vc-duration-fast) var(--vc-ease),
@@ -143,12 +65,53 @@
   /* ─── Foco ────────────────────────────────────────────────────────*/
   --vc-focus-ring: 2px solid var(--vc-accent);
   --vc-focus-offset: 2px;
+
+  /* ─── Tema oscuro (por defecto) ───────────────────────────────────*/
+  --vc-surface-0: #0c0e12;
+  --vc-surface-1: #12151b;
+  --vc-surface-2: #181c24;
+  --vc-surface-3: #1f242e;
+  --vc-surface-4: #272d39;
+  --vc-text-1: #eef1f6;
+  --vc-text-2: #b3bccb;
+  --vc-text-3: #8b95a6;
+  --vc-line: #262c37;
+  --vc-line-strong: #59647a;
+  --vc-accent: #7c8cff;
+  --vc-accent-hover: #929fff;
+  --vc-accent-dim: #4d5cc4;
+  --vc-accent-soft: #1c2145;
+  --vc-accent-line: #39427e;
+  --vc-on-accent: #0b0d13;
+  --vc-success: #44c58a;
+  --vc-success-soft: #12301f;
+  --vc-success-line: #1e5238;
+  --vc-warning: #e0a355;
+  --vc-warning-soft: #33230f;
+  --vc-warning-line: #5c421d;
+  --vc-danger: #eb6a6a;
+  --vc-danger-soft: #331617;
+  --vc-danger-line: #5e2a2c;
+  --vc-on-success: #0b0d13;
+  --vc-on-warning: #0b0d13;
+  --vc-on-danger: #0b0d13;
+  --vc-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.32);
+  --vc-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.36);
+  --vc-shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.44);
+
+  --vc-accent-rgb: 124, 140, 255;
+  --vc-ink-rgb: 238, 241, 246;
+  --vc-success-rgb: 68, 197, 138;
+  --vc-warning-rgb: 224, 163, 85;
+  --vc-danger-rgb: 235, 106, 106;
+
+  --vc-info: var(--vc-accent);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   Tema claro — papel mineral, calido.
-   Se soportan los dos selectores historicos: la web usa `body.light-mode`
-   y el escritorio `.light-theme`.
+   Tema claro. Se soportan los tres selectores en uso: la web escribe
+   `body.light-mode`, el escritorio `.light-theme`, y theme-boot marca
+   `[data-theme]` sobre <html> antes del primer pintado.
    ═══════════════════════════════════════════════════════════════════ */
 body.light-mode,
 .light-theme,
@@ -158,27 +121,17 @@ body.light-mode,
   --vc-surface-2: #ffffff;
   --vc-surface-3: #edeae3;
   --vc-surface-4: #e3dfd6;
-
-  --vc-text-1: #16181d;  /* 15.9:1 */
-  --vc-text-2: #454b57;  /*  8.6:1 */
-  --vc-text-3: #5f6675;  /*  5.2:1 */
-
+  --vc-text-1: #16181d;
+  --vc-text-2: #454b57;
+  --vc-text-3: #5f6675;
   --vc-line: #dcd8cf;
-  --vc-line-strong: #8b8577;  /* 3.28:1 sobre el fondo claro */
-
-  --vc-accent: #4d5edb;  /* 4.8:1 sobre surface-0 */
+  --vc-line-strong: #8b8577;
+  --vc-accent: #4d5edb;
   --vc-accent-hover: #3f4fc4;
   --vc-accent-dim: #8e97e8;
-  --vc-accent-soft: #edeffe;  /* 4.67:1 con el acento encima */
+  --vc-accent-soft: #edeffe;
   --vc-accent-line: #c2c8f5;
   --vc-on-accent: #ffffff;
-
-  --vc-accent-rgb: 77, 94, 219;
-  --vc-ink-rgb: 22, 24, 29;
-  --vc-success-rgb: 23, 114, 74;
-  --vc-warning-rgb: 150, 85, 26;
-  --vc-danger-rgb: 179, 39, 31;
-
   --vc-success: #17724a;
   --vc-success-soft: #e3f3ea;
   --vc-success-line: #b6ddc7;
@@ -188,15 +141,18 @@ body.light-mode,
   --vc-danger: #b3271f;
   --vc-danger-soft: #fbe8e6;
   --vc-danger-line: #edc0bb;
-
-  /* En claro los estados son oscuros: el texto encima se invierte. */
   --vc-on-success: #ffffff;
   --vc-on-warning: #ffffff;
   --vc-on-danger: #ffffff;
-
   --vc-shadow-sm: 0 1px 2px rgba(32, 30, 26, 0.08);
   --vc-shadow-md: 0 4px 12px rgba(32, 30, 26, 0.10);
   --vc-shadow-lg: 0 12px 32px rgba(32, 30, 26, 0.12);
+
+  --vc-accent-rgb: 77, 94, 219;
+  --vc-ink-rgb: 22, 24, 29;
+  --vc-success-rgb: 23, 114, 74;
+  --vc-warning-rgb: 150, 85, 26;
+  --vc-danger-rgb: 179, 39, 31;
 }
 
 /* ═══════════════════════════════════════════════════════════════════

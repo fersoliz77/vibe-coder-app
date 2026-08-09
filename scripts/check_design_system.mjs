@@ -141,21 +141,27 @@ if (siblingRoot) {
   // 2. Los gates estan duplicados en los dos repositorios porque cada CI clona
   //    solo el suyo. Duplicado y sin vigilar, se bifurca: esto lo detecta.
   const MIRRORED = [
-    'check_design_system.mjs',
-    'check_contrast.mjs',
-    'check_token_refs.mjs',
-    'check_static_a11y.mjs',
-    'check_bundle_budgets.mjs',
+    'scripts/check_design_system.mjs',
+    'scripts/check_contrast.mjs',
+    'scripts/check_token_refs.mjs',
+    'scripts/check_static_a11y.mjs',
+    'scripts/check_bundle_budgets.mjs',
+    'scripts/check_font_loading.mjs',
+    // La fuente del contrato tambien: si se bifurca, los dos productos generan
+    // capas distintas y la paridad se pierde en el origen, no en la copia.
+    'design-tokens/tokens.json',
+    'design-tokens/build.mjs',
+    'public/theme-boot.js',
   ];
   for (const name of MIRRORED) {
-    const here = join(ownRoot, 'scripts', name);
-    const there = join(siblingRoot, 'scripts', name);
+    const here = join(ownRoot, name);
+    const there = join(siblingRoot, name);
     if (!existsSync(there)) {
-      failures.push(`scripts/${name} falta en el producto hermano; los gates deben existir en los dos`);
+      failures.push(`${name} falta en el producto hermano; debe existir en los dos`);
       continue;
     }
     const [a, b] = await Promise.all([readFile(here, 'utf8'), readFile(there, 'utf8')]);
-    if (a !== b) failures.push(`scripts/${name} difiere entre los dos productos; el gate debe ser identico`);
+    if (a !== b) failures.push(`${name} difiere entre los dos productos; debe ser identico`);
   }
 }
 

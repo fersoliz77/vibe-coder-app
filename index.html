@@ -6,6 +6,9 @@
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src 'self' http://localhost:5173 ws://localhost:5173 http://127.0.0.1:4173 ws://127.0.0.1:4173; frame-src http://127.0.0.1:4173; object-src 'none'; base-uri 'self'; form-action 'self'" />
   <meta name="description" content="Vibe IDE Code - IDE para Vibecoding con Inteligencia Artificial" />
   <title>Vibe IDE Code</title>
+  <!-- Bloqueante y antes que todo lo demas: fija el tema antes del primer
+       pintado. Sin esto la configuracion llega por IPC, ya tarde. -->
+  <script src="/theme-boot.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
