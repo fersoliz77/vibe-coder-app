@@ -7,6 +7,9 @@
  *
  * Este modulo decide que hacer con cada tecla. No toca el DOM: devuelve una
  * accion que el componente traduce a movimiento o cambio de estado.
+ *
+ * Las teclas que abren el menu contextual no viven aca: son del patron `menu`
+ * y las resuelve `menuKeyboard`. El componente consulta ese modulo primero.
  */
 
 /**

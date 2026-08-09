@@ -238,33 +238,46 @@ export function ExplorerTree({
     // Moverse con flechas tambien selecciona. Sin esto, Ctrl+X, F2 o Suprimir
     // actuarian sobre la fila clickeada antes, no sobre la que ves enfocada.
     if (nodePath) {
-      // La tecla Menu (o Shift+F10) abre el menu contextual sobre la fila,
-    // posicionado donde esta, no donde estuvo el mouse por ultima vez.
-    if (opensMenu(event)) {
-      event.preventDefault();
-      const box = row.getBoundingClientRect();
-      onContextMenuKey?.(
-        { clientX: box.left + 16, clientY: box.bottom, preventDefault() {} },
-        {
-          path: row.dataset.nodePath,
-          name: row.dataset.nodePath.split(/[\/]/).pop(),
-          isDirectory: row.dataset.nodeDirectory === 'true',
-          isRoot: row.dataset.nodeRoot === 'true',
-        },
-      );
-      return;
-    }
-
-    const isDirectory = row.dataset.nodeDirectory === 'true';
+      const isDirectory = row.dataset.nodeDirectory === 'true';
       const name = nodePath.split(/[\/]/).pop();
       setSelectedEntry({ name, path: nodePath, isDirectory });
       setSelectedPaths([nodePath]);
     }
   }, [setSelectedEntry, setSelectedPaths]);
 
+  /*
+   * La tecla Menu (o Shift+F10) abre el menu contextual sobre la fila enfocada,
+   * posicionado donde esta, no donde estuvo el mouse por ultima vez.
+   */
+  const openContextMenuForRow = useCallback((row) => {
+    const nodePath = row.dataset.nodePath;
+    if (!nodePath) return;
+    const box = row.getBoundingClientRect();
+    onContextMenuKey?.(
+      { clientX: box.left + 16, clientY: box.bottom, preventDefault() {} },
+      {
+        path: nodePath,
+        name: nodePath.split(/[\/]/).pop(),
+        isDirectory: row.dataset.nodeDirectory === 'true',
+        isRoot: row.dataset.nodeRoot === 'true',
+      },
+    );
+  }, [onContextMenuKey]);
+
   const handleTreeKeyDown = useCallback((event) => {
     const row = event.target.closest?.('[role="treeitem"]');
     if (!row || !treeRef.current?.contains(row)) return;
+
+    /*
+     * El menu se consulta antes que el arbol. `treeAction` no reclama Menu ni
+     * Shift+F10, asi que preguntarle primero descartaria la tecla y dejaria el
+     * menu contextual inalcanzable sin mouse.
+     */
+    if (opensMenu({ key: event.key, shiftKey: event.shiftKey })) {
+      event.preventDefault();
+      openContextMenuForRow(row);
+      return;
+    }
 
     const isDirectory = row.dataset.nodeDirectory === 'true';
     const isExpanded = row.getAttribute('aria-expanded') === 'true';
@@ -308,7 +321,7 @@ export function ExplorerTree({
     if (target === null || target === current) return;
     event.preventDefault();
     focusRow(target);
-  }, [toggleDirectory, focusRow, onDeleteNode, onContextMenuKey]);
+  }, [toggleDirectory, focusRow, onDeleteNode, openContextMenuForRow]);
 
   return (
     <div className="file-explorer__root" onContextMenu={handleRootContextMenu}>

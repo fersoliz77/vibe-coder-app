@@ -493,7 +493,7 @@
 .claude-setup-screen__error {
   max-width: 60ch;
   margin: 0;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--vc-space-3) var(--vc-space-4);
   border: 1px solid var(--vc-danger-line);
   border-radius: var(--vc-radius-md);
   background: var(--vc-danger-soft);

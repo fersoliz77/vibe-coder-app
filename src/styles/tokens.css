@@ -80,6 +80,12 @@
   --vc-danger-line: #5e2a2c;
   --vc-info: var(--vc-accent);
 
+  /* Texto e iconos sobre un fondo solido de estado. Sin estos, cada
+     componente elige su propio blanco o negro y deja de seguir el tema. */
+  --vc-on-success: #0b0d13;
+  --vc-on-warning: #0b0d13;
+  --vc-on-danger: #0b0d13;
+
   --vc-success-rgb: 68, 197, 138;
   --vc-warning-rgb: 224, 163, 85;
   --vc-danger-rgb: 235, 106, 106;
@@ -159,7 +165,7 @@ body.light-mode,
   --vc-accent: #4d5edb;  /* 4.8:1 sobre surface-0 */
   --vc-accent-hover: #3f4fc4;
   --vc-accent-dim: #8e97e8;
-  --vc-accent-soft: #e8eafc;
+  --vc-accent-soft: #edeffe;  /* 4.67:1 con el acento encima */
   --vc-accent-line: #c2c8f5;
   --vc-on-accent: #ffffff;
 
@@ -178,6 +184,11 @@ body.light-mode,
   --vc-danger: #b3271f;
   --vc-danger-soft: #fbe8e6;
   --vc-danger-line: #edc0bb;
+
+  /* En claro los estados son oscuros: el texto encima se invierte. */
+  --vc-on-success: #ffffff;
+  --vc-on-warning: #ffffff;
+  --vc-on-danger: #ffffff;
 
   --vc-shadow-sm: 0 1px 2px rgba(32, 30, 26, 0.08);
   --vc-shadow-md: 0 4px 12px rgba(32, 30, 26, 0.10);

@@ -112,7 +112,7 @@
    El flujo termina en otra aplicacion; esta tarjeta deja claro que la
    ventana sigue esperando y no se colgo. */
 .auth-card--waiting {
-  gap: var(--space-3);
+  gap: var(--vc-space-3);
 }
 
 .auth-wait-bar {

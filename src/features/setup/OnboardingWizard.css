@@ -68,13 +68,13 @@
 .onboarding-wizard__step-indicator.is-active {
   background: var(--vc-accent);
   border-color: var(--vc-accent);
-  color: var(--vc-surface-1);
+  color: var(--vc-on-accent);
 }
 
 .onboarding-wizard__step-indicator.is-completed {
   background: var(--vc-success);
   border-color: var(--vc-success);
-  color: #ffffff;
+  color: var(--vc-on-success);
 }
 
 /* Step Content Styles */

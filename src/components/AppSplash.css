@@ -7,8 +7,8 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: var(--space-4);
-  padding: var(--space-8);
+  gap: var(--vc-space-4);
+  padding: var(--vc-space-8);
   background: var(--vc-surface-0);
   text-align: center;
 }
@@ -16,7 +16,7 @@
 .app-splash__brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: var(--vc-space-2);
 }
 
 .app-splash__mark {
@@ -67,7 +67,7 @@
 
 .app-splash__slow {
   display: grid;
-  gap: var(--space-2);
+  gap: var(--vc-space-2);
   justify-items: center;
   max-width: 44ch;
 }
@@ -81,7 +81,7 @@
   line-height: 1.55;
 }
 
-.app-splash__slow button { margin-top: var(--space-2); }
+.app-splash__slow button { margin-top: var(--vc-space-2); }
 
 /* Sin movimiento, la barra se muestra completa y quieta. */
 @media (prefers-reduced-motion: reduce) {

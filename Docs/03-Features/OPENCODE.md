@@ -17,10 +17,22 @@ OpenCode is an optional third AI agent alongside Claude Code and the direct Open
 
 - OpenCode is not bundled and is not part of Setup Center's project requirements.
 - Detection never installs or updates software.
-- Installation starts only after the user selects OpenCode and confirms a native Electron dialog.
 - The audited package is pinned to `opencode-ai@1.17.18` and installed globally through npm.
-- Installing OpenCode does not install Claude Code or Codex.
 - Existing valid OpenCode installations are reused regardless of whether they came from npm, Chocolatey, Scoop, or another official Windows method.
+
+There are two installation paths, and they consent differently. Describing only
+the first one is what let the second one drift:
+
+| Path | Entry point | Consent | Also installs |
+| --- | --- | --- | --- |
+| In-app | `opencode:install` IPC, from Setup Center or the OpenCode panel | Native Electron dialog naming the package | Nothing else |
+| First-run bootstrap | `bootstrap:start`, from the installer window | The welcome screen enumerates both packages before the start button | `@anthropic-ai/claude-code` |
+
+- On the in-app path, installing OpenCode does not install Claude Code or Codex.
+- The bootstrap prepares the full environment in one pass, so it installs Claude
+  Code as well. It must name both packages on the welcome screen before the user
+  starts it; `tests/bootstrapConsent.test.js` enforces that.
+- Neither path may install anything the user was not shown first.
 
 ## Launch Model
 

@@ -5,13 +5,13 @@
   inset: var(--titlebar-height) 0 0;
   display: grid;
   place-items: center;
-  padding: var(--space-6);
+  padding: var(--vc-space-6);
   background: rgba(3, 6, 12, 0.72);
 }
 
 .confirm-dialog {
   width: min(460px, 100%);
-  padding: var(--space-6);
+  padding: var(--vc-space-6);
   border: 1px solid var(--vc-line);
   border-radius: var(--vc-radius-lg);
   background: var(--vc-surface-2);
@@ -19,7 +19,7 @@
 }
 
 .confirm-dialog__title {
-  margin: 0 0 var(--space-2);
+  margin: 0 0 var(--vc-space-2);
   font-size: var(--vc-text-lg);
   line-height: 1.3;
 }
@@ -33,8 +33,8 @@
 
 /* La consecuencia concreta: que pasa y que no pasa al confirmar. */
 .confirm-dialog__detail {
-  margin: var(--space-3) 0 0;
-  padding: var(--space-3) var(--space-4);
+  margin: var(--vc-space-3) 0 0;
+  padding: var(--vc-space-3) var(--vc-space-4);
   border-left: 2px solid var(--vc-line-strong);
   background: var(--vc-surface-3);
   color: var(--vc-text-3);
@@ -46,6 +46,6 @@
 .confirm-dialog__actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--space-2);
-  margin-top: var(--space-6);
+  gap: var(--vc-space-2);
+  margin-top: var(--vc-space-6);
 }

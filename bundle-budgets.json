@@ -1,0 +1,7 @@
+{
+  "_comment": "Limites de bundle en kB (raw / gzip). Los consume scripts/check_bundle_budgets.js, que es identico al de la web: lo que cambia entre productos son estos numeros, no el codigo. El escritorio pesa mas porque empaqueta CodeMirror, xterm y el resaltado de sintaxis. Subir un limite es una decision, no un arreglo: dejar dicho en el PR que se ensancho y por que.",
+  "entry": { "raw": 300, "gzip": 80 },
+  "chunk": { "raw": 480, "gzip": 160 },
+  "css": { "raw": 100, "gzip": 20 },
+  "totalJs": { "raw": 1800, "gzip": 560 }
+}

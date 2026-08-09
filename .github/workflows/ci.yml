@@ -62,8 +62,11 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-      - name: Build
-        run: npm run build
+      # Antes de esto el escritorio no corria ningun gate de diseno, contraste,
+      # accesibilidad ni bundle: los scripts ni existian en este repositorio.
+      # Ahora es el mismo comando que corre el desarrollador, e incluye build.
+      - name: Run the full local gate
+        run: npm run check
 
       - name: Build unpacked non-deployable Windows CI smoke artifact
         run: npm run package:dir
