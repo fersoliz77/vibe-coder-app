@@ -123,8 +123,14 @@ for (const { label, css } of sources) {
 /*
  * Con el hermano al lado se comprueban las dos cosas que solo se pueden ver
  * teniendo los dos arboles. En CI cada repositorio esta solo, asi que esto se
- * salta: es la verificacion que hace el desarrollador, y la que la Fase 1
- * vuelve innecesaria al generar ambos desde una fuente unica.
+ * salta: es la verificacion que hace el desarrollador.
+ *
+ * No es temporal, aunque una version anterior de este comentario decia que la
+ * fuente unica de tokens lo volveria innecesario. No lo hizo: unifico el
+ * contenido, pero los productos siguen siendo dos repositorios separados con
+ * dos CI que clonan uno solo cada uno, asi que la fuente vive duplicada y
+ * `design-tokens/` tuvo que sumarse a la lista de abajo. Esto deja de hacer
+ * falta el dia que el contrato se distribuya como paquete, no antes.
  */
 /*
  * Las comparaciones entre productos ignoran el tipo de salto de linea: si un

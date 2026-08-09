@@ -157,12 +157,24 @@
   color: var(--text-secondary);
 }
 
+/*
+ * Este boton viene con `btn--primary`, que pinta el fondo de acento y su texto
+ * con --vc-on-accent. Aca el fondo pasa a ser de exito, asi que el texto tiene
+ * que acompañar: sin esto quedaba con el color pensado para otro fondo.
+ *
+ * Hoy los dos tokens valen lo mismo en ambos temas y por eso se leia bien, pero
+ * estan separados justamente para poder divergir. Depender de esa coincidencia
+ * era esperar a que alguien tocara el acento para romper esto en silencio.
+ */
 .openai-btn {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: linear-gradient(135deg, var(--vc-success), var(--vc-success)) !important;
+  /* Era un gradiente entre el mismo color dos veces: un color plano escrito
+     como gradiente. Se declara como lo que es. */
+  background: var(--vc-success) !important;
   border-color: var(--vc-success) !important;
+  color: var(--vc-on-success) !important;
 }
 
 /* Ni gradiente en un boton operativo ni halo verde de 20px: elevacion real. */
