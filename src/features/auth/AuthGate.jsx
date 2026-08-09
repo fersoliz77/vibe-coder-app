@@ -4,6 +4,7 @@ import AppSplash from '../../components/AppSplash';
 import { AuthProvider } from './AuthContext';
 import { useI18n } from '../../i18n/I18nContext';
 import { readAccessibility, saveAccessibility } from '../../utils/accessibility';
+import { localizedAuthError } from './authErrorMessages';
 import './AuthGate.css';
 
 function AuthTitlebar() {
@@ -32,10 +33,10 @@ function AccessibilityControls() {
 
   return (
     <div className="auth-accessibility" aria-label={t('auth.accessibilityOptions')}>
-      <button type="button" onClick={() => toggle('highContrast')} aria-pressed={accessibility.highContrast}>
+      <button type="button" onClick={() => toggle('highContrast')} aria-pressed={accessibility.highContrast} title={t('auth.highContrastHelp')}>
         {t('auth.highContrast')}
       </button>
-      <button type="button" onClick={() => toggle('reducedMotion')} aria-pressed={accessibility.reducedMotion}>
+      <button type="button" onClick={() => toggle('reducedMotion')} aria-pressed={accessibility.reducedMotion} title={t('auth.reduceMotionHelp')}>
         {t('auth.reduceMotion')}
       </button>
     </div>
@@ -63,7 +64,7 @@ function AuthActions({ state, onState, busy, setBusy }) {
         <button type="button" className="auth-button" onClick={() => run('logout')} disabled={Boolean(busy)}>{t('auth.logout')}</button>
         <button type="button" className="auth-button" onClick={() => window.electronAPI.auth.openHelp()}>{t('auth.help')}</button>
       </div>
-      {state.error && <p className="auth-error" role="alert">{state.error.message}</p>}
+      {state.error && <p className="auth-error" role="alert">{localizedAuthError(state.error, t)}</p>}
       <AccessibilityControls />
     </>
   );
@@ -183,7 +184,7 @@ function Login({ state, onState }) {
         <form onSubmit={submit}>
           <label>{t('auth.email')}<input type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} required /></label>
           <label>{t('auth.password')}<input type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></label>
-          {error && <p className="auth-error" role="alert"><strong>{error.code}</strong><br />{error.message}</p>}
+          {error && <p className="auth-error" role="alert">{localizedAuthError(error, t)}</p>}
           <button className="auth-button auth-button--primary auth-button--wide" disabled={Boolean(busy) || !state.configurationReady} type="submit">
             {busy === 'password' ? t('auth.signingIn') : t('auth.signIn')}
           </button>
@@ -198,6 +199,11 @@ function Login({ state, onState }) {
 function Denied({ state, onState }) {
   const { t } = useI18n();
   const [busy, setBusy] = useState('');
+  const deniedCopy = state.account?.role === 'admin'
+    ? t('auth.adminDesktopWebOnly')
+    : state.account?.role === 'instructor'
+      ? t('auth.instructorDesktopWebOnly')
+      : t('auth.deniedCopy');
   return (
     <div className="auth-page">
       <AuthTitlebar />
@@ -205,7 +211,7 @@ function Denied({ state, onState }) {
         <div className="auth-mark">V</div>
         <p className="auth-eyebrow">{state.account?.status ? t(`accountStatuses.${state.account.status}`) : t('auth.accessExpired')}</p>
         <h1 id="denied-title">{t('auth.accessUnavailable')}</h1>
-        <p className="auth-copy">{t('auth.deniedCopy')}</p>
+        <p className="auth-copy">{deniedCopy}</p>
         <AuthActions state={state} onState={onState} busy={busy} setBusy={setBusy} />
       </main>
     </div>
