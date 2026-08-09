@@ -1,0 +1,45 @@
+{
+  "$comment": [
+    "Valores que NO tienen que migrar a la capa canonica, con su motivo.",
+    "",
+    "Una excepcion registrada deja de ser deuda: no vuelve a discutirse en cada",
+    "revision y no ensucia el conteo de lo que si falta migrar. Una excepcion",
+    "sin registrar se discute para siempre.",
+    "",
+    "Para agregar una: nombre, por que no es un token de diseño, y quien la usa.",
+    "Si el motivo se puede resumir como 'todavia no lo migramos', no es una",
+    "excepcion: es deuda, y va a la fase de migracion."
+  ],
+
+  "runtime": {
+    "$comment": "No son valores de diseño: los escribe JavaScript en vivo. Declararlos en el contrato no tendria sentido porque cambian por cuadro.",
+    "--landing-parallax-x": "Desplazamiento del parallax de la landing, lo escribe LandingPage.jsx segun el mouse.",
+    "--landing-parallax-y": "Idem, eje vertical.",
+    "--hero-order": "Orden de aparicion de cada bloque del hero, se asigna por elemento en el JSX.",
+    "--reveal-delay": "Retraso de la animacion de entrada, distinto por elemento.",
+    "--vc-reveal-distance": "Distancia del desplazamiento de entrada, la fija MotionReveal por instancia.",
+    "--vc-reveal-delay": "Retraso de entrada, idem.",
+    "--preview-width": "Ancho elegido por el usuario en la vista previa, arrastrando el divisor.",
+    "--service-accent": "Color del servicio que se esta pintando, viene de sus datos.",
+    "--service-bg": "Idem, fondo.",
+    "--file-accent": "Color por tipo de archivo en el explorador; ExplorerTree lo asigna por fila segun la extension."
+  },
+
+  "chrome": {
+    "$comment": "Medidas del marco de la aplicacion de escritorio. No son candidatos a canonicos porque la web no tiene ni barra de titulo ni barra lateral fija: subirlos al contrato compartido obligaria al otro producto a cargar con un concepto que no tiene.",
+    "--titlebar-height": "Alto de la barra de titulo propia de Electron, 40px.",
+    "--sidebar-width": "Ancho de la barra lateral colapsada, 72px."
+  },
+
+  "neutralized": {
+    "$comment": "Tokens que existen para NO hacer nada. La auditoria retiro los halos de color, y estos quedan en un valor neutro para que las reglas que los consumian sigan siendo validas sin tener que editar cada una. Se borran cuando se migre la familia que los usa.",
+    "--accent-glow": "Halo del acento, neutralizado a `none`. 2 usos en el escritorio.",
+    "--status-success-glow": "Halo del estado correcto, neutralizado a `none`. 2 usos."
+  },
+
+  "flattenedGradients": {
+    "$comment": "Gradientes entre el mismo color dos veces, o sea un color plano escrito como gradiente. Se conservan asi porque las reglas que los consumen esperan un valor de tipo gradiente en `background`; cambiarlos a color plano requiere editar cada consumidor, y eso es trabajo de la migracion.",
+    "--accent-gradient": "Presente en los dos productos, identico.",
+    "--accent-gradient-soft": "Solo en el escritorio."
+  }
+}

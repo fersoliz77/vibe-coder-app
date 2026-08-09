@@ -15,7 +15,6 @@
   --bg-deep: var(--vc-surface-1);
   --bg-base: var(--vc-surface-2);
   --bg-raised: var(--vc-surface-3);
-  --bg-surface: var(--vc-surface-3);
   --bg-overlay: var(--vc-surface-4);
 
   /* Antes vidrio, ahora superficies solidas.
@@ -24,7 +23,6 @@
   --glass-border: var(--vc-line);
   --glass-hover: var(--vc-surface-3);
   --glass-active: var(--vc-surface-4);
-  --glass-blur: 0px;
 
   /* Acento unico. Los gradientes se aplanan a color solido para que
      sigan siendo validos donde se esperaba un `background` de gradiente. */
@@ -71,16 +69,26 @@
   --radius-xl: var(--vc-radius-xl);
   --radius-full: var(--vc-radius-full);
 
-  /* Duraciones. Aca los tokens son solo duracion + easing. */
-  --transition-fast: var(--vc-duration-fast) var(--vc-ease);
-  --transition-normal: var(--vc-duration-normal) var(--vc-ease);
-  --transition-slow: var(--vc-duration-dialog) var(--vc-ease);
-  /* El rebote se elimina: ningun control debe saltar al aparecer. */
-  --transition-spring: var(--vc-duration-dialog) var(--vc-ease);
+  /*
+   * Tiempo, no transicion. Estos tokens traen duracion + easing y se usan como
+   * `transition: <propiedad> var(--timing-fast)`.
+   *
+   * Se llamaban --transition-*, igual que en la web, donde el token trae la
+   * declaracion entera y se usa como `transition: var(--transition-fast)`.
+   * Mismo nombre, dos gramaticas: copiar una regla de un producto al otro daba
+   * algo invalido o distinto, sin que nada avisara. El nombre ahora dice cual
+   * de las dos cosas es.
+   *
+   * --transition-slow y --transition-spring no tenian ni un uso: se borraron.
+   */
+  --timing-fast: var(--vc-duration-fast) var(--vc-ease);
+  --timing-normal: var(--vc-duration-normal) var(--vc-ease);
 
-  /* Layout */
+  /*
+   * Layout del chrome de escritorio. No son candidatos a canonicos: la web no
+   * tiene barra de titulo ni barra lateral fija. Quedan privados del producto.
+   */
   --sidebar-width: 72px;
-  --sidebar-expanded: 240px;
   --titlebar-height: 40px;
 }
 
@@ -204,7 +212,7 @@ body {
   cursor: pointer;
   pointer-events: auto;
   -webkit-app-region: no-drag;
-  transition: color var(--transition-fast), opacity var(--transition-fast);
+  transition: color var(--timing-fast), opacity var(--timing-fast);
 }
 
 .titlebar__project-path:hover {
@@ -255,7 +263,7 @@ body {
   background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--timing-fast), color var(--timing-fast);
 }
 
 .titlebar__btn:hover {

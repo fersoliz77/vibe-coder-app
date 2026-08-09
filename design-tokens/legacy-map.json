@@ -1,0 +1,105 @@
+{
+  "$comment": [
+    "Diccionario de traduccion: cada nombre heredado y su equivalente canonico.",
+    "",
+    "Es la entrada de la migracion. Sin este mapa, cambiar un nombre viejo por",
+    "uno nuevo es adivinar, y adivinar sobre 1200 usos sale caro.",
+    "",
+    "`canonical` es a que token --vc-* apunta hoy. Cuando toda una familia de",
+    "pantallas deja de usar el nombre viejo, el alias se borra de su CSS y su",
+    "entrada sale de aca.",
+    "",
+    "Lo que NO entra: los valores de scripts/../exceptions.json, que no van a",
+    "migrar nunca porque no son tokens de diseño."
+  ],
+
+  "$resolved": {
+    "$comment": "Homonimos que ya se resolvieron, anotados para que nadie los reintroduzca pensando que son un descuido.",
+    "--transition-fast": "Era el mismo nombre con dos gramaticas: en la web traia la declaracion entera (`transition: var(--transition-fast)`), en el escritorio solo duracion+easing (`transition: color var(--transition-fast)`). La web pasa a usar --vc-transition-fast directo; el escritorio renombro a --timing-fast, que dice lo que es.",
+    "--bg-surface": "Apuntaba a surface-1 en la web y a surface-3 en el escritorio. Cuatro usos en total: se migraron directo al canonico y el alias se borro de los dos.",
+    "--accent-glow (web)": "Definido como `transparent` en la web y `none` en el escritorio: tipos distintos. La web no lo usaba en ningun lado, asi que se borro de ahi. El del escritorio queda como excepcion neutralizada.",
+    "--transition-slow": "Cero usos. Borrado.",
+    "--transition-spring": "Cero usos. Borrado.",
+    "--glass-blur": "Cero usos. Borrado.",
+    "--sidebar-expanded": "Cero usos. Borrado."
+  },
+
+  "$open": {
+    "$comment": "Homonimos que siguen abiertos: mismo nombre, distinto valor, en los dos productos.",
+    "--glass-bg": {
+      "web": "--vc-surface-1",
+      "app": "--vc-surface-2",
+      "uses": 39,
+      "risk": "Bajo hoy, porque cada producto resuelve el suyo y los dos son un color de superficie: no hay incompatibilidad de tipo. El riesgo es mover una regla de un producto al otro y que cambie de nivel de elevacion en silencio.",
+      "plan": "Se resuelve en la migracion, cuando cada familia de pantallas pase a --vc-surface-N directo. Son 39 usos: demasiados para un solo cambio sin evidencia visual."
+    }
+  },
+
+  "web": {
+    "--bg-color": "--vc-surface-0",
+    "--bg-surface-2": "--vc-surface-2",
+    "--glass-bg": "--vc-surface-1",
+    "--glass-border": "--vc-line",
+    "--glass-hover": "--vc-surface-3",
+    "--glass-shadow": "--vc-shadow-md",
+    "--text-primary": "--vc-text-1",
+    "--text-secondary": "--vc-text-2",
+    "--text-muted": "--vc-text-3",
+    "--accent-blue": "--vc-accent",
+    "--accent-cyan": "--vc-accent",
+    "--accent-purple": "--vc-accent",
+    "--accent-green": "--vc-success",
+    "--accent-amber": "--vc-warning",
+    "--radius-sm": "--vc-radius-xs",
+    "--radius-md": "--vc-radius-md",
+    "--radius-lg": "--vc-radius-lg",
+    "--radius-xl": "--vc-radius-xl",
+    "--transition": "--vc-transition-normal"
+  },
+
+  "app": {
+    "--bg-deepest": "--vc-surface-0",
+    "--bg-deep": "--vc-surface-1",
+    "--bg-base": "--vc-surface-2",
+    "--bg-raised": "--vc-surface-3",
+    "--bg-overlay": "--vc-surface-4",
+    "--glass-bg": "--vc-surface-2",
+    "--glass-border": "--vc-line",
+    "--glass-hover": "--vc-surface-3",
+    "--glass-active": "--vc-surface-4",
+    "--text-primary": "--vc-text-1",
+    "--text-secondary": "--vc-text-2",
+    "--text-tertiary": "--vc-text-3",
+    "--text-accent": "--vc-accent",
+    "--accent-primary": "--vc-accent",
+    "--accent-primary-dim": "--vc-accent-dim",
+    "--accent-secondary": "--vc-accent",
+    "--status-success": "--vc-success",
+    "--status-success-bg": "--vc-success-soft",
+    "--status-error": "--vc-danger",
+    "--status-error-bg": "--vc-danger-soft",
+    "--status-warning": "--vc-warning",
+    "--status-warning-bg": "--vc-warning-soft",
+    "--status-checking": "--vc-accent",
+    "--font-sans": "--vc-font-sans",
+    "--font-mono": "--vc-font-mono",
+    "--space-xs": "--vc-space-1",
+    "--space-sm": "--vc-space-2",
+    "--space-md": "--vc-space-4",
+    "--space-lg": "--vc-space-6",
+    "--space-xl": "--vc-space-8",
+    "--space-2xl": "--vc-space-12",
+    "--radius-sm": "--vc-radius-xs",
+    "--radius-md": "--vc-radius-md",
+    "--radius-lg": "--vc-radius-lg",
+    "--radius-xl": "--vc-radius-xl",
+    "--radius-full": "--vc-radius-full",
+    "--timing-fast": "--vc-duration-fast + --vc-ease",
+    "--timing-normal": "--vc-duration-normal + --vc-ease"
+  },
+
+  "$notes": {
+    "--accent-blue / --accent-cyan / --accent-purple": "Tres nombres para el mismo acento. Son de cuando habia una paleta multicolor; hoy los tres resuelven a --vc-accent. Se borran juntos cuando se migre la landing.",
+    "--radius-sm": "Apunta a --vc-radius-xs, no a --vc-radius-sm. Es correcto y es asi en los dos productos: la escala canonica agrego un escalon mas chico despues de que se nombraran estos alias. Renombrarlo es la clase de cambio cosmetico que rompe cosas sin mejorar nada."
+  }
+}

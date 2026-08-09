@@ -5,14 +5,14 @@
 .settings-eyebrow, .settings-card__heading span { color: var(--accent-primary); font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .settings-shell { display: grid; grid-template-columns: 240px minmax(0, 880px); gap: var(--space-xl); max-width: 1120px; margin: auto; }
 .settings-tabs { display: grid; align-content: start; gap: 6px; padding: 6px; height: fit-content; border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
-.settings-tabs button { display: grid; gap: 2px; width: 100%; padding: 12px 12px; color: var(--text-secondary); text-align: left; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; cursor: pointer; transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast); }
+.settings-tabs button { display: grid; gap: 2px; width: 100%; padding: 12px 12px; color: var(--text-secondary); text-align: left; border: 1px solid transparent; border-radius: var(--radius-md); background: transparent; cursor: pointer; transition: background var(--timing-fast), border-color var(--timing-fast), color var(--timing-fast); }
 .settings-tabs button:hover { color: var(--text-primary); background: var(--glass-hover); }
 .settings-tabs button.is-active { color: var(--text-primary); border-color: color-mix(in srgb, var(--accent-primary) 35%, var(--glass-border)); background: var(--accent-gradient-soft); }
 .settings-tabs strong { font-size: 13px; }
 .settings-tabs span { color: var(--text-tertiary); font-size: 12px; }
 .settings-tabs button.is-active span { color: var(--text-secondary); }
 .settings-content { min-width: 0; }
-.settings-tab-panel { display: grid; gap: var(--space-md); animation: settings-panel-enter var(--transition-normal) ease-out; }
+.settings-tab-panel { display: grid; gap: var(--space-md); animation: settings-panel-enter var(--timing-normal) ease-out; }
 .settings-preferences { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .settings-card { padding: var(--space-lg); border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--glass-bg); }
 .settings-card__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-md); margin-bottom: var(--space-md); }

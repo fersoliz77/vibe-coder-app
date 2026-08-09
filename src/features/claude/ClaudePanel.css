@@ -217,7 +217,7 @@
   border: 1px solid var(--glass-border);
   border-radius: var(--radius-md);
   padding: var(--space-sm);
-  transition: border-color var(--transition-fast);
+  transition: border-color var(--timing-fast);
 }
 
 .claude-panel__input-wrap:focus-within {

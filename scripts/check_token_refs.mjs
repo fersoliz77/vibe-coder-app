@@ -68,7 +68,10 @@ async function exists(path) {
  * Un token queda definido de tres formas, y las tres cuentan. Mirar solo el CSS
  * daria falsos positivos sobre los que el producto inyecta desde React.
  */
-function collectDefinitions(code) {
+function collectDefinitions(source) {
+  // Tampoco define nada lo que este comentado: contarlo taparia un token que
+  // en realidad falta, que es justo lo que este archivo busca.
+  const code = stripBlockComments(source);
   const names = new Set();
   // 1. Declaracion CSS: `--nombre: valor;`
   for (const [, name] of code.matchAll(/(--[\w-]+)\s*:/g)) names.add(name);
@@ -80,12 +83,22 @@ function collectDefinitions(code) {
 }
 
 /*
+ * Un `var()` dentro de un comentario no es un consumo: no lo resuelve nadie.
+ * Se blanquea el contenido conservando los saltos de linea, para que los
+ * numeros de linea que se reportan sigan siendo los del archivo.
+ */
+function stripBlockComments(code) {
+  return code.replace(/\/\*[\s\S]*?\*\//g, (comment) =>
+    comment.replace(/[^\n]/g, ' '));
+}
+
+/*
  * Solo interesan los consumos sin respaldo. `var(--x, 8px)` puede apuntar a un
  * token inexistente sin consecuencia visible: el fallback es la definicion.
  */
 function collectUsages(code) {
   const usages = [];
-  code.split('\n').forEach((text, index) => {
+  stripBlockComments(code).split('\n').forEach((text, index) => {
     for (const match of text.matchAll(/var\(\s*(--[\w-]+)\s*([,)])/g)) {
       if (match[2] === ',') continue;
       usages.push({ name: match[1], line: index + 1 });

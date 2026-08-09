@@ -160,10 +160,14 @@ if (siblingRoot) {
     'scripts/check_static_a11y.mjs',
     'scripts/check_bundle_budgets.mjs',
     'scripts/check_font_loading.mjs',
+    'scripts/check_legacy_tokens.mjs',
+    'scripts/check_breakpoints.mjs',
     // La fuente del contrato tambien: si se bifurca, los dos productos generan
     // capas distintas y la paridad se pierde en el origen, no en la copia.
     'design-tokens/tokens.json',
     'design-tokens/build.mjs',
+    'design-tokens/legacy-map.json',
+    'design-tokens/exceptions.json',
     'public/theme-boot.js',
   ];
   for (const name of MIRRORED) {

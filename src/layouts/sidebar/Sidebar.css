@@ -9,7 +9,7 @@
   align-items: center;
   padding: var(--space-md) 0;
   gap: var(--space-xs);
-  transition: width var(--transition-normal);
+  transition: width var(--timing-normal);
   z-index: 100;
 }
 

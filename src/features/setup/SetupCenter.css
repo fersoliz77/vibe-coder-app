@@ -23,7 +23,7 @@
 .setup-center__controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 32px; border-bottom: 1px solid var(--glass-border); background: var(--vc-surface-2); }
 .setup-center__controls p { color: var(--text-secondary); font-size: 12px; }
 
-.setup-center__button { min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: 9px; color: var(--text-primary); font: 700 12px var(--font-sans); cursor: pointer; transition: border-color var(--transition-fast), background var(--transition-fast), transform var(--transition-fast); }
+.setup-center__button { min-height: 40px; padding: 0 16px; border: 1px solid transparent; border-radius: 9px; color: var(--text-primary); font: 700 12px var(--font-sans); cursor: pointer; transition: border-color var(--timing-fast), background var(--timing-fast), transform var(--timing-fast); }
 .setup-center__button:disabled { cursor: not-allowed; opacity: .45; }
 .setup-center__button.is-primary { color: var(--vc-on-accent); background: var(--accent-primary); box-shadow: var(--vc-shadow-sm); }
 .setup-center__button.is-secondary { border-color: var(--glass-border); background: var(--glass-bg); }

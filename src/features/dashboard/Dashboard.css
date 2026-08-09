@@ -167,10 +167,10 @@
 .outcome-signal.is-attention i { background: var(--status-warning); }
 .outcome-signal.is-loading i { background: var(--status-checking); animation: dashboard-pulse 1.4s ease-in-out infinite; }
 .project-outcome__cta, .next-action button { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-height: 46px; padding: 0 16px; border: 0; border-radius: var(--radius-md); color: var(--vc-on-accent); background: var(--accent-primary); box-shadow: var(--accent-glow); font: 750 13px var(--font-sans); cursor: pointer; }
-.project-outcome__cta svg, .next-action button svg { width: 16px; height: 16px; transition: transform var(--transition-fast); }
+.project-outcome__cta svg, .next-action button svg { width: 16px; height: 16px; transition: transform var(--timing-fast); }
 
 .health-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--glass-border); border-radius: var(--radius-lg); background: var(--bg-deep); }
-.health-item { position: relative; display: grid; gap: 5px; min-width: 0; padding: 16px 16px; border: 0; border-right: 1px solid var(--glass-border); color: inherit; background: transparent; text-align: left; font-family: var(--font-sans); cursor: pointer; transition: background var(--transition-fast); }
+.health-item { position: relative; display: grid; gap: 5px; min-width: 0; padding: 16px 16px; border: 0; border-right: 1px solid var(--glass-border); color: inherit; background: transparent; text-align: left; font-family: var(--font-sans); cursor: pointer; transition: background var(--timing-fast); }
 .health-item:last-child { border-right: 0; }
 .health-item:hover { background: var(--vc-surface-3); }
 .health-item::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 2px; background: transparent; }

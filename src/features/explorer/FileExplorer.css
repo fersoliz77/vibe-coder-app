@@ -58,7 +58,7 @@
   background: transparent;
   color: var(--text-tertiary);
   cursor: pointer;
-  transition: background var(--transition-fast), color var(--transition-fast);
+  transition: background var(--timing-fast), color var(--timing-fast);
 }
 
 .file-explorer__icon-btn:hover,

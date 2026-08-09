@@ -4,7 +4,7 @@
    ARCHIVO GENERADO. No editar a mano: se regenera y se pierde el cambio.
    Fuente:  design-tokens/tokens.json
    Generar: npm run tokens
-   Contrato: v1.0.0 (2a12e0d2b43e)
+   Contrato: v1.1.0 (393283a8cb00)
 
    Regla: aca solo viven tokens canonicos --vc-*. Cada producto mapea sus
    nombres historicos sobre esta capa, de modo que ningun componente
@@ -43,6 +43,18 @@
   --vc-radius-lg: 12px;
   --vc-radius-xl: 16px;
   --vc-radius-full: 9999px;
+
+  /* ─── Capas: que va encima de que ─────────────────────────────────*/
+  --vc-z-below: -1;
+  --vc-z-base: 1;
+  --vc-z-raised: 10;
+  --vc-z-sticky: 100;
+  --vc-z-dropdown: 200;
+  --vc-z-overlay: 1000;
+  --vc-z-modal: 2000;
+  --vc-z-toast: 3000;
+  --vc-z-tooltip: 4000;
+  --vc-z-max: 9999;
 
   /* ─── Movimiento ──────────────────────────────────────────────────*/
   --vc-ease: cubic-bezier(0.2, 0, 0, 1);

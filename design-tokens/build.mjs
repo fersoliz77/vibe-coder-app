@@ -76,7 +76,7 @@ function contractHash(source) {
 }
 
 const hash = contractHash(contract);
-const { typography, space, radius, motion, focus, themes, rgbFrom, aliases, transitionProperties, themeSelectors } = contract;
+const { typography, space, radius, layers, motion, focus, themes, rgbFrom, aliases, transitionProperties, themeSelectors } = contract;
 
 const shared = [
   '  /* ─── Tipografia ──────────────────────────────────────────────────*/',
@@ -87,6 +87,9 @@ const shared = [
   '',
   '  /* ─── Radios ──────────────────────────────────────────────────────*/',
   declarations(entries(radius)),
+  '',
+  '  /* ─── Capas: que va encima de que ─────────────────────────────────*/',
+  declarations(entries(layers)),
   '',
   '  /* ─── Movimiento ──────────────────────────────────────────────────*/',
   declarations(entries(motion)),
