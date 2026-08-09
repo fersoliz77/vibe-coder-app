@@ -155,9 +155,23 @@ test('authentication requests abort after their bounded timeout', async () => {
     signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
   });
 
+  /*
+   * `request()` marca su timer de timeout con unref(), y eso esta bien: en el
+   * proceso principal de Electron una peticion pendiente no debe impedir que la
+   * aplicacion cierre. Pero un timer con unref() no mantiene vivo el event loop,
+   * y este fetch simulado solo se resuelve cuando ese timer dispara el abort. Si
+   * el loop se vacia primero, el timer no corre nunca y la prueba queda colgada.
+   *
+   * En la aplicacion real el loop siempre esta vivo, asi que la carrera es solo
+   * de la prueba. Pero decidia el resultado segun la version de Node: verde en
+   * 24, colgada en 22 -la que corre CI-, y al colgarse arrastraba a las otras
+   * 22 pruebas del archivo con 'Promise resolution is still pending'.
+   */
+  const keepEventLoopAlive = setInterval(() => {}, 1_000);
   try {
     await assert.rejects(service.request('/test', { timeoutMs: 5 }), (error) => error.code === 'AUTH_REQUEST_TIMEOUT');
   } finally {
+    clearInterval(keepEventLoopAlive);
     global.fetch = originalFetch;
   }
 });
