@@ -203,7 +203,7 @@ Object.assign(dictionaries.es, { preview: {
 } });
 
 Object.assign(dictionaries.en.settings, {
-  tabs: { ...dictionaries.en.settings.tabs, support: 'Support', supportCopy: 'Local diagnostics' },
+  tabs: { ...dictionaries.en.settings.tabs, ai: 'AI', aiCopy: 'Models and assistants', tools: 'Tools', toolsCopy: 'Local development environment', connections: 'Connections', connectionsCopy: 'Connected services', support: 'Support', supportCopy: 'Updates and diagnostics' },
   localDiagnostics: 'Local diagnostics', supportReport: 'Support report',
   diagnosticsCopy: 'Generate a local JSON report with application, platform, access policy, technical states, and recent operational events.',
   diagnosticsPrivacy: 'The report is created only when you request it. It is never sent automatically and excludes tokens, prompts, code, emails, and complete user paths.',
@@ -216,7 +216,7 @@ Object.assign(dictionaries.en.settings, {
   updateCurrentToast: 'Vibe IDE Code is up to date.', updateCheckFailed: 'Updates could not be checked. Try again.', updateDownloading: 'Downloading update: {percentage}%',
 });
 Object.assign(dictionaries.es.settings, {
-  tabs: { ...dictionaries.es.settings.tabs, support: 'Soporte', supportCopy: 'Diagnóstico local' },
+  tabs: { ...dictionaries.es.settings.tabs, ai: 'IA', aiCopy: 'Modelos y asistentes', tools: 'Herramientas', toolsCopy: 'Entorno de desarrollo local', connections: 'Conexiones', connectionsCopy: 'Servicios conectados', support: 'Soporte', supportCopy: 'Actualizaciones y diagnóstico' },
   localDiagnostics: 'Diagnóstico local', supportReport: 'Reporte para soporte',
   diagnosticsCopy: 'Generá un reporte JSON local con la aplicación, plataforma, política de acceso, estados técnicos y eventos operativos recientes.',
   diagnosticsPrivacy: 'El reporte se crea únicamente cuando lo solicitás. Nunca se envía automáticamente y excluye tokens, prompts, código, emails y rutas completas de usuario.',

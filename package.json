@@ -1,6 +1,6 @@
 {
   "name": "vibe-ide-coder",
-  "version": "1.1.9",
+  "version": "1.1.10",
   "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "author": "Vibe IDE Code",
   "main": "electron/main.js",

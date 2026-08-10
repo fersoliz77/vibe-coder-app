@@ -9,7 +9,9 @@ import './SettingsPanel.css';
 const DELIVERY_SERVICES = ['github', 'vercel', 'supabase'];
 
 const SETTINGS_TABS = [
-  { id: 'services', labelKey: 'settings.tabs.services', descriptionKey: 'settings.tabs.servicesCopy' },
+  { id: 'ai', labelKey: 'settings.tabs.ai', descriptionKey: 'settings.tabs.aiCopy' },
+  { id: 'tools', labelKey: 'settings.tabs.tools', descriptionKey: 'settings.tabs.toolsCopy' },
+  { id: 'connections', labelKey: 'settings.tabs.connections', descriptionKey: 'settings.tabs.connectionsCopy' },
   { id: 'preferences', labelKey: 'settings.tabs.preferences', descriptionKey: 'settings.tabs.preferencesCopy' },
   { id: 'account', labelKey: 'settings.tabs.account', descriptionKey: 'settings.tabs.accountCopy' },
   { id: 'support', labelKey: 'settings.tabs.support', descriptionKey: 'settings.tabs.supportCopy' },
@@ -90,7 +92,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   const [accessibility, setAccessibility] = useState(readAccessibility);
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
   const [delivery, setDelivery] = useState({ loading: true, services: [], commands: {}, error: '' });
-  const [activeTab, setActiveTab] = useState('services');
+  const [activeTab, setActiveTab] = useState('ai');
   const [updateState, setUpdateState] = useState({ status: 'disabled', progress: null, error: null, revision: -1 });
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateToast, setUpdateToast] = useState(null);
@@ -247,9 +249,9 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
         </nav>
 
         <div className="settings-content">
-          {activeTab === 'services' && (
-            <div id="settings-panel-services" role="tabpanel" aria-labelledby="settings-tab-services" className="settings-tab-panel">
-              <section className="settings-card">
+          {activeTab === 'ai' && (
+            <div id="settings-panel-ai" role="tabpanel" aria-labelledby="settings-tab-ai" className="settings-tab-panel settings-tab-panel--compact">
+              <section className="settings-card settings-card--focus">
                 <div className="settings-card__heading"><div><span>{t('settings.aiProviders')}</span><h2>{t('settings.modelsAccounts')}</h2></div><button className="btn btn--small" type="button" disabled={providers.loading} onClick={refreshProviders}>{t('settings.refreshStatuses')}</button></div>
                 <p className="settings-copy">{t('settings.providerCopy')}</p>
                 <div className="settings-providers">
@@ -259,7 +261,12 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
                 </div>
                 {providers.error && <p className="settings-provider-error" role="status">{providers.error}</p>}
               </section>
-              <section className="settings-card">
+            </div>
+          )}
+
+          {activeTab === 'connections' && (
+            <div id="settings-panel-connections" role="tabpanel" aria-labelledby="settings-tab-connections" className="settings-tab-panel settings-tab-panel--compact">
+              <section className="settings-card settings-card--focus">
                 <div className="settings-card__heading"><div><span>{t('settings.deliveryEyebrow')}</span><h2>{t('settings.deliveryTitle')}</h2></div><button className="btn btn--small" type="button" disabled={delivery.loading} onClick={refreshDelivery}>{t('settings.refreshStatuses')}</button></div>
                 <p className="settings-copy">{t('settings.deliveryCopy')}</p>
                 <div className="settings-delivery">
@@ -279,6 +286,11 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
                 </div>
                 {delivery.error && <p className="settings-provider-error" role="status">{delivery.error}</p>}
               </section>
+            </div>
+          )}
+
+          {activeTab === 'tools' && (
+            <div id="settings-panel-tools" role="tabpanel" aria-labelledby="settings-tab-tools" className="settings-tab-panel">
               <section className="settings-card settings-card--setup">
                 <div className="settings-card__heading"><div><span>{t('settings.localTools')}</span><h2>{t('settings.devEnvironment')}</h2></div><button className="btn btn--small btn--ghost" type="button" onClick={onReopenOnboarding}>{t('settings.openGuidedSetup')}</button></div>
                 <SetupCenter compact />
