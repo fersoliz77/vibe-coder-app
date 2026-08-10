@@ -2,7 +2,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { parse } = require('yaml');
+const { Upload } = require('tus-js-client');
 const { verifySignedUpdateInfo } = require('../electron/services/updateSignature');
+
+const TUS_CHUNK_SIZE = 6 * 1024 * 1024;
 
 function parseLatestMetadata(source, { verifySignature = verifySignedUpdateInfo } = {}) {
   let document;
@@ -62,7 +65,53 @@ async function releaseFiles(outputDirectory, metadata) {
   return files;
 }
 
-async function uploadFile({ supabaseUrl, serviceRoleKey, bucket, channel, file, fetchImpl = fetch }) {
+function resumableEndpoint(supabaseUrl) {
+  const url = new URL(supabaseUrl);
+  if (url.hostname.endsWith('.supabase.co')) {
+    url.hostname = url.hostname.replace(/\.supabase\.co$/, '.storage.supabase.co');
+  }
+  url.pathname = '/storage/v1/upload/resumable';
+  return url.toString();
+}
+
+function uploadResumableFile({ supabaseUrl, serviceRoleKey, bucket, channel, file, UploadClass = Upload }) {
+  return new Promise((resolve, reject) => {
+    const stream = fs.createReadStream(file.local);
+    const upload = new UploadClass(stream, {
+      endpoint: resumableEndpoint(supabaseUrl),
+      retryDelays: [0, 3000, 5000, 10000, 20000],
+      headers: {
+        Authorization: `Bearer ${serviceRoleKey}`,
+        apikey: serviceRoleKey,
+        'x-upsert': 'false',
+      },
+      uploadDataDuringCreation: true,
+      removeFingerprintOnSuccess: true,
+      chunkSize: TUS_CHUNK_SIZE,
+      metadata: {
+        bucketName: bucket,
+        objectName: `${channel}/${file.remote}`,
+        contentType: file.contentType,
+        cacheControl: file.cacheControl,
+      },
+      onError(error) {
+        stream.destroy();
+        const status = error?.originalResponse?.getStatus?.();
+        reject(new Error(`resumable upload failed for ${file.remote}${status ? `: HTTP ${status}` : ''}`));
+      },
+      onSuccess() {
+        stream.destroy();
+        resolve();
+      },
+    });
+    upload.start();
+  });
+}
+
+async function uploadFile({ supabaseUrl, serviceRoleKey, bucket, channel, file, fetchImpl = fetch, UploadClass = Upload }) {
+  if (!file.mutable) {
+    return uploadResumableFile({ supabaseUrl, serviceRoleKey, bucket, channel, file, UploadClass });
+  }
   const objectUrl = [bucket, channel, file.remote]
     .map((segment) => encodeURIComponent(segment))
     .join('/');
@@ -88,6 +137,7 @@ async function publishRelease({
   channel = process.env.VIBE_UPDATE_CHANNEL || 'stable',
   outputDirectory = path.resolve('dist-electron'),
   fetchImpl = fetch,
+  UploadClass = Upload,
   verifySignature = verifySignedUpdateInfo,
 } = {}) {
   if (!supabaseUrl || !serviceRoleKey) throw new Error('VIBE_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required');
@@ -100,7 +150,7 @@ async function publishRelease({
   // Publish immutable binaries first. latest.yml is the activation switch and
   // must be uploaded last so clients never observe an incomplete release.
   for (const file of files) {
-    await uploadFile({ supabaseUrl: normalizedUrl, serviceRoleKey, bucket, channel, file, fetchImpl });
+    await uploadFile({ supabaseUrl: normalizedUrl, serviceRoleKey, bucket, channel, file, fetchImpl, UploadClass });
     console.log(`Published ${bucket}/${channel}/${file.remote}`);
   }
   return { version: metadata.version, files: files.map((file) => file.remote) };
@@ -113,4 +163,12 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseLatestMetadata, publishRelease, releaseFiles, sha512File, uploadFile };
+module.exports = {
+  parseLatestMetadata,
+  publishRelease,
+  releaseFiles,
+  resumableEndpoint,
+  sha512File,
+  uploadFile,
+  uploadResumableFile,
+};

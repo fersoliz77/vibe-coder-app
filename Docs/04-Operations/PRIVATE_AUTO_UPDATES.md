@@ -52,7 +52,7 @@ supabase/migrations/20260809120000_private_desktop_releases.sql
 supabase/migrations/20260809130000_restrict_desktop_release_reads.sql
 ```
 
-La primera crea el bucket privado con límite de 400 MiB, instala la función de entitlement, aplica la policy de lectura y alinea `get_desktop_access()`. La segunda impone el entitlement con una policy restrictiva para que ninguna policy permisiva futura pueda abrir el bucket por combinación `OR`. Ambas deben desplegarse antes de publicar `v1.1.3`.
+La primera crea el bucket privado con límite de 400 MiB, instala la función de entitlement, aplica la policy de lectura y alinea `get_desktop_access()`. La segunda impone el entitlement con una policy restrictiva para que ninguna policy permisiva futura pueda abrir el bucket por combinación `OR`. Ambas deben desplegarse antes de publicar `v1.1.4`.
 
 Desde el repositorio web, con Supabase CLI autenticada y acceso autorizado al proyecto, ejecutar:
 
@@ -119,35 +119,35 @@ El publicador lee el `latest.yml` generado por `electron-builder`, exige SemVer 
 2. `Vibe-IDE-Code-Setup-X.Y.Z.exe.blockmap`;
 3. `latest.yml`.
 
-El instalador y el blockmap se crean sin upsert: una colisión aborta la publicación. `latest.yml` es el único objeto mutable, usa `no-store`, se sube al final y es el interruptor de activación. Antes de subir, el publicador analiza el YAML completo y verifica versión, nombre, tamaño y SHA-512 contra el instalador local. El nombre local y remoto canónico es `Vibe-IDE-Code-Setup-X.Y.Z.exe`.
+El instalador y el blockmap se crean sin upsert mediante TUS resumible en fragmentos de 6 MiB: una colisión aborta la publicación. `latest.yml` es el único objeto mutable, usa la subida estándar con `no-store`, se sube al final y es el interruptor de activación. Antes de subir, el publicador analiza el YAML completo y verifica versión, nombre, tamaño y SHA-512 contra el instalador local. El nombre local y remoto canónico es `Vibe-IDE-Code-Setup-X.Y.Z.exe`.
 
 Si falla un secret, el gate, el build, la firma o la evidencia, no se ejecuta la publicación. Si una subida deja un objeto versionado parcial antes de `latest.yml`, la versión anterior sigue activa, pero el mismo tag no se reejecuta hasta retirar manualmente sólo esos objetos parciales y comprobar que nunca fueron activados. No mover, recrear ni reconstruir silenciosamente un tag publicado.
 
-## Bootstrap Manual De `1.1.3`
+## Bootstrap Manual De `1.1.4`
 
-`1.0.0` no contiene updater y nunca descubrirá `latest.yml`. Por eso `1.1.3` necesita una instalación manual única:
+`1.0.0` no contiene updater y nunca descubrirá `latest.yml`. Por eso `1.1.4` necesita una instalación manual única:
 
 1. Aplicar y verificar ambas migraciones privadas de desktop releases.
-2. Publicar el tag `v1.1.3` mediante el workflow vigente y comprobar firma, objetos y evidencia.
+2. Publicar el tag `v1.1.4` mediante el workflow vigente y comprobar firma, objetos y evidencia.
 3. Obtener el instalador aprobado sin exponer la service-role key ni convertir el bucket en público.
-4. Distribuir `Vibe-IDE-Code-Setup-1.1.3.exe` por el canal privado aprobado e indicar a cada usuario de `1.0.0` que lo ejecute manualmente sobre la instalación existente.
-5. Aceptar conscientemente el aviso inicial `Editor desconocido`, confirmar que la aplicación abre como `1.1.3`, que el usuario puede reautenticarse y que una cuenta con entitlement `active` llega al estado `current`.
-6. No considerar migrada la base instalada sólo porque `v1.1.3` esté en Storage; registrar quién completó el bootstrap. Los equipos que permanezcan en `1.0.0` seguirán necesitando instalación manual.
+4. Distribuir `Vibe-IDE-Code-Setup-1.1.4.exe` por el canal privado aprobado e indicar a cada usuario de `1.0.0` que lo ejecute manualmente sobre la instalación existente.
+5. Aceptar conscientemente el aviso inicial `Editor desconocido`, confirmar que la aplicación abre como `1.1.4`, que el usuario puede reautenticarse y que una cuenta con entitlement `active` llega al estado `current`.
+6. No considerar migrada la base instalada sólo porque `v1.1.4` esté en Storage; registrar quién completó el bootstrap. Los equipos que permanezcan en `1.0.0` seguirán necesitando instalación manual.
 
-No publicar `v1.1.4` como validación general hasta disponer de al menos una instalación real y funcional de `1.1.3` para probar el salto completo.
+No publicar `v1.1.5` como validación general hasta disponer de al menos una instalación real y funcional de `1.1.4` para probar el salto completo.
 
-## Prueba Real `1.1.3` A `1.1.4`
+## Prueba Real `1.1.4` A `1.1.5`
 
-Esta prueba usa metadata firmada con la clave privada gratuita y el canal privado real; publicar `v1.1.4` en `stable` la vuelve obligatoria para todos los clientes elegibles que la detecten. Coordinar la ventana antes de crear el tag.
+Esta prueba usa metadata firmada con la clave privada gratuita y el canal privado real; publicar `v1.1.5` en `stable` la vuelve obligatoria para todos los clientes elegibles que la detecten. Coordinar la ventana antes de crear el tag.
 
-1. Partir de Windows con `1.1.3` instalada manualmente, no desde una app de desarrollo ni `win-unpacked`.
-2. Iniciar sesión con una cuenta de prueba cuyo perfil y plan cumplan el entitlement `active`. Confirmar primero `current` contra `v1.1.3`.
-3. Preparar `1.1.4`, completar todos los gates y publicar `v1.1.4` mediante su tag.
-4. Confirmar en Storage la presencia de instalador, blockmap y `latest.yml`, y comprobar que el metadata declara `version: 1.1.4` y el nombre remoto correcto.
-5. Reiniciar `1.1.3` para provocar la consulta de arranque. Debe pasar por `checking` y mostrar `available` para `1.1.4` sin opción de omitir; el workspace debe quedar inerte.
+1. Partir de Windows con `1.1.4` instalada manualmente, no desde una app de desarrollo ni `win-unpacked`.
+2. Iniciar sesión con una cuenta de prueba cuyo perfil y plan cumplan el entitlement `active`. Confirmar primero `current` contra `v1.1.4`.
+3. Preparar `1.1.5`, completar todos los gates y publicar `v1.1.5` mediante su tag.
+4. Confirmar en Storage la presencia de instalador, blockmap y `latest.yml`, y comprobar que el metadata declara `version: 1.1.5` y el nombre remoto correcto.
+5. Reiniciar `1.1.4` para provocar la consulta de arranque. Debe pasar por `checking` y mostrar `available` para `1.1.5` sin opción de omitir; el workspace debe quedar inerte.
 6. Descargar y observar `downloading` con progreso, seguido de `downloaded`.
 7. Con trabajo sin guardar, cancelar una vez la protección previa al reinicio y confirmar que no instala ni desbloquea el workspace. Guardar o descartar de forma deliberada y volver a elegir reiniciar.
-8. Confirmar el cierre, la instalación y el arranque de `1.1.4`; verificar que la sesión puede validarse y que el updater termina en `current`.
+8. Confirmar el cierre, la instalación y el arranque de `1.1.5`; verificar que la sesión puede validarse y que el updater termina en `current`.
 9. Repetir la lectura de `latest.yml` con una cuenta no entitled y confirmar rechazo. No registrar headers ni tokens.
 10. Guardar como evidencia la ejecución de Actions, versión inicial/final, estados observados, validación de la firma interna y tiempos, sin credenciales.
 
@@ -158,9 +158,9 @@ El cliente configura `allowDowngrade = false`. Cambiar `latest.yml` a una versi�
 El rollback operativo es siempre forward-only:
 
 1. Identificar el último código conocido como bueno y aplicar sobre él la reversión o corrección necesaria.
-2. Incrementar SemVer por encima de cualquier versión ya activada. Si `1.1.4` es defectuosa, publicar como mínimo `1.1.5`; nunca volver a `1.1.3`.
+2. Incrementar SemVer por encima de cualquier versión ya activada. Si `1.1.5` es defectuosa, publicar como mínimo `1.1.6`; nunca volver a `1.1.4`.
 3. Ejecutar otra vez gates, firma Ed25519, evidencia y prueba manual.
-4. Crear y publicar el nuevo tag. Los clientes en `1.1.3` y `1.1.4` convergerán en `1.1.5`.
+4. Crear y publicar el nuevo tag. Los clientes en `1.1.4` y `1.1.5` convergerán en `1.1.6`.
 5. Conservar los objetos versionados anteriores para descargas en curso y auditoría. No sobrescribirlos ni borrarlos durante el incidente.
 
 Si todavía no se activó `latest.yml`, se puede abandonar el intento fallido sin afectar al canal. Una vez activado, priorizar la versión superior; ocultar metadata, retirar permisos o publicar una versión menor no es rollback.
