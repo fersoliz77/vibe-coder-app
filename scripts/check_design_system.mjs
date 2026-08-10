@@ -167,6 +167,7 @@ if (siblingRoot) {
     'design-tokens/tokens.json',
     'design-tokens/build.mjs',
     'design-tokens/components.css',
+    'design-tokens/migrate.mjs',
     'design-tokens/legacy-map.json',
     'design-tokens/exceptions.json',
     'public/theme-boot.js',
