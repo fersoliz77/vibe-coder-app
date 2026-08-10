@@ -50,8 +50,14 @@ jobs:
       - name: Run tests
         run: node --test --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=test-results.xml "tests/**/*.test.js"
 
+      # `continue-on-error` porque estos artefactos son diagnostico, no el
+      # resultado: cuando se lleno la cuota de almacenamiento de la cuenta, la
+      # subida fallo y el job murio ANTES de correr los gates, reportando como
+      # fallo de codigo algo que no lo era y ocultando si el codigo estaba bien.
+      # Que no se pueda guardar un informe no dice nada sobre el commit.
       - name: Upload test results
         if: ${{ !cancelled() }}
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: ci-smoke-non-deployable-desktop-test-results
@@ -71,14 +77,22 @@ jobs:
       - name: Build unpacked non-deployable Windows CI smoke artifact
         run: npm run package:dir
 
+      # Este es el que llena la cuota: `dist-electron/` es la app desempaquetada
+      # y pesa cientos de MB por corrida. Con siete dias de retencion y varios
+      # push por dia, la cuenta acumulo casi 10 GB.
+      #
+      # Lo que se quiere comprobar es que el empaquetado NO FALLA, y eso ya lo
+      # dice el paso anterior. Guardar el resultado solo sirve para inspeccionar
+      # una corrida puntual, asi que baja a dos dias y deja de subir la app
+      # desempaquetada: con `dist/` alcanza para mirar que se genero.
       - name: Upload non-deployable Windows smoke build
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: ci-smoke-non-deployable-desktop-windows-unpacked
           path: |
             dist/
-            dist-electron/
             ci-smoke-artifact-metadata.txt
             scripts/CI_SMOKE_NON_DEPLOYABLE_README.txt
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 2
