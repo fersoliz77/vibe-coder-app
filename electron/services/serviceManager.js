@@ -390,6 +390,7 @@ function setupServiceHandlers(ipcMain, diagnostics) {
       vercel: 'vercel login',
       supabase: 'supabase login',
       github: 'gh auth login',
+      firebase: 'firebase login',
     };
     return { command: commands[serviceName] || null };
   });

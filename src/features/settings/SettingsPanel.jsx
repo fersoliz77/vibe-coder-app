@@ -6,7 +6,7 @@ import { readAccessibility, saveAccessibility } from '../../utils/accessibility'
 import './SettingsPanel.css';
 
 // Los que el asistente de creacion exige o usa para el backend.
-const DELIVERY_SERVICES = ['github', 'vercel', 'supabase'];
+const DELIVERY_SERVICES = ['github', 'vercel', 'supabase', 'firebase'];
 
 const SETTINGS_TABS = [
   { id: 'ai', labelKey: 'settings.tabs.ai', descriptionKey: 'settings.tabs.aiCopy' },
@@ -272,7 +272,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
                 <div className="settings-delivery">
                   {DELIVERY_SERVICES.map((id) => {
                     const service = delivery.services.find((item) => item.id === id)
-                      ?? { id, name: id === 'github' ? 'GitHub' : id === 'vercel' ? 'Vercel' : 'Supabase', connected: false, checking: delivery.loading };
+                      ?? { id, name: id === 'github' ? 'GitHub' : id === 'vercel' ? 'Vercel' : id === 'supabase' ? 'Supabase' : 'Firebase', connected: false, checking: delivery.loading };
                     return (
                       <DeliveryProvider
                         key={id}

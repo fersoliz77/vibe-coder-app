@@ -15,3 +15,12 @@ test('project requirements distinguish ready connections from missing accounts',
   assert.match(locales, /Configuración > Conexiones/);
   assert.doesNotMatch(locales, /Qué hace falta/);
 });
+
+test('project requirements include both backends and default to Supabase first', () => {
+  assert.match(wizard, /useState\('supabase'\)/);
+  assert.ok(wizard.indexOf('value="supabase"') < wizard.indexOf('value="firebase"'));
+  assert.match(wizard, /Supabase —/);
+  assert.match(wizard, /Firebase —/);
+  assert.match(wizard, /optionalNotConnected/);
+  assert.match(wizard, /step === 5 && missingProviders\.length > 0/);
+});

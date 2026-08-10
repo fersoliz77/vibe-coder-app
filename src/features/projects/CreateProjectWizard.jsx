@@ -41,6 +41,8 @@ function normalizeOptions(raw = {}) {
     supabaseRegions: toOptions(raw.supabase?.regions ?? raw.supabaseRegions),
     githubUser: raw.githubUser || '',
     vercelUser: raw.vercelUser || '',
+    supabaseUser: raw.supabaseUser || '',
+    firebaseUser: raw.firebaseUser || '',
   };
 }
 
@@ -95,14 +97,14 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
   const [location, setLocation] = useState(FALLBACK_LOCATION);
   const [locationGrant, setLocationGrant] = useState('');
   const [webStack, setWebStack] = useState('next-ts');
-  const [backend, setBackend] = useState('firebase');
+  const [backend, setBackend] = useState('supabase');
   const [firebaseProjectId, setFirebaseProjectId] = useState('');
   const [firebaseIdEdited, setFirebaseIdEdited] = useState(false);
   const [firebaseLocation, setFirebaseLocation] = useState('');
   const [supabaseOrganization, setSupabaseOrganization] = useState('');
   const [supabaseRegion, setSupabaseRegion] = useState('');
   const [databasePassword, setDatabasePassword] = useState('');
-  const [options, setOptions] = useState({ firebaseLocations: [], supabaseOrganizations: [], supabaseRegions: [], githubUser: '', vercelUser: '' });
+  const [options, setOptions] = useState({ firebaseLocations: [], supabaseOrganizations: [], supabaseRegions: [], githubUser: '', vercelUser: '', supabaseUser: '', firebaseUser: '' });
   const [loadingSetup, setLoadingSetup] = useState(true);
   const [setupError, setSetupError] = useState('');
   const [fieldError, setFieldError] = useState('');
@@ -240,7 +242,7 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
       if (!supabaseRegion.trim()) return t('createProject.supabaseRegionRequired');
       if (databasePassword.length < 12) return t('createProject.passwordRequired');
     }
-    if (step === 5 && (!options.githubUser || !options.vercelUser)) return t('createProject.connectServices');
+    if (step === 5 && missingProviders.length > 0) return t('createProject.connectServices');
     return '';
   };
 
@@ -316,7 +318,11 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
     }
   };
 
-  const missingProviders = [options.githubUser ? null : 'github', options.vercelUser ? null : 'vercel'].filter(Boolean);
+  const missingProviders = [
+    options.githubUser ? null : 'github',
+    options.vercelUser ? null : 'vercel',
+    backend === 'supabase' ? (options.supabaseUser ? null : 'supabase') : (options.firebaseUser ? null : 'firebase'),
+  ].filter(Boolean);
 
   const renderStep = () => {
     if (step === 0) return (
@@ -339,6 +345,12 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
             </li>
             <li className={options.vercelUser ? 'is-ready' : ''}>
               Vercel — {options.vercelUser ? t('createProject.connectedAs', { user: options.vercelUser }) : t('createProject.accountDisconnected')}
+            </li>
+            <li className={options.supabaseUser ? 'is-ready' : ''}>
+              Supabase — {options.supabaseUser ? t('createProject.connectedAs', { user: options.supabaseUser }) : t(backend === 'supabase' ? 'createProject.accountDisconnected' : 'createProject.optionalNotConnected')}
+            </li>
+            <li className={options.firebaseUser ? 'is-ready' : ''}>
+              Firebase — {options.firebaseUser ? t('createProject.connectedAs', { user: options.firebaseUser }) : t(backend === 'firebase' ? 'createProject.accountDisconnected' : 'createProject.optionalNotConnected')}
             </li>
           </ul>
           {missingProviders.length > 0 && <p>{t('createProject.requirementsPending')}</p>}
@@ -370,8 +382,8 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
       <section className="cpw-step" aria-labelledby="cpw-step-title">
         <div className="cpw-step__intro"><span>{t('createProject.step', { number: 4 })}</span><h2 id="cpw-step-title" ref={titleRef} tabIndex="-1">{t('createProject.backendTitle')}</h2><p>{t('createProject.backendCopy')}</p></div>
         <div className="cpw-choice-grid">
-          <ChoiceCard name={`${radioId}-backend`} value="firebase" checked={backend === 'firebase'} onChange={() => setBackend('firebase')} icon="cloud" title="Firebase" description={t('createProject.firebaseCopy')} />
           <ChoiceCard name={`${radioId}-backend`} value="supabase" checked={backend === 'supabase'} onChange={() => setBackend('supabase')} icon="cloud" title="Supabase" description={t('createProject.supabaseCopy')} />
+          <ChoiceCard name={`${radioId}-backend`} value="firebase" checked={backend === 'firebase'} onChange={() => setBackend('firebase')} icon="cloud" title="Firebase" description={t('createProject.firebaseCopy')} />
         </div>
       </section>
     );

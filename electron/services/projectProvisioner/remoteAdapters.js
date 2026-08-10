@@ -16,6 +16,13 @@ async function getRuntimeOptions(runner) {
   } catch {
     options.supabaseOrganizations = [];
   }
+  options.supabaseUser = options.supabaseOrganizations[0]?.name || null;
+  try {
+    const output = (await runReadCommand(runner, 'firebase', ['login:list'])).stdout;
+    options.firebaseUser = output.match(/[\w.-]+@[\w.-]+\.\w+/)?.[0] || null;
+  } catch {
+    options.firebaseUser = null;
+  }
   try {
     options.githubUser = (await runReadCommand(runner, 'gh', ['api', 'user', '--jq', '.login'])).stdout.trim() || null;
   } catch {

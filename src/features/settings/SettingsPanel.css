@@ -46,7 +46,7 @@
 .settings-provider span:not(.status-dot) { color: var(--vc-text-3); font-size: var(--vc-text-xs); }
 .settings-provider-error { margin-top: var(--vc-space-2); color: var(--vc-warning); font-size: var(--vc-text-xs); }
 /* Conectar GitHub/Vercel: el estado solo no alcanzaba, hacia falta la accion. */
-.settings-delivery { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--vc-space-3); }
+.settings-delivery { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--vc-space-3); }
 .settings-delivery__item { display: grid; gap: var(--vc-space-2); }
 .settings-delivery__item .settings-provider { height: 100%; }
 .settings-delivery__connect { display: grid; gap: var(--vc-space-2); }

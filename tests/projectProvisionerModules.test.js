@@ -125,11 +125,14 @@ test('remote adapters expose sanitized runtime account metadata from read-only c
   const runner = async (command, args, options) => {
     calls.push({ command, args, options });
     if (command === 'supabase') return { stdout: '[{"id":"org_123","name":"Example"}]' };
+    if (command === 'firebase') return { stdout: 'Logged in as firebase@example.com' };
     if (command === 'gh') return { stdout: 'github-user\n' };
     return { stdout: 'vercel-user extra-output\n' };
   };
   const options = await getRuntimeOptions(runner);
   assert.deepEqual(options.supabaseOrganizations, [{ id: 'org_123', name: 'Example' }]);
+  assert.equal(options.supabaseUser, 'Example');
+  assert.equal(options.firebaseUser, 'firebase@example.com');
   assert.equal(options.githubUser, 'github-user');
   assert.equal(options.vercelUser, 'vercel-user');
   assert.equal(calls.every(({ options: value }) => value.kind === 'read' && value.timeout === 15_000), true);

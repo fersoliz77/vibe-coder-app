@@ -25,7 +25,8 @@ test('desktop settings keeps the navigation rail fixed while only long content s
   assert.match(styles, /\.settings-tabs \{[^}]*border-right:/);
   assert.match(styles, /\.settings-content \{[^}]*overflow-y: auto/);
   assert.match(styles, /\.settings-providers \{[^}]*repeat\(3/);
-  assert.match(styles, /\.settings-delivery \{[^}]*repeat\(3/);
+  assert.match(styles, /\.settings-delivery \{[^}]*repeat\(4/);
+  assert.match(panel, /'github', 'vercel', 'supabase', 'firebase'/);
 });
 
 test('new settings destinations are translated in English and Spanish', () => {
