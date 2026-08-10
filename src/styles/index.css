@@ -3,6 +3,7 @@
    Precision Studio: superficies solidas, un acento, densidad controlada
    ═══════════════════════════════════════════════════════════════════ */
 @import './tokens.css';
+@import './components.css';
 
 /* ─── Mapa de compatibilidad ─────────────────────────────────────────
    Los nombres historicos se conservan y ahora resuelven contra la capa

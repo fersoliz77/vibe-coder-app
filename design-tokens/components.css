@@ -1,0 +1,267 @@
+/* ═══════════════════════════════════════════════════════════════════
+   Vibe IDE Code — Primitivas compartidas
+
+   ARCHIVO FUENTE. Se copia a cada producto al correr `npm run tokens`;
+   la copia lleva encabezado de generado y no se edita a mano.
+
+   Por que existe: los dos productos definian `.btn` con la misma clase y
+   distinto resultado -radio 12px contra 8px, peso 600 contra 500, padding
+   literal contra tokens- y modificadores con gramatica distinta:
+   `.btn-primary` en la web, `.btn--primary` en el escritorio. Una regla
+   copiada de un producto al otro heredaba la base y perdia la variante,
+   sin que nada fallara.
+
+   Estas primitivas usan el prefijo `vc-` y conviven con las historicas.
+   La migracion las adopta pantalla por pantalla; nada se rompe mientras
+   tanto porque no comparten nombre con lo viejo.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* ─── Boton ─────────────────────────────────────────────────────────
+   Un solo objetivo tactil de 44px en todas las variantes. Es el minimo
+   que se puede acertar con el pulgar sin apuntar, y el que mas se
+   olvida cuando el boton se diseña con el mouse en la mano.          */
+.vc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--vc-space-2);
+  min-height: 44px;
+  padding: var(--vc-space-2) var(--vc-space-4);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-1);
+  font-family: var(--vc-font-sans);
+  font-size: var(--vc-text-base);
+  font-weight: 500;
+  line-height: var(--vc-leading-tight);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: var(--vc-transition-fast);
+}
+
+.vc-btn:hover:not(:disabled):not([aria-busy='true']) {
+  background: var(--vc-surface-3);
+  border-color: var(--vc-line-strong);
+}
+
+/* El foco no se hereda del navegador: con fondo propio, el anillo por
+   defecto queda invisible sobre la mitad de las variantes. */
+.vc-btn:focus-visible {
+  outline: var(--vc-focus-ring);
+  outline-offset: var(--vc-focus-offset);
+}
+
+/*
+ * Deshabilitado y ocupado se ven parecido pero no son lo mismo: uno no
+ * se puede usar, el otro esta trabajando y va a volver. Los dos bloquean
+ * el puntero; solo el segundo deja el texto legible, porque el usuario
+ * necesita seguir leyendo que era lo que pidio.
+ */
+.vc-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-btn[aria-busy='true'] {
+  cursor: progress;
+}
+
+.vc-btn[aria-busy='true']::after {
+  content: '';
+  width: 1em;
+  height: 1em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: var(--vc-radius-full);
+  animation: vc-spin 640ms linear infinite;
+}
+
+@keyframes vc-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Variantes. Cada fondo solido trae su propio color de texto: heredar el
+   del boton base es como se rompen los contrastes en silencio. */
+.vc-btn--primary {
+  background: var(--vc-accent);
+  border-color: var(--vc-accent);
+  color: var(--vc-on-accent);
+  font-weight: 600;
+}
+
+.vc-btn--primary:hover:not(:disabled):not([aria-busy='true']) {
+  background: var(--vc-accent-hover);
+  border-color: var(--vc-accent-hover);
+}
+
+.vc-btn--danger {
+  background: var(--vc-danger);
+  border-color: var(--vc-danger);
+  color: var(--vc-on-danger);
+  font-weight: 600;
+}
+
+.vc-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--vc-text-2);
+}
+
+.vc-btn--ghost:hover:not(:disabled):not([aria-busy='true']) {
+  background: var(--vc-surface-2);
+  border-color: transparent;
+  color: var(--vc-text-1);
+}
+
+/* Cuadrado y con nombre accesible obligatorio: un icono sin etiqueta es
+   un boton mudo para quien no lo ve. Lo verifica check_static_a11y. */
+.vc-btn--icon {
+  width: 44px;
+  min-width: 44px;
+  padding: 0;
+}
+
+/* Tamaños. El alto minimo no baja de 44px ni en `sm`: lo que se achica
+   es el aire horizontal y el texto, no el area que hay que acertar. */
+.vc-btn--sm {
+  padding: var(--vc-space-1) var(--vc-space-3);
+  font-size: var(--vc-text-sm);
+}
+
+.vc-btn--lg {
+  min-height: 52px;
+  padding: var(--vc-space-3) var(--vc-space-6);
+  font-size: var(--vc-text-md);
+}
+
+/* ─── Campo ─────────────────────────────────────────────────────────
+   La etiqueta siempre visible. Un placeholder no es una etiqueta:
+   desaparece justo cuando el usuario necesita recordar que escribia. */
+.vc-field {
+  display: grid;
+  gap: var(--vc-space-2);
+}
+
+.vc-field__label {
+  color: var(--vc-text-2);
+  font-size: var(--vc-text-sm);
+  font-weight: 500;
+}
+
+.vc-field__input {
+  min-height: 44px;
+  padding: var(--vc-space-2) var(--vc-space-3);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-1);
+  color: var(--vc-text-1);
+  font-family: var(--vc-font-sans);
+  font-size: var(--vc-text-base);
+  transition: var(--vc-transition-fast);
+}
+
+.vc-field__input:focus-visible {
+  outline: var(--vc-focus-ring);
+  outline-offset: var(--vc-focus-offset);
+  border-color: var(--vc-accent);
+}
+
+.vc-field__input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.vc-field__hint {
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-xs);
+}
+
+/*
+ * El error no se comunica solo con color: quien no distingue rojo de gris
+ * necesita el texto, y quien usa lector de pantalla necesita que la
+ * relacion este declarada con aria-describedby en el marcado.
+ */
+.vc-field__error {
+  display: flex;
+  align-items: center;
+  gap: var(--vc-space-2);
+  color: var(--vc-danger);
+  font-size: var(--vc-text-xs);
+}
+
+.vc-field__input[aria-invalid='true'] {
+  border-color: var(--vc-danger);
+}
+
+/* ─── Superficie ────────────────────────────────────────────────────*/
+.vc-surface {
+  padding: var(--vc-space-4);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-lg);
+  background: var(--vc-surface-1);
+}
+
+.vc-surface--raised {
+  background: var(--vc-surface-2);
+  box-shadow: var(--vc-shadow-md);
+}
+
+/* ─── Estados de contenido ──────────────────────────────────────────
+   Cargando, vacio y error son tres pantallas distintas, no una sola con
+   otro texto. Se olvidan siempre y son la mitad de la vida de una vista. */
+.vc-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--vc-space-3);
+  padding: var(--vc-space-12) var(--vc-space-6);
+  text-align: center;
+  color: var(--vc-text-2);
+}
+
+.vc-state__title {
+  color: var(--vc-text-1);
+  font-size: var(--vc-text-md);
+  font-weight: 600;
+}
+
+.vc-state__detail {
+  max-width: 46ch;
+  color: var(--vc-text-3);
+  font-size: var(--vc-text-sm);
+  line-height: var(--vc-leading-read);
+}
+
+.vc-state--error .vc-state__title {
+  color: var(--vc-danger);
+}
+
+/* ─── Capas ─────────────────────────────────────────────────────────
+   Overlay y modal usan la escala declarada, no un numero elegido a ojo. */
+.vc-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: var(--vc-z-overlay);
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.vc-modal {
+  position: fixed;
+  z-index: var(--vc-z-modal);
+  max-width: min(92vw, 560px);
+  padding: var(--vc-space-6);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-lg);
+  background: var(--vc-surface-2);
+  box-shadow: var(--vc-shadow-lg);
+}
+
+.vc-toast {
+  position: fixed;
+  z-index: var(--vc-z-toast);
+  padding: var(--vc-space-3) var(--vc-space-4);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-3);
+  box-shadow: var(--vc-shadow-md);
+}

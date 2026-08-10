@@ -166,6 +166,7 @@ if (siblingRoot) {
     // capas distintas y la paridad se pierde en el origen, no en la copia.
     'design-tokens/tokens.json',
     'design-tokens/build.mjs',
+    'design-tokens/components.css',
     'design-tokens/legacy-map.json',
     'design-tokens/exceptions.json',
     'public/theme-boot.js',

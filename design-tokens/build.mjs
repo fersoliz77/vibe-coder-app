@@ -189,6 +189,19 @@ const targets = roots
   .map((root) => TOKEN_FILES.map((file) => join(root, file)).find((path) => existsSync(path)))
   .filter(Boolean);
 
+/*
+ * La capa de primitivas viaja igual que la de tokens: una fuente, una copia
+ * generada al lado de tokens.css en cada producto. Es CSS a mano y no datos,
+ * asi que no se compone: se copia con encabezado, y el mismo --check impide
+ * que alguien edite la copia.
+ */
+const componentsSource = await readFile(new URL('components.css', import.meta.url), 'utf8');
+const componentsCss = componentsSource.replace(
+  'ARCHIVO FUENTE. Se copia a cada producto al correr `npm run tokens`;\n   la copia lleva encabezado de generado y no se edita a mano.',
+  `ARCHIVO GENERADO. No editar a mano: se regenera y se pierde el cambio.\n   Fuente:  design-tokens/components.css\n   Generar: npm run tokens\n   Contrato: v${contract.version} (${hash})`,
+);
+const componentTargets = targets.map((path) => path.replace(/tokens\.css$/, 'components.css'));
+
 if (targets.length === 0) {
   console.error('Tokens: no se encontro ningun tokens.css donde escribir.');
   process.exit(1);
@@ -203,12 +216,15 @@ if (targets.length === 0) {
 const sameContent = (a, b) => a !== null && a.replaceAll('\r\n', '\n') === b.replaceAll('\r\n', '\n');
 
 const stale = [];
-for (const target of targets) {
+const emit = async (target, contents) => {
   const current = await readFile(target, 'utf8').catch(() => null);
-  if (sameContent(current, css)) continue;
+  if (sameContent(current, contents)) return;
   if (check) stale.push(target);
-  else await writeFile(target, css, 'utf8');
-}
+  else await writeFile(target, contents, 'utf8');
+};
+
+for (const target of targets) await emit(target, css);
+for (const target of componentTargets) await emit(target, componentsCss);
 
 if (check) {
   if (stale.length) {
