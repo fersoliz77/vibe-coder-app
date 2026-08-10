@@ -17,7 +17,7 @@ const AUTH_CHANNELS = new Set([
   'auth:open-help',
 ]);
 
-const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll']);
+const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll', 'updates:get-state']);
 
 function canAccessChannel(policy, channel) {
   if (AUTH_CHANNELS.has(channel) || channel.startsWith('window:') || channel === 'diagnostics:export') return true;

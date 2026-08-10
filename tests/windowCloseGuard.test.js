@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { EventEmitter } = require('events');
-const { installCloseGuard } = require('../electron/ipc/windowManager');
+const { installCloseGuard, prepareWindowForUpdateInstall } = require('../electron/ipc/windowManager');
 
 test('native close requests renderer confirmation once and approved close does not loop', () => {
   const window = new EventEmitter();
@@ -31,4 +31,20 @@ test('close guard is installed once on every recreated BrowserWindow', () => {
   installCloseGuard(second);
   assert.equal(first.listenerCount('close'), 1);
   assert.equal(second.listenerCount('close'), 1);
+});
+
+test('update installation explicitly bypasses and can restore the native close guard', () => {
+  const window = new EventEmitter();
+  window.webContents = { send() {} };
+  window.isDestroyed = () => false;
+  installCloseGuard(window);
+
+  const revoke = prepareWindowForUpdateInstall(window);
+  let prevented = false;
+  window.emit('close', { preventDefault() { prevented = true; } });
+  assert.equal(prevented, false);
+
+  revoke();
+  window.emit('close', { preventDefault() { prevented = true; } });
+  assert.equal(prevented, true);
 });

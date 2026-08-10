@@ -18,6 +18,7 @@ import './styles/App.css';
 import { VIEWS, restoreView } from './utils/viewRestore';
 import AppSplash from './components/AppSplash';
 import { applyAccessibility, readAccessibility } from './utils/accessibility';
+import MandatoryUpdateGate from './features/updates/MandatoryUpdateGate';
 
 const ClaudePanel = lazy(() => import('./features/claude/ClaudePanel'));
 const OpenAIPanel = lazy(() => import('./features/openai/OpenAIPanel'));
@@ -475,6 +476,7 @@ export default function App() {
     closeCheckRef.current = check;
     return () => { if (closeCheckRef.current === check) closeCheckRef.current = null; };
   }, []);
+  const prepareToRestart = useCallback(async () => !closeCheckRef.current || await closeCheckRef.current() !== false, []);
 
   useEffect(() => {
     applyAccessibility(readAccessibility());
@@ -489,5 +491,13 @@ export default function App() {
   }, [theme]);
 
   if (!initialized) return <AppSplash error={initializationError} onRetry={init} />;
-  return <Suspense fallback={<AppSplash />}><AuthGate><Workspace setCloseCheck={setCloseCheck} /></AuthGate></Suspense>;
+  return (
+    <Suspense fallback={<AppSplash />}>
+      <AuthGate>
+        <MandatoryUpdateGate prepareToRestart={prepareToRestart}>
+          <Workspace setCloseCheck={setCloseCheck} />
+        </MandatoryUpdateGate>
+      </AuthGate>
+    </Suspense>
+  );
 }

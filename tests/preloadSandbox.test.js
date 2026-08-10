@@ -32,10 +32,22 @@ test('sandboxed preload loads using only Electron and exposes a working bridge',
   assert.deepEqual(calls[1], ['invoke', 'diagnostics:export']);
   assert.equal(await exposed.electronAPI.auth.google(), 'ok');
   assert.deepEqual(calls[2], ['invoke', 'auth:google']);
+  assert.equal(await exposed.electronAPI.updates.check(), 'ok');
+  assert.deepEqual(calls[3], ['invoke', 'updates:check']);
+  assert.equal(await exposed.electronAPI.updates.download(), 'ok');
+  assert.deepEqual(calls[4], ['invoke', 'updates:download']);
+  assert.equal(await exposed.electronAPI.updates.install(), 'ok');
+  assert.deepEqual(calls[5], ['invoke', 'updates:install']);
 
   let closeRequested = false;
   const unsubscribe = exposed.electronAPI.window.onCloseRequested(() => { closeRequested = true; });
   ipcRenderer.emit('window:close-requested', {});
   assert.equal(closeRequested, true);
   unsubscribe();
+
+  let updateState;
+  const unsubscribeUpdate = exposed.electronAPI.updates.onStateChanged((state) => { updateState = state; });
+  ipcRenderer.emit('updates:state-changed', {}, { status: 'available', mandatory: true, blocking: true });
+  assert.equal(updateState.status, 'available');
+  unsubscribeUpdate();
 });

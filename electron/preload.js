@@ -23,6 +23,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exportReport: () => ipcRenderer.invoke('diagnostics:export'),
   },
 
+  updates: {
+    getState: () => ipcRenderer.invoke('updates:get-state'),
+    check: () => ipcRenderer.invoke('updates:check'),
+    download: () => ipcRenderer.invoke('updates:download'),
+    install: () => ipcRenderer.invoke('updates:install'),
+    onStateChanged: (callback) => subscribe('updates:state-changed', callback, (state) => [state]),
+  },
+
   // ─── Window Controls ────────────────────────────────
   window: {
     minimize: () => ipcRenderer.send('window:minimize'),

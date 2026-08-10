@@ -6,20 +6,22 @@ This workflow prepares and checks a Windows release candidate using only an exis
 
 The local manifest is release-candidate evidence, not proof that a release was published. Its `publishedAt` value is the proposed publication timestamp and must be reviewed or regenerated at the real publication gate.
 
+The current private publication and mandatory-update procedure is `Docs/04-Operations/PRIVATE_AUTO_UPDATES.md`. None of the commands in this document uploads the installer, blockmap, `latest.yml`, or any other object.
+
 ## Manifest Contract
 
 The canonical JSON Schema is `release/release-manifest.schema.json`. Runtime validation is dependency-free in `scripts/release-manifest.js` and requires exactly these fields:
 
 - `version`: strict SemVer application version; `stable` rejects prerelease versions
 - `channel`: `internal`, `pilot`, or `stable`
-- `url`: intended public HTTPS `.exe` URL, with no credentials or localhost endpoint
+- `url`: intended HTTPS `.exe` URL, including a private authenticated endpoint when applicable, with no credentials or localhost endpoint
 - `sha256`: lowercase SHA-256 of the installer
 - `size`: installer size in bytes, limited to JavaScript's safe integer range
 - `compatibility.minimumBackendVersion`: oldest compatible backend version
 - `compatibility.minimumClientVersion`: oldest compatible client version
 - `publishedAt`: the accepted RFC 3339 subset: UTC `Z`, required seconds, optional 1-9 fractional digits, and no leap seconds
 
-No updater consumes this manifest yet. Adding an updater requires an explicit dependency, threat review, signed artifacts, certificate lifecycle, rollback design, and a separately approved application behavior change.
+The updater does not consume this JSON evidence manifest. The implemented private updater consumes the signed release's `latest.yml`, installer, and blockmap according to `PRIVATE_AUTO_UPDATES.md`.
 
 ## Offline Package
 
@@ -75,8 +77,8 @@ npm run release:smoke -- --manifest "temp/build/release-manifest.json" --install
 
 ## Explicitly Pending
 
-- **PENDING: Authenticode signing.** No certificate is configured and these scripts never sign.
-- **PENDING: updater implementation.** The app does not fetch or consume this manifest.
-- **PENDING: release publication.** No command in this workflow uploads an installer or manifest.
+- **OUTSIDE THIS FLOW: update metadata signing.** These offline commands never sign `latest.yml`; the production workflow uses the free `UPDATE_SIGNING_PRIVATE_KEY`, and the app verifies it with its embedded public key. Windows Authenticode is intentionally not used in this initial no-cost stage.
+- **OUTSIDE THIS FLOW: updater validation.** This workflow does not exercise private Storage, JWT/RLS, mandatory states, download, restart, or installation.
+- **OUTSIDE THIS FLOW: release publication.** No command in this workflow uploads an installer, blockmap, `latest.yml`, or manifest.
 - **PENDING: production URL and compatibility approval.** Placeholder values are not release approval.
 - **PENDING: signed-install manual validation.** Do not silently install a candidate; use an approved disposable test environment when this gate is authorized.

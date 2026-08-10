@@ -43,7 +43,7 @@ test('close confirmation is registered above auth and delegates dirty workspace 
   assert.match(app, /onCloseRequested/);
   assert.match(app, /closeCheckRef\.current/);
   assert.match(app, /confirmClose\(\)/);
-  assert.match(app, /<AuthGate><Workspace setCloseCheck=/);
+  assert.match(app, /<AuthGate>[\s\S]*?<MandatoryUpdateGate[\s\S]*?<Workspace setCloseCheck=/);
   assert.doesNotMatch(app.slice(0, app.indexOf('export default function App')), /onCloseRequested/);
 });
 

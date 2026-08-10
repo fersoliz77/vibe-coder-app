@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { MAX_OFFLINE_LEASE_MS, getEffectivePolicy, getLeaseExpiry, getLeaseTimerDelay } = require('../electron/auth/policy');
 const { canAccessChannel } = require('../electron/auth/ipcGuard');
-const { AuthService } = require('../electron/auth/authService');
+const { AuthService, readConfig } = require('../electron/auth/authService');
 
 const validatedAt = '2026-07-01T00:00:00.000Z';
 
@@ -353,5 +353,52 @@ test('restricted IPC permits state reads but denies productive actions', () => {
   assert.equal(canAccessChannel('denied', 'auth:google'), true);
   assert.equal(canAccessChannel('denied', 'auth:cancel-oauth'), true);
   assert.equal(canAccessChannel('denied', 'auth:unknown'), false);
+  assert.equal(canAccessChannel('denied', 'updates:get-state'), true);
+  assert.equal(canAccessChannel('denied', 'updates:check'), false);
+  assert.equal(canAccessChannel('restricted', 'updates:download'), false);
   assert.equal(canAccessChannel('active', 'fs:write-file'), true);
+});
+
+test('update credentials are available only to active main-process policy', () => {
+  const service = Object.create(AuthService.prototype);
+  service.config = {
+    missing: [],
+    supabaseUrl: 'https://project.supabase.co',
+    anonKey: 'anon-key',
+    updateBucket: 'desktop-releases',
+    updateChannel: 'stable',
+  };
+  service.record = createSessionRecord();
+
+  assert.deepEqual(service.getUpdateCredentials(), {
+    supabaseUrl: 'https://project.supabase.co',
+    accessToken: 'old-access',
+    apiKey: 'anon-key',
+    bucket: 'desktop-releases',
+    channel: 'stable',
+  });
+
+  service.record.account.status = 'restricted';
+  assert.equal(service.getUpdateCredentials(), null);
+});
+
+test('update storage config has safe defaults and accepts explicit environment overrides', () => {
+  const previousBucket = process.env.VIBE_UPDATE_BUCKET;
+  const previousChannel = process.env.VIBE_UPDATE_CHANNEL;
+  try {
+    delete process.env.VIBE_UPDATE_BUCKET;
+    delete process.env.VIBE_UPDATE_CHANNEL;
+    assert.equal(readConfig().updateBucket, 'desktop-releases');
+    assert.equal(readConfig().updateChannel, 'stable');
+
+    process.env.VIBE_UPDATE_BUCKET = 'private-desktop';
+    process.env.VIBE_UPDATE_CHANNEL = 'preview';
+    assert.equal(readConfig().updateBucket, 'private-desktop');
+    assert.equal(readConfig().updateChannel, 'preview');
+  } finally {
+    if (previousBucket == null) delete process.env.VIBE_UPDATE_BUCKET;
+    else process.env.VIBE_UPDATE_BUCKET = previousBucket;
+    if (previousChannel == null) delete process.env.VIBE_UPDATE_CHANNEL;
+    else process.env.VIBE_UPDATE_CHANNEL = previousChannel;
+  }
 });

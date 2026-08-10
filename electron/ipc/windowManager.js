@@ -6,10 +6,16 @@ function installCloseGuard(mainWindow) {
   if (!mainWindow || mainWindow.__vibeCloseGuardInstalled) return;
   mainWindow.__vibeCloseGuardInstalled = true;
   mainWindow.on('close', (event) => {
-    if (mainWindow.__vibeCloseApproved) return;
+    if (mainWindow.__vibeCloseApproved || mainWindow.__vibeUpdateInstallApproved) return;
     event.preventDefault();
     mainWindow.webContents.send('window:close-requested');
   });
+}
+
+function prepareWindowForUpdateInstall(mainWindow) {
+  if (!mainWindow || mainWindow.isDestroyed?.()) return () => {};
+  mainWindow.__vibeUpdateInstallApproved = true;
+  return () => { mainWindow.__vibeUpdateInstallApproved = false; };
 }
 
 function setupWindowHandlers(getMainWindow) {
@@ -55,4 +61,4 @@ function setupWindowHandlers(getMainWindow) {
   windowHandlersRegistered = true;
 }
 
-module.exports = { installCloseGuard, setupWindowHandlers };
+module.exports = { installCloseGuard, prepareWindowForUpdateInstall, setupWindowHandlers };

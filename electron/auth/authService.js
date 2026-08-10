@@ -29,9 +29,11 @@ function readConfig() {
     anonKey: process.env.VIBE_SUPABASE_ANON_KEY || packaged.anonKey,
     accessRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || packaged.accessRpc || 'get_desktop_access',
     helpUrl: process.env.VIBE_AUTH_HELP_URL || packaged.helpUrl || null,
+    updateBucket: process.env.VIBE_UPDATE_BUCKET || packaged.updateBucket || 'desktop-releases',
+    updateChannel: process.env.VIBE_UPDATE_CHANNEL || packaged.updateChannel || 'stable',
   };
   const missing = Object.entries(config)
-    .filter(([key, value]) => key !== 'helpUrl' && !value)
+    .filter(([key, value]) => !['helpUrl', 'updateBucket', 'updateChannel'].includes(key) && !value)
     .map(([key]) => key);
   return { ...config, missing };
 }
@@ -242,6 +244,17 @@ class AuthService {
       anonKey: this.config.anonKey,
       accessToken: this.record.session.access_token,
       userId: this.record.session.user.id,
+    };
+  }
+
+  getUpdateCredentials() {
+    if (this.getPolicy() !== 'active' || !this.record?.session?.access_token) return null;
+    return {
+      supabaseUrl: this.config.supabaseUrl,
+      accessToken: this.record.session.access_token,
+      apiKey: this.config.anonKey,
+      bucket: this.config.updateBucket,
+      channel: this.config.updateChannel,
     };
   }
 
@@ -570,4 +583,4 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
   return notify;
 }
 
-module.exports = { AUTH_REQUEST_TIMEOUT_MS, AuthService, setupAuthHandlers };
+module.exports = { AUTH_REQUEST_TIMEOUT_MS, AuthService, readConfig, setupAuthHandlers };

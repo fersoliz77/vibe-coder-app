@@ -1,6 +1,6 @@
 {
   "name": "vibe-ide-coder",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "author": "Vibe IDE Code",
   "main": "electron/main.js",
@@ -25,7 +25,8 @@
     "release:manifest": "node scripts/generate-release-manifest.js",
     "release:validate": "node scripts/validate-release-manifest.js",
     "release:verify-installer": "node scripts/verify-windows-installer.js",
-    "release:smoke": "node scripts/release-smoke.js"
+    "release:smoke": "node scripts/release-smoke.js",
+    "release:sign-update": "node scripts/sign-update-metadata.js"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -44,7 +45,7 @@
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-web-links": "^0.12.0",
     "@xterm/xterm": "^6.0.0",
-    "electron-updater": "^6.6.2",
+    "electron-updater": "6.8.9",
     "marked": "^15.0.0",
     "node-pty": "^1.0.0",
     "prismjs": "^1.30.0",
@@ -60,7 +61,8 @@
     "electron-builder": "^26.15.3",
     "playwright": "^1.61.1",
     "vite": "^6.3.0",
-    "wait-on": "^9.1.0"
+    "wait-on": "^9.1.0",
+    "yaml": "2.9.0"
   },
   "build": {
     "appId": "com.vibeidecoder.app",
@@ -92,6 +94,13 @@
       "target": "nsis",
       "icon": "public/icon.png"
     },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://updates.invalid/stable",
+        "channel": "stable"
+      }
+    ],
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true

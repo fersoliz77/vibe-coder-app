@@ -3,7 +3,7 @@ const path = require('path');
 const { fileURLToPath } = require('url');
 const os = require('os');
 const fs = require('fs');
-const { installCloseGuard, setupWindowHandlers } = require('./ipc/windowManager');
+const { installCloseGuard, prepareWindowForUpdateInstall, setupWindowHandlers } = require('./ipc/windowManager');
 const { setupDialogHandlers } = require('./ipc/dialogManager');
 const { setupFileSystemHandlers } = require('./ipc/fileSystemManager');
 const { setupServiceHandlers } = require('./services/serviceManager');
@@ -25,6 +25,7 @@ const { getLeaseTimerDelay } = require('./auth/policy');
 const { writeJsonAtomic } = require('./services/atomicJson');
 const { classifyError, diagnostics, recordUnhandledRejection } = require('./diagnostics/logger');
 const { setupDiagnosticsHandlers } = require('./diagnostics/reportManager');
+const { UpdateManager, setupUpdateHandlers } = require('./services/updateManager');
 
 process.on('uncaughtExceptionMonitor', (error, origin) => {
   diagnostics.log('main', 'uncaught-error', { ...classifyError(error, 'uncaught-exception'), origin });
@@ -395,6 +396,7 @@ if (isSandboxSmokeTest) {
   let adminSignupAlerts;
   let studentBroadcastAlerts;
   let projectProvisioner;
+  let updateManager;
   const revalidateAndNotify = async () => {
     if (!authService.getState().authenticated) return;
     await authService.revalidate();
@@ -435,12 +437,20 @@ if (isSandboxSmokeTest) {
     authRealtime?.sync().catch(() => {});
     adminSignupAlerts?.sync().catch(() => {});
     studentBroadcastAlerts?.sync().catch(() => {});
+    updateManager?.handleAuthState(state).catch(() => {});
   };
   installIpcAuthorization(ipcMain, () => authService.getPolicy(), () => mainWindow);
   notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState);
   authRealtime = new AuthRealtime(authService, revalidateAndNotify);
   adminSignupAlerts = new AdminSignupAlerts(authService);
   studentBroadcastAlerts = new StudentBroadcastAlerts(authService);
+  updateManager = new UpdateManager({
+    app,
+    authService,
+    getMainWindow: () => mainWindow,
+    prepareWindowForUpdateInstall,
+  });
+  setupUpdateHandlers(ipcMain, updateManager);
   handleAuthState(authService.getState());
   for (const callbackUrl of pendingAuthCallbacks.splice(0)) {
     handleAuthCallback(callbackUrl).catch(() => {});
@@ -457,6 +467,7 @@ if (isSandboxSmokeTest) {
     authRealtime.stop().catch(() => {});
     adminSignupAlerts.stop().catch(() => {});
     studentBroadcastAlerts.stop().catch(() => {});
+    updateManager.dispose();
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
     terminateAllOpenCodeProcesses();

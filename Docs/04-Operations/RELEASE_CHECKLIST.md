@@ -4,6 +4,8 @@
 
 Use this checklist before packaging or shipping a meaningful build.
 
+Private Windows publication and mandatory-update operations follow `Docs/04-Operations/PRIVATE_AUTO_UPDATES.md`. The offline preparation document is evidence-only and never publishes.
+
 ## Pre-Release Review
 
 - confirm `Docs/04-Operations/CHANGELOG.md` is up to date
@@ -74,6 +76,7 @@ Before release, specifically review these areas:
 - explorer file moves and nested folder behavior
 - store-backed persistence and project resume behavior
 - Electron IPC changes
+- private updater state transitions, Supabase entitlement/RLS, and authenticated artifact access
 - native dependency assumptions
 - Git action behavior inside the explorer
 
@@ -93,14 +96,20 @@ Do not consider the release ready unless:
 - documentation is current
 - local manifest, relative checksum, PE structure, x64 unpacked app, and smoke checks pass
 - installer configuration contains no automatic external-tool installation
+- `latest.yml` has a valid Ed25519 signature produced by `UPDATE_SIGNING_PRIVATE_KEY`
+- installer size and SHA-512 exactly match the signed metadata
+- the initial Windows `Unknown publisher` warning is documented for this no-cost stage
 
-## Mandatory Pending Gates
+## Private Publication Gate
 
-An offline candidate is **not publishable** while any item below remains pending:
+Before pushing or manually dispatching a release tag:
 
-- [ ] **PENDING: Authenticode signing and certificate trust verification**
-- [ ] **PENDING: updater implementation and security review**
-- [ ] **PENDING: release publication approval and upload**
-- [ ] **PENDING: final production URL and compatibility approval**
+- [ ] Supabase migrations `20260809120000` and `20260809130000` are deployed and verified as described in `PRIVATE_AUTO_UPDATES.md`
+- [ ] tag is exactly `vX.Y.Z` and matches `package.json`
+- [ ] required GitHub `production` secrets and environment approval are available
+- [ ] target account has effective `active` desktop entitlement and the bucket remains private
+- [ ] workflow uploads installer, blockmap, and `latest.yml` in that order
+- [ ] real signed-update validation and a forward-only rollback version are planned
+- [ ] `1.0.0` users are covered by the manual `1.1.0` bootstrap; Storage publication alone cannot update them
 
-Do not implement automatic updates without an approved dependency and signing certificate. Do not silently install the NSIS package during release preparation.
+Do not publish from the offline preparation flow or manually upload `latest.yml` ahead of its versioned artifacts. A rollback must be a new higher version, never a downgrade or a moved tag.
