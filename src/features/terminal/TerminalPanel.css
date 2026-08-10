@@ -3,18 +3,18 @@
   display: flex;
   flex-direction: column;
   height: 100%;
-  background: var(--bg-deepest);
+  background: var(--vc-surface-0);
 }
 
 /* Tabs */
 .terminal-panel__tabs {
   display: flex;
   align-items: center;
-  background: var(--bg-base);
-  border-bottom: 1px solid var(--glass-border);
-  padding: 0 var(--space-sm);
+  background: var(--vc-surface-2);
+  border-bottom: 1px solid var(--vc-line);
+  padding: 0 var(--vc-space-2);
   height: 40px;
-  gap: var(--space-xs);
+  gap: var(--vc-space-1);
 }
 
 .terminal-panel__tabs-list {
@@ -32,14 +32,14 @@
 .terminal-panel__tab {
   display: flex;
   align-items: center;
-  gap: var(--space-xs);
-  padding: var(--space-xs) var(--space-md);
+  gap: var(--vc-space-1);
+  padding: var(--vc-space-1) var(--vc-space-4);
   height: 32px;
   border: none;
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  border-radius: var(--vc-radius-xs) var(--vc-radius-xs) 0 0;
   background: transparent;
-  color: var(--text-tertiary);
-  font-family: var(--font-sans);
+  color: var(--vc-text-3);
+  font-family: var(--vc-font-sans);
   font-size: var(--vc-text-base);
   font-weight: 500;
   cursor: pointer;
@@ -48,14 +48,14 @@
 }
 
 .terminal-panel__tab:hover {
-  background: var(--glass-hover);
-  color: var(--text-secondary);
+  background: var(--vc-surface-3);
+  color: var(--vc-text-2);
 }
 
 .terminal-panel__tab--active {
-  background: var(--bg-deepest);
-  color: var(--text-primary);
-  border-bottom: 2px solid var(--accent-primary);
+  background: var(--vc-surface-0);
+  color: var(--vc-text-1);
+  border-bottom: 2px solid var(--vc-accent);
 }
 
 .terminal-panel__tab-close {
@@ -66,10 +66,10 @@
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   font-size: 16px;
   cursor: pointer;
-  border-radius: var(--radius-sm);
+  border-radius: var(--vc-radius-xs);
   opacity: 0;
   transition: var(--vc-transition-fast);
 }
@@ -79,8 +79,8 @@
 }
 
 .terminal-panel__tab-close:hover {
-  background: var(--status-error-bg);
-  color: var(--status-error);
+  background: var(--vc-danger-soft);
+  color: var(--vc-danger);
 }
 
 .terminal-panel__new-tab {
@@ -90,22 +90,22 @@
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--vc-radius-xs);
   background: transparent;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   cursor: pointer;
   transition: var(--vc-transition-fast);
 }
 
 .terminal-panel__new-tab:hover {
-  background: var(--glass-hover);
-  color: var(--accent-primary);
+  background: var(--vc-surface-3);
+  color: var(--vc-accent);
 }
 
 /* Terminal Content */
 .terminal-panel__content {
   flex: 1;
-  padding: var(--space-sm);
+  padding: var(--vc-space-2);
   overflow: hidden;
 }
 
@@ -124,7 +124,7 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: var(--space-md);
+  gap: var(--vc-space-4);
 }
 
 /* Una sesion cuyo shell no arranco no monta xterm: en su lugar se explica. */
@@ -195,11 +195,11 @@
 }
 .terminal-panel__fallback {
   padding: 16px;
-  color: var(--text-tertiary);
-  font-family: var(--font-mono);
+  color: var(--vc-text-3);
+  font-family: var(--vc-font-mono);
   font-size: 13px;
 }
 
 .terminal-panel__fallback span {
-  color: var(--accent-primary);
+  color: var(--vc-accent);
 }
