@@ -676,14 +676,33 @@ function cancelEnvironmentInstallation() {
 }
 
 function setupEnvironmentHandlers(ipcMain, getMainWindow) {
+  let installationState = { status: 'idle', progress: null, revision: 0 };
+  const publishInstallationProgress = (progress) => {
+    let status = 'installing';
+    if (progress?.type === 'complete') status = progress.success ? 'completed' : 'error';
+    else if (progress?.type === 'error') status = 'error';
+    else if (progress?.type === 'cancelled') status = 'cancelled';
+    installationState = { status, progress, revision: installationState.revision + 1 };
+    const mainWindow = getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('setup:environment-progress', progress);
+    }
+  };
+
+  ipcMain.handle('setup:environment-state', () => installationState);
   ipcMain.handle('setup:environment-check', (_event, options) => checkEnvironment(options));
-  ipcMain.handle('setup:environment-install', (_event, options) => {
-    return installAllEnvironment(options, (progress) => {
-      const mainWindow = getMainWindow();
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send('setup:environment-progress', progress);
-      }
-    });
+  ipcMain.handle('setup:environment-install', async (_event, options) => {
+    if (activeInstallation) return { success: false, busy: true, error: 'Ya hay una instalación del entorno en curso.', steps: [] };
+    publishInstallationProgress({ type: 'checking', message: 'Comprobando el entorno actual...' });
+    const result = await installAllEnvironment(options, publishInstallationProgress);
+    if (installationState.status === 'installing') {
+      publishInstallationProgress({
+        type: result.cancelled ? 'cancelled' : result.success ? 'complete' : 'error',
+        message: result.error || (result.success ? 'Instalación finalizada.' : 'La instalación no pudo completarse.'),
+        success: Boolean(result.success),
+      });
+    }
+    return result;
   });
   ipcMain.handle('setup:environment-cancel', () => cancelEnvironmentInstallation());
 }

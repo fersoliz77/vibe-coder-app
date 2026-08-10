@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   setup: {
+    getState: () => ipcRenderer.invoke('setup:environment-state'),
     check: (options) => ipcRenderer.invoke('setup:environment-check', options),
     install: (options) => ipcRenderer.invoke('setup:environment-install', options),
     cancel: () => ipcRenderer.invoke('setup:environment-cancel'),

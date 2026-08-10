@@ -35,3 +35,21 @@
   border-color: var(--vc-success-line);
   color: var(--vc-success);
 }
+
+.environment-install-toast { right: var(--vc-space-6); bottom: var(--vc-space-6); display: grid; width: min(calc(var(--vc-space-24) * 4), calc(100vw - var(--vc-space-12))); gap: var(--vc-space-3); overflow: hidden; color: var(--vc-text-1); border-color: color-mix(in srgb, var(--vc-accent) 55%, var(--vc-line)); }
+.environment-install-toast::before { position: absolute; inset: 0 auto 0 0; width: var(--vc-space-1); background: var(--vc-accent); content: ''; }
+.environment-install-toast__heading { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: var(--vc-space-2); }
+.environment-install-toast__heading strong { overflow: hidden; font-size: var(--vc-text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.environment-install-toast__heading > span:last-child { color: var(--vc-accent); font-family: var(--vc-font-mono); font-size: var(--vc-text-xs); font-weight: 700; }
+.environment-install-toast__pulse { width: var(--vc-space-2); height: var(--vc-space-2); border-radius: var(--vc-radius-full); background: var(--vc-accent); animation: environment-install-pulse calc(var(--vc-duration-dialog) * 4) var(--vc-ease) infinite alternate; }
+.environment-install-toast > p { overflow: hidden; margin: 0; color: var(--vc-text-2); font-family: var(--vc-font-mono); font-size: var(--vc-text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.environment-install-toast__track { height: var(--vc-space-1); overflow: hidden; border-radius: var(--vc-radius-full); background: var(--vc-surface-1); }
+.environment-install-toast__track > span { display: block; height: 100%; border-radius: inherit; background: var(--vc-accent); transition: width var(--vc-duration-normal) var(--vc-ease); }
+.environment-install-toast__track > .is-indeterminate { width: 35%; animation: environment-install-slide calc(var(--vc-duration-dialog) * 6) var(--vc-ease) infinite; }
+.environment-install-toast__footer { display: flex; align-items: center; justify-content: space-between; gap: var(--vc-space-3); }
+.environment-install-toast__footer > span { color: var(--vc-text-3); font-size: var(--vc-text-xs); }
+.environment-install-toast__footer button { flex: 0 0 auto; padding: var(--vc-space-1) var(--vc-space-2); border: 0; background: transparent; color: var(--vc-accent); font-size: var(--vc-text-xs); font-weight: 700; cursor: pointer; }
+.environment-install-toast__footer button:hover { color: var(--vc-text-1); }
+@keyframes environment-install-pulse { to { opacity: .4; transform: scale(.75); } }
+@keyframes environment-install-slide { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
+@media (prefers-reduced-motion: reduce) { .environment-install-toast__pulse, .environment-install-toast__track > .is-indeterminate { animation: none; } }

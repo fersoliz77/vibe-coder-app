@@ -229,6 +229,19 @@ Object.assign(dictionaries.es.settings, {
   updateCurrentToast: 'Vibe IDE Code está actualizado.', updateCheckFailed: 'No se pudieron buscar actualizaciones. Intentá nuevamente.', updateDownloading: 'Descargando actualización: {percentage}%',
 });
 
+Object.assign(dictionaries.en.setup, {
+  backgroundInstallTitle: 'Preparing development environment',
+  backgroundInstallCopy: 'Continues in the background while you navigate.',
+  viewProgress: 'View progress',
+  progress: 'Environment installation progress',
+});
+Object.assign(dictionaries.es.setup, {
+  backgroundInstallTitle: 'Preparando el entorno de desarrollo',
+  backgroundInstallCopy: 'Continúa en segundo plano mientras navegás.',
+  viewProgress: 'Ver progreso',
+  progress: 'Progreso de instalación del entorno',
+});
+
 // Copiar la respuesta de un agente. Va al final a proposito: los merges de
 // arriba reescriben `ai` varias veces y borrarian cualquier clave anterior.
 Object.assign(dictionaries.en.ai, { copy: 'Copy', copied: 'Copied', copyMessage: 'Copy this answer' });

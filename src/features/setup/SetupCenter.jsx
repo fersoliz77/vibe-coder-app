@@ -3,6 +3,7 @@ import { useFocusTrap } from '../../hooks/useFocusTrap';
 import './SetupCenter.css';
 import { useI18n } from '../../i18n/I18nContext';
 import { CheckIcon, AlertIcon } from '../../components/icons/StatusIcons';
+import { getEnvironmentInstallPercent, isEnvironmentInstallTerminal } from './environmentProgress';
 
 const ENVIRONMENT_OPTIONS = Object.freeze({ includeMobile: true, backend: 'firebase' });
 
@@ -114,10 +115,26 @@ export default function SetupCenter({ compact = false }) {
 
   useEffect(() => {
     if (!api?.onProgress) return undefined;
-    return api.onProgress((event) => {
+    let active = true;
+    const acceptProgress = (event) => {
+      if (!active || !event) return;
       setProgress(event);
       if (event?.message) setLog((current) => [...current.slice(-7), event.message]);
-    });
+      if (isEnvironmentInstallTerminal(event)) {
+        setInstalling(false);
+        check();
+      } else {
+        setInstalling(true);
+      }
+    };
+    api.getState?.().then((state) => {
+      if (state?.status === 'installing') acceptProgress(state.progress);
+    }).catch(() => {});
+    const unsubscribe = api.onProgress(acceptProgress);
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, [api]);
 
   const install = async () => {
@@ -160,7 +177,7 @@ export default function SetupCenter({ compact = false }) {
   const items = environment?.items || [];
   const required = items.filter((item) => item.required);
   const optional = items.filter((item) => !item.required);
-  const percentage = progress?.total ? Math.round((Math.max(0, progress.current - (progress.type === 'step-start' ? 1 : 0)) / progress.total) * 100) : 0;
+  const percentage = getEnvironmentInstallPercent(progress) ?? 0;
 
   return (
     <section className={`setup-center ${compact ? 'setup-center--compact' : ''}`} aria-labelledby="setup-center-title">

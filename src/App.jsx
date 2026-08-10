@@ -19,6 +19,7 @@ import { VIEWS, restoreView } from './utils/viewRestore';
 import AppSplash from './components/AppSplash';
 import { applyAccessibility, readAccessibility } from './utils/accessibility';
 import MandatoryUpdateGate from './features/updates/MandatoryUpdateGate';
+import { getEnvironmentInstallPercent, getEnvironmentInstallStatus } from './features/setup/environmentProgress';
 
 const ClaudePanel = lazy(() => import('./features/claude/ClaudePanel'));
 const OpenAIPanel = lazy(() => import('./features/openai/OpenAIPanel'));
@@ -39,6 +40,7 @@ function Workspace({ setCloseCheck }) {
   const [openCodeSetup, setOpenCodeSetup] = useState({ open: false, phase: 'idle', progress: '', error: '' });
   const [openAIAvailable, setOpenAIAvailable] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [environmentInstallation, setEnvironmentInstallation] = useState({ status: 'idle', progress: null });
   const openCodeRequest = useRef(0);
   const explorerRef = useRef(null);
 
@@ -100,6 +102,22 @@ function Workspace({ setCloseCheck }) {
 
     window.electronAPI.window.isMaximized?.().then(setIsMaximized).catch(() => {});
     return window.electronAPI.window.onMaximizedChanged(setIsMaximized);
+  }, []);
+
+  useEffect(() => {
+    const setup = window.electronAPI?.setup;
+    if (!setup?.onProgress) return undefined;
+    let active = true;
+    setup.getState?.().then((state) => {
+      if (active && state) setEnvironmentInstallation(state);
+    }).catch(() => {});
+    const unsubscribe = setup.onProgress((progress) => {
+      if (active) setEnvironmentInstallation({ status: getEnvironmentInstallStatus(progress), progress });
+    });
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
   }, []);
 
   useEffect(() => {
@@ -370,6 +388,10 @@ function Workspace({ setCloseCheck }) {
     }
   };
 
+  const environmentProgress = environmentInstallation.progress;
+  const environmentPercentage = getEnvironmentInstallPercent(environmentProgress);
+  const showEnvironmentToast = environmentInstallation.status === 'installing' && activeView !== VIEWS.SETTINGS;
+
   // Mientras se lee la bandera de onboarding se muestra la marca, no un vacio.
   if (onboardingDone === null) return <AppSplash error={onboardingError} onRetry={loadOnboarding} />;
 
@@ -465,6 +487,23 @@ function Workspace({ setCloseCheck }) {
         </main>
         {openCodeSetup.open && <OpenCodeSetupDialog state={openCodeSetup} onClose={closeOpenCodeSetup} onInstall={installOpenCode} />}
       </div>
+      {showEnvironmentToast && (
+        <aside className="vc-toast environment-install-toast" role="status" aria-live="polite" aria-label={t('setup.backgroundInstallTitle')}>
+          <div className="environment-install-toast__heading">
+            <span className="environment-install-toast__pulse" aria-hidden="true" />
+            <strong>{environmentProgress?.label || t('setup.backgroundInstallTitle')}</strong>
+            {environmentPercentage !== null && <span>{environmentPercentage}%</span>}
+          </div>
+          <p>{environmentProgress?.message || t('setup.preparingInstallation')}</p>
+          <div className="environment-install-toast__track" role="progressbar" aria-label={t('setup.progress')} aria-valuemin="0" aria-valuemax="100" {...(environmentPercentage !== null ? { 'aria-valuenow': environmentPercentage } : {})}>
+            <span className={environmentPercentage === null ? 'is-indeterminate' : ''} style={environmentPercentage !== null ? { width: `${environmentPercentage}%` } : undefined} />
+          </div>
+          <div className="environment-install-toast__footer">
+            <span>{t('setup.backgroundInstallCopy')}</span>
+            <button type="button" onClick={() => setActiveView(VIEWS.SETTINGS)}>{t('setup.viewProgress')}</button>
+          </div>
+        </aside>
+      )}
     </>
   );
 }
