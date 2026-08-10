@@ -31,6 +31,7 @@
 
 ### Fixed
 
+- Android SDK provisioning no longer tries to upgrade an existing Android Studio package through WinGet.
 - Service checks now receive project context correctly.
 - Claude panel prop wiring and multiple IPC cleanup issues.
 - Folder move behavior now preserves visible nested contents without manual refresh.

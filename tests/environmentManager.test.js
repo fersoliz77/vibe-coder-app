@@ -58,7 +58,6 @@ test('installation plan is restricted to the fixed allowlist and preserves depen
     'git',
     'gh',
     'java',
-    'android-sdk',
     'flutter',
     'vercel',
     'firebase',
@@ -67,6 +66,26 @@ test('installation plan is restricted to the fixed allowlist and preserves depen
   assert.ok(plan.every((step) => ['winget.exe', 'npm', 'git'].includes(step.file)));
   assert.deepEqual(INSTALL_ALLOWLIST.vercel.args, ['install', '--global', 'vercel']);
   assert.deepEqual(INSTALL_ALLOWLIST.firebase.args, ['install', '--global', 'firebase-tools']);
+});
+
+test('a missing Android SDK is provisioned directly without reinstalling Android Studio', async () => {
+  const readyItems = ['node', 'npm', 'git', 'gh', 'vercel', 'java', 'flutter'].map((id) => ({ id, installed: true }));
+  const before = environment([...readyItems, { id: 'android-sdk', installed: false }]);
+  const after = environment([...readyItems, { id: 'android-sdk', installed: true }]);
+  const events = [];
+  let checks = 0;
+  let tracked = 0;
+  let provisioned = 0;
+  const result = await installAllEnvironment({ backend: 'supabase', includeMobile: true }, (event) => events.push(event), {
+    checkEnvironment: async () => (++checks === 1 ? before : after),
+    runTracked: async () => { tracked += 1; return { success: true }; },
+    probeEnvironmentItem: async () => ({ installed: true }),
+    provisionAndroidSdk: async () => { provisioned += 1; return { success: true }; },
+  });
+  assert.equal(result.success, true);
+  assert.equal(tracked, 0);
+  assert.equal(provisioned, 1);
+  assert.equal(events.some((event) => /Android Studio/.test(event.message || '')), false);
 });
 
 test('installed tools are omitted and a missing npm selects the allowlisted Node repair', () => {

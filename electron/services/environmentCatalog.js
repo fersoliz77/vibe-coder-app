@@ -17,7 +17,6 @@ const INSTALL_ALLOWLIST = Object.freeze({
   git: Object.freeze({ id: 'git', label: 'Git', file: 'winget.exe', args: Object.freeze([...WINGET_ARGS, '--id', 'Git.Git']) }),
   gh: Object.freeze({ id: 'gh', label: 'GitHub CLI', file: 'winget.exe', args: Object.freeze([...WINGET_ARGS, '--id', 'GitHub.cli']) }),
   java: Object.freeze({ id: 'java', label: 'JDK 17', file: 'winget.exe', args: Object.freeze([...WINGET_ARGS, '--id', 'EclipseAdoptium.Temurin.17.JDK']) }),
-  'android-sdk': Object.freeze({ id: 'android-sdk', label: 'Android Studio y Android SDK', file: 'winget.exe', args: Object.freeze([...WINGET_ARGS, '--id', 'Google.AndroidStudio']) }),
   flutter: Object.freeze({
     id: 'flutter',
     label: 'Flutter',
@@ -32,7 +31,7 @@ const INSTALL_ALLOWLIST = Object.freeze({
   firebase: Object.freeze({ id: 'firebase', label: 'Firebase CLI', file: 'npm', args: Object.freeze(['install', '--global', 'firebase-tools']) }),
 });
 
-const INSTALL_ORDER = Object.freeze(['node', 'git', 'gh', 'java', 'android-sdk', 'flutter', 'vercel', 'firebase']);
+const INSTALL_ORDER = Object.freeze(['node', 'git', 'gh', 'java', 'flutter', 'vercel', 'firebase']);
 const ITEM_CATALOG = Object.freeze({
   node: Object.freeze({ name: 'Node.js', category: 'core', required: true, installable: true }),
   npm: Object.freeze({ name: 'npm', category: 'core', required: true, installable: true }),

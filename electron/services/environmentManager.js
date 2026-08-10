@@ -619,10 +619,9 @@ async function installAllEnvironment(options = {}, onProgress, dependencies = {}
         probeItem('flutter', run.controller.signal),
       ]);
       if (run.cancelled) return cancelledInstallation(progress, results);
-      const androidStudioStep = results.find((result) => result.id === 'android-sdk');
       let execution;
-      if (!java.installed || !flutter.installed || (androidStudioStep && !androidStudioStep.success)) {
-        const missing = [!java.installed && 'JDK 17', !flutter.installed && 'Flutter', androidStudioStep && !androidStudioStep.success && 'Android Studio'].filter(Boolean).join(' y ');
+      if (!java.installed || !flutter.installed) {
+        const missing = [!java.installed && 'JDK 17', !flutter.installed && 'Flutter'].filter(Boolean).join(' y ');
         execution = { success: false, error: `No se puede preparar Android hasta que estén disponibles: ${missing}.` };
       } else {
         if (run.cancelled) return cancelledInstallation(progress, results);
