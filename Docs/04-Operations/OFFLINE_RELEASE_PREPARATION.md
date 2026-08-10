@@ -40,19 +40,19 @@ The Windows installer installs only the packaged application. It no longer start
 Generate a manifest and checksum for an existing installer. Replace compatibility versions and the intended future HTTPS URL with reviewed values:
 
 ```bash
-npm run release:manifest -- --installer "dist-electron/Vibe IDE Code Setup 1.0.0.exe" --version 1.0.0 --channel internal --url "https://releases.example.invalid/Vibe-IDE-Code-Setup-1.0.0.exe" --minimum-backend 1.0.0 --minimum-client 1.0.0 --output "temp/build/release-manifest.json" --checksum "temp/build/Vibe IDE Code Setup 1.0.0.exe.sha256"
+npm run release:manifest -- --installer "dist-electron/Vibe-IDE-Code-Setup-1.0.0.exe" --version 1.0.0 --channel internal --url "https://releases.example.invalid/Vibe-IDE-Code-Setup-1.0.0.exe" --minimum-backend 1.0.0 --minimum-client 1.0.0 --output "temp/build/release-manifest.json" --checksum "temp/build/Vibe-IDE-Code-Setup-1.0.0.exe.sha256"
 ```
 
-The generator requires `version` to match both `package.json` and the exact installer name `Vibe IDE Code Setup <version>.exe`. It only reads that installer and writes local files. It creates `temp/build/` when needed; that directory is ignored because release evidence should be regenerated from the final artifact.
+The generator requires `version` to match both `package.json` and the exact installer name `Vibe-IDE-Code-Setup-<version>.exe`. It only reads that installer and writes local files. It creates `temp/build/` when needed; that directory is ignored because release evidence should be regenerated from the final artifact.
 
-The `.sha256` file contains a path relative to its own location. From `temp/build/` it resolves to `../../dist-electron/Vibe IDE Code Setup <version>.exe`, so the record is unambiguous and independently resolvable. The SHA-256 covers only the installer bytes. It does not cover unpacked smoke files, external tools, future downloads, metadata, or publication infrastructure.
+The `.sha256` file contains a path relative to its own location. From `temp/build/` it resolves to `../../dist-electron/Vibe-IDE-Code-Setup-<version>.exe`, so the record is unambiguous and independently resolvable. The SHA-256 covers only the installer bytes. It does not cover unpacked smoke files, external tools, future downloads, metadata, or publication infrastructure.
 
 ## Verification
 
 Check bounded PE headers and sections, Windows GUI subsystem, expected installer name, installer size/overlay, and the x64 machine field of the unpacked application:
 
 ```bash
-npm run release:verify-installer -- "dist-electron/Vibe IDE Code Setup 1.0.0.exe" "dist-electron/win-unpacked/Vibe IDE Code.exe"
+npm run release:verify-installer -- "dist-electron/Vibe-IDE-Code-Setup-1.0.0.exe" "dist-electron/win-unpacked/Vibe IDE Code.exe"
 ```
 
 This is not installer-format authentication, malware analysis, or signature verification. `authenticode: present/not-verified` means only that a bounded PE certificate-table entry exists; `absent` means no entry was found. Neither result establishes signer identity or trust.
@@ -60,19 +60,19 @@ This is not installer-format authentication, malware analysis, or signature veri
 Validate the contract, size, and SHA-256:
 
 ```bash
-npm run release:validate -- "temp/build/release-manifest.json" "dist-electron/Vibe IDE Code Setup 1.0.0.exe" "temp/build/Vibe IDE Code Setup 1.0.0.exe.sha256"
+npm run release:validate -- "temp/build/release-manifest.json" "dist-electron/Vibe-IDE-Code-Setup-1.0.0.exe" "temp/build/Vibe-IDE-Code-Setup-1.0.0.exe.sha256"
 ```
 
 Run the non-installing static smoke gate:
 
 ```bash
-npm run release:smoke -- --manifest "temp/build/release-manifest.json" --installer "dist-electron/Vibe IDE Code Setup 1.0.0.exe"
+npm run release:smoke -- --manifest "temp/build/release-manifest.json" --installer "dist-electron/Vibe-IDE-Code-Setup-1.0.0.exe"
 ```
 
 Optionally exercise the existing hidden sandbox smoke against the unpacked app. `--app` accepts only `win-unpacked/Vibe IDE Code.exe`, rejects the installer itself and Setup/installer names, and checks that the unpacked executable is x64 before launch. It never launches the installer:
 
 ```bash
-npm run release:smoke -- --manifest "temp/build/release-manifest.json" --installer "dist-electron/Vibe IDE Code Setup 1.0.0.exe" --app "dist-electron/win-unpacked/Vibe IDE Code.exe"
+npm run release:smoke -- --manifest "temp/build/release-manifest.json" --installer "dist-electron/Vibe-IDE-Code-Setup-1.0.0.exe" --app "dist-electron/win-unpacked/Vibe IDE Code.exe"
 ```
 
 ## Explicitly Pending

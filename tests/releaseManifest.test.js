@@ -103,7 +103,7 @@ test('JSON Schema and runtime expose the same patterns and safe integer limit', 
 test('local generator binds package and artifact versions and writes a verifiable relative checksum', async (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-release-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const installerName = `Vibe IDE Code Setup ${packageJson.version}.exe`;
+  const installerName = `Vibe-IDE-Code-Setup-${packageJson.version}.exe`;
   const installerPath = path.join(root, 'dist-electron', installerName);
   const outputPath = path.join(root, 'temp', 'build', 'release-manifest.json');
   const checksumPath = path.join(root, 'temp', 'build', `${installerName}.sha256`);
@@ -178,4 +178,5 @@ test('packaging generates the latest.yml expected by the private stable feed', (
   const packageConfig = require('../package.json');
   assert.equal(packageConfig.build.publish[0].provider, 'generic');
   assert.equal(Object.hasOwn(packageConfig.build.publish[0], 'channel'), false);
+  assert.equal(packageConfig.build.nsis.artifactName, 'Vibe-IDE-Code-Setup-${version}.${ext}');
 });

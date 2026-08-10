@@ -45,7 +45,7 @@ function sha512File(filePath) {
 
 async function releaseFiles(outputDirectory, metadata) {
   if (metadata.version !== require('../package.json').version) throw new Error('latest.yml version does not match package.json');
-  const localInstaller = `Vibe IDE Code Setup ${metadata.version}.exe`;
+  const localInstaller = `Vibe-IDE-Code-Setup-${metadata.version}.exe`;
   if (metadata.remoteInstaller !== `Vibe-IDE-Code-Setup-${metadata.version}.exe`) throw new Error('latest.yml installer name is not canonical');
   const files = [
     { local: path.join(outputDirectory, localInstaller), remote: metadata.remoteInstaller, contentType: 'application/vnd.microsoft.portable-executable', cacheControl: '31536000, immutable', mutable: false },

@@ -25,7 +25,7 @@ async function generateManifest(options) {
   if (!stat.isFile()) throw new Error('installer must be an existing file');
   const packageVersion = require('../package.json').version;
   if (options.version !== packageVersion) throw new Error(`version must match package.json (${packageVersion})`);
-  const expectedInstallerName = `Vibe IDE Code Setup ${packageVersion}.exe`;
+  const expectedInstallerName = `Vibe-IDE-Code-Setup-${packageVersion}.exe`;
   if (path.basename(installerPath) !== expectedInstallerName) throw new Error(`installer must be named ${expectedInstallerName}`);
   const manifest = {
     version: options.version,

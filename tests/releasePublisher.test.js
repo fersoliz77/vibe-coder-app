@@ -10,7 +10,7 @@ const packageVersion = require('../package.json').version;
 function createReleaseFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-release-'));
   const version = packageVersion;
-  const localName = `Vibe IDE Code Setup ${version}.exe`;
+  const localName = `Vibe-IDE-Code-Setup-${version}.exe`;
   const installer = Buffer.from('installer');
   const sha512 = crypto.createHash('sha512').update(installer).digest('base64');
   fs.writeFileSync(path.join(root, localName), installer);

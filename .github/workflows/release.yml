@@ -87,7 +87,7 @@ jobs:
       - name: Verify installer structure
         shell: pwsh
         run: |
-          $installer = "dist-electron/Vibe IDE Code Setup $env:RELEASE_VERSION.exe"
+          $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $application = 'dist-electron/win-unpacked/Vibe IDE Code.exe'
           npm run release:verify-installer -- "$installer" "$application"
 
@@ -96,10 +96,10 @@ jobs:
         env:
           VIBE_SUPABASE_URL: ${{ secrets.VIBE_SUPABASE_URL }}
         run: |
-          $installer = "dist-electron/Vibe IDE Code Setup $env:RELEASE_VERSION.exe"
+          $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $remoteName = "Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $url = "$env:VIBE_SUPABASE_URL/storage/v1/object/authenticated/$env:VIBE_UPDATE_BUCKET/$env:VIBE_UPDATE_CHANNEL/$remoteName"
-          $checksum = "temp/build/Vibe IDE Code Setup $env:RELEASE_VERSION.exe.sha256"
+          $checksum = "temp/build/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe.sha256"
           npm run release:manifest -- --installer "$installer" --version "$env:RELEASE_VERSION" --channel stable --url "$url" --minimum-backend 1.0.0 --minimum-client "$env:RELEASE_VERSION" --output temp/build/release-manifest.json --checksum "$checksum"
           npm run release:validate -- temp/build/release-manifest.json "$installer" "$checksum"
 
@@ -116,8 +116,8 @@ jobs:
           name: desktop-release-${{ env.RELEASE_VERSION }}-evidence
           path: |
             dist-electron/latest.yml
-            dist-electron/Vibe IDE Code Setup *.exe
-            dist-electron/Vibe IDE Code Setup *.exe.blockmap
+            dist-electron/Vibe-IDE-Code-Setup-*.exe
+            dist-electron/Vibe-IDE-Code-Setup-*.exe.blockmap
             temp/build/release-manifest.json
             temp/build/*.sha256
           if-no-files-found: error

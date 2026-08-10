@@ -1,6 +1,6 @@
 {
   "name": "vibe-ide-coder",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "author": "Vibe IDE Code",
   "main": "electron/main.js",
@@ -101,6 +101,7 @@
       }
     ],
     "nsis": {
+      "artifactName": "Vibe-IDE-Code-Setup-${version}.${ext}",
       "oneClick": false,
       "allowToChangeInstallationDirectory": true
     }
