@@ -26,9 +26,9 @@ function ArrowIcon() {
   return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6" /></svg>;
 }
 
-function AccountCard({ authState, account, progress, completedLessons, totalLessons, t, formatDate, compact = false }) {
+function AccountCard({ authState, account, progress, completedLessons, totalLessons, t, formatDate }) {
   return (
-    <section className={`identity-card glass-card ${compact ? 'identity-card--compact' : ''}`} aria-label={t('dashboard.accountAccess')}>
+    <section className="identity-card glass-card" aria-label={t('dashboard.accountAccess')}>
       <div className="identity-card__profile">
         <div className="identity-card__avatar">{authState.user?.email?.[0]?.toUpperCase() || 'V'}</div>
         <div><span className="identity-card__eyebrow">{t('dashboard.platformAccount')}</span><h2>{authState.user?.email || t('dashboard.activeAccount')}</h2><p>{t('dashboard.role', { role: account.role ? t(`roles.${account.role}`) : t('dashboard.unavailable') })} · {t('dashboard.plan', { plan: account.planName || t('dashboard.unavailable') })}</p></div>
@@ -113,6 +113,9 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
 
   const connectedCount = serviceList.filter((service) => service.connected).length;
   const vercel = serviceList.find((service) => service.id === 'vercel');
+  const github = serviceList.find((service) => service.id === 'github');
+  const gitService = serviceList.find((service) => service.id === 'git');
+  const backendService = serviceList.find((service) => service.id === currentProject?.backend);
   const deliveryState = vercel?.checking ? 'loading' : vercel?.connected && vercel?.projectLinked === true ? 'ready' : 'attention';
   const issueCount = Array.isArray(web.issues) ? web.issues.length : 0;
   const previewHasProblems = web.state === 'stopped' || web.state === 'error' || issueCount > 0 || web.diagnostics?.status === 'error';
@@ -155,6 +158,27 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
     ? t('dashboard.activityConversation', { provider: item.provider })
     : t(`dashboard.activityTypes.${item.type}`, { count: item.count || 0 });
   const statusLabel = (state, namespace) => t(`dashboard.${namespace}.${state}`);
+  const workspaceTargets = Array.isArray(currentProject?.workspace?.targets) ? currentProject.workspace.targets : [];
+  const primaryTarget = workspaceTargets.find((target) => target.id === currentProject?.primaryTargetId);
+  const projectType = primaryTarget
+    ? primaryTarget.kind === 'flutter' || primaryTarget.kind === 'android' ? t('dashboard.projectTypes.mobileSuite') : primaryTarget.kind === 'web' ? t('dashboard.projectTypes.web') : primaryTarget.kind
+    : currentProject?.type === 'mobile-suite'
+    ? t('dashboard.projectTypes.mobileSuite')
+    : ['next-ts', 'vite-react-ts'].includes(currentProject?.type)
+      ? t('dashboard.projectTypes.web')
+      : t('dashboard.statusUnavailable');
+  const projectStack = primaryTarget
+    ? primaryTarget.technologies?.join(' · ') || primaryTarget.framework || t('dashboard.statusUnavailable')
+    : currentProject?.type === 'mobile-suite'
+    ? t('dashboard.projectStacks.mobileSuite')
+    : currentProject?.type === 'vite-react-ts'
+      ? t('dashboard.projectStacks.vite')
+      : currentProject?.type === 'next-ts'
+        ? t('dashboard.projectStacks.next')
+        : t('dashboard.statusUnavailable');
+  const repositoryVisibility = currentProject?.repositoryVisibility === 'private'
+    ? t('dashboard.privateVisibility')
+    : t('dashboard.visibilityUnavailable');
 
   return (
     <div className="dashboard">
@@ -189,6 +213,23 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                 <button className="project-outcome__cta" type="button" onClick={onOpenPreview}>{t('dashboard.openPreview')}<ArrowIcon /></button>
               </section>
 
+              {detailed && <section className="project-details glass-card" aria-labelledby="project-details-title">
+                <div className="project-details__header">
+                  <div><span className="dashboard-card-eyebrow">{t('dashboard.projectDetails')}</span><h2 id="project-details-title">{t('dashboard.projectConfiguration')}</h2></div>
+                  <span className="project-details__status">{currentProject.provisioningStatus === 'partial' ? t('dashboard.partialProject') : t('dashboard.registeredProject')}</span>
+                </div>
+                <div className="project-details__grid">
+                  <article><span>{t('dashboard.projectType')}</span><strong>{projectType}</strong><small>{projectStack}</small></article>
+                  {workspaceTargets.length > 0 && <article><span>{t('dashboard.projectTargets')}</span><strong>{t('dashboard.targetCount', { count: workspaceTargets.length })}</strong><small>{workspaceTargets.map((target) => target.name).join(' · ')}</small></article>}
+                  <article><span>{t('dashboard.projectBackend')}</span><strong>{currentProject.backend ? currentProject.backend[0].toUpperCase() + currentProject.backend.slice(1) : t('dashboard.notConfigured')}</strong><small>{backendService?.project || (backendService?.projectLinked ? t('dashboard.linkedProject') : t('dashboard.linkPending'))}</small></article>
+                  <article><span>{t('dashboard.projectRepository')}</span><strong>{github?.project || t('dashboard.linkPending')}</strong><small>{repositoryVisibility}</small></article>
+                  <article><span>{t('dashboard.projectDelivery')}</span><strong>{vercel?.project || t('dashboard.linkPending')}</strong><small>{vercel?.projectLinked ? t('dashboard.vercelLinked') : t('dashboard.vercelPending')}</small></article>
+                  <article><span>{t('dashboard.projectGit')}</span><strong>{gitService?.project || t('dashboard.notConfigured')}</strong><small>{git.state === 'ready' && git.entries.length ? t('dashboard.changeCount', { count: git.entries.length }) : git.state === 'ready' ? t('dashboard.clean') : t('dashboard.statusUnavailable')}</small></article>
+                  <article><span>{currentProject.origin === 'imported' ? t('dashboard.projectRegistered') : t('dashboard.projectDates')}</span><strong>{currentProject.registeredAt || currentProject.createdAt ? formatDate(currentProject.registeredAt || currentProject.createdAt, { dateStyle: 'medium' }) : t('dashboard.statusUnavailable')}</strong><small>{currentProject.lastOpened ? t('dashboard.lastOpened', { date: formatDate(currentProject.lastOpened, { dateStyle: 'medium', timeStyle: 'short' }) }) : t('dashboard.lastOpenedUnavailable')}</small></article>
+                  <article className="project-details__path"><span>{t('dashboard.projectLocation')}</span><strong title={currentProject.path}>{currentProject.path}</strong></article>
+                </div>
+              </section>}
+
               {detailed && <section className="health-strip" aria-label={t('dashboard.projectHealth')}>
                 <button type="button" onClick={onOpenPreview} className={`health-item is-${previewHasProblems ? 'attention' : web.state === 'ready' ? 'ready' : 'neutral'}`}><span>{t('dashboard.previewHealth')}</span><strong>{issueCount ? t('dashboard.issueCount', { count: issueCount }) : statusLabel(web.state, 'webStates')}</strong></button>
                 <button type="button" onClick={onOpenFiles} className={`health-item is-${git.state === 'ready' && !git.entries.length ? 'ready' : git.state === 'ready' ? 'attention' : 'neutral'}`}><span>{t('dashboard.gitHealth')}</span><strong>{git.state === 'loading' ? t('dashboard.checking') : git.state === 'unavailable' ? t('dashboard.statusUnavailable') : git.entries.length ? t('dashboard.changeCount', { count: git.entries.length }) : t('dashboard.clean')}</strong></button>
@@ -214,8 +255,6 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                   return <button key={action.id} className="action-card glass-card" onClick={handleClick} type="button"><div className="action-card__icon">{action.icon}</div><div className="action-card__text"><span className="action-card__title">{action.titleKey ? t(action.titleKey) : action.title}</span><span className="action-card__desc text-secondary">{t(action.descriptionKey)}</span></div></button>;
                 })}</div>
               </section>
-              {detailed && <AccountCard compact {...{ authState, account, progress, completedLessons, totalLessons, t, formatDate }} />}
-
               {/* Nada se retira: la capa completa esta a un click. */}
               <button type="button" className="dashboard__density-toggle" onClick={() => setDetailed((value) => !value)} aria-pressed={detailed}>
                 {detailed ? t('dashboard.showBasic') : t('dashboard.showDetailed')}

@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     revalidate: () => ipcRenderer.invoke('auth:revalidate'),
     logout: () => ipcRenderer.invoke('auth:logout'),
     openHelp: () => ipcRenderer.invoke('auth:open-help'),
+    openLearning: () => ipcRenderer.invoke('auth:open-learning'),
     onStateChanged: (callback) => subscribe('auth:state-changed', callback, (state) => [state]),
   },
 
@@ -53,7 +54,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ─── Projects ──────────────────────────────────────
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
-    import: () => ipcRenderer.invoke('projects:import'),
+    chooseImport: () => ipcRenderer.invoke('projects:choose-import'),
+    analyzeImport: (grantId) => ipcRenderer.invoke('projects:analyze-import', grantId),
+    confirmImport: (grantId, primaryTargetId) => ipcRenderer.invoke('projects:confirm-import', grantId, primaryTargetId),
+    cancelImport: (grantId) => ipcRenderer.invoke('projects:cancel-import', grantId),
     remove: (id) => ipcRenderer.invoke('projects:remove', id),
     updateLastOpened: (id) => ipcRenderer.invoke('projects:update-last-opened', id),
     openDirectoryDialog: () => ipcRenderer.invoke('dialog:open-directory'),

@@ -47,6 +47,9 @@
   color: var(--vc-danger);
 }
 
+.sidebar__item--learning { color: var(--vc-accent); }
+.sidebar__item--learning:hover { color: var(--vc-accent); background: var(--accent-gradient-soft); }
+
 .sidebar__item:disabled {
   cursor: wait;
   opacity: 0.55;

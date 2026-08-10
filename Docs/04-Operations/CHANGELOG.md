@@ -4,6 +4,9 @@
 
 ### Added
 
+- Safe external-workspace analysis with bounded manifest discovery, multi-application detection, confidence evidence, and primary-target selection.
+- External import review for monorepos and mixed stacks, with editing-only fallback when automatic preview is unavailable.
+- Sidebar access to courses and learning progress through the trusted system-browser bridge.
 - Dependency-free strict release manifest, relative checksum, bounded PE inspection, and installer-safe smoke tooling.
 - Windows packaging no longer starts external development-tool installation; Setup Center retains explicit consent.
 - Optional OpenCode agent with explicit installation consent and project-terminal launch.
@@ -21,6 +24,9 @@
 
 ### Changed
 
+- Project creation and import now persist the same target-based workspace model for details, preview, and linked Vercel status.
+- Project details now describe applications, stacks, backend, repository, deployment, Git state, dates, and local location instead of repeating learning progress.
+- Private GitHub repository copy now explains who can access the generated repository.
 - Agent terminals now close when switching projects, and OpenCode uses a main-process-resolved executable instead of shell lookup.
 - Project import and registration now validate paths in the Electron main process.
 - Windows packaging uses tested native prebuilds instead of requiring Visual Studio Build Tools.

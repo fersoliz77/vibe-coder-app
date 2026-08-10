@@ -4,7 +4,7 @@ const http = require('http');
 const path = require('path');
 const util = require('util');
 const { assertNoLinkedPath, validateProjectCwd } = require('../ipc/fsGuards');
-const { isProjectRegistered } = require('./projectManager');
+const { getProjects, isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
 const {
   ANDROID_AVD_NAME,
@@ -98,17 +98,33 @@ function readJson(filePath) {
 
 function detectProjectTargets(projectCwd) {
   const root = path.resolve(projectCwd);
+  const project = getProjects().find((entry) => path.resolve(entry.path) === root);
+  const detectedTargets = Array.isArray(project?.workspace?.targets) ? project.workspace.targets : [];
+  const primary = detectedTargets.find((target) => target.id === project?.primaryTargetId);
+  const firstWeb = [primary, ...detectedTargets].find((target) => target?.capabilities?.webPreview);
+  const firstMobile = [primary, ...detectedTargets].find((target) => target?.kind === 'flutter' && target?.capabilities?.androidPreview);
+  const resolveDetected = (target) => target && target.relativePath
+    ? path.resolve(root, target.relativePath === '.' ? '' : target.relativePath)
+    : null;
+  const detectedWeb = resolveDetected(firstWeb);
+  const detectedMobile = resolveDetected(firstMobile);
+  if (detectedWeb) assertNoLinkedPath(root, detectedWeb);
+  if (detectedMobile) assertNoLinkedPath(root, detectedMobile);
   const nestedWeb = path.join(root, 'web');
   const mobile = path.join(root, 'mobile');
   assertNoLinkedPath(root, nestedWeb);
   assertNoLinkedPath(root, mobile);
-  const webCwd = fs.existsSync(path.join(nestedWeb, 'package.json'))
+  const webCwd = detectedWeb && fs.existsSync(path.join(detectedWeb, 'package.json'))
+    ? detectedWeb
+    : fs.existsSync(path.join(nestedWeb, 'package.json'))
     ? nestedWeb
     : fs.existsSync(path.join(root, 'package.json')) ? root : null;
   return {
     projectCwd: root,
     webCwd,
-    mobileCwd: fs.existsSync(path.join(mobile, 'pubspec.yaml')) ? mobile : null,
+    mobileCwd: detectedMobile && fs.existsSync(path.join(detectedMobile, 'pubspec.yaml'))
+      ? detectedMobile
+      : fs.existsSync(path.join(mobile, 'pubspec.yaml')) ? mobile : null,
   };
 }
 

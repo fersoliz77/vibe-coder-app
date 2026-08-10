@@ -114,7 +114,18 @@ function validateRequest(request) {
   }
   const name = request.name ?? request.projectName;
   const slug = slugifyProjectName(name);
-  const normalized = { name: String(name).trim(), slug, type, backend };
+  const stack = type === 'mobile-suite'
+    ? { web: 'next-typescript', mobile: 'flutter-android', folders: { web: 'web', mobile: 'mobile' } }
+    : { web: type === 'vite-react-ts' ? 'react-vite-typescript' : 'next-typescript' };
+  const normalized = {
+    name: String(name).trim(),
+    slug,
+    type,
+    stack,
+    backend,
+    repository: { visibility: 'private' },
+    deployment: { provider: 'vercel' },
+  };
   if (backend === 'supabase') {
     const config = typeof request.supabase === 'object' ? request.supabase : request.backendConfig || {};
     const organizationId = config.organizationId ?? request.supabaseOrganizationId;

@@ -7,6 +7,7 @@ const { configureFirebase } = require('./projectProvisioner/firebaseAdapter');
 const { deployVercel, getRuntimeOptions, preflightProviders, publishGitHub } = require('./projectProvisioner/remoteAdapters');
 const { installBackendClients, scaffoldProject } = require('./projectProvisioner/scaffold');
 const { configureSupabase, createSupabaseProjectViaApi } = require('./projectProvisioner/supabaseAdapter');
+const { analyzeWorkspace } = require('./workspaceAnalyzer');
 const {
   assertWindows,
   createGrantStore,
@@ -21,6 +22,7 @@ function clonePublicState(state) {
 
 function createProjectProvisioner({
   registerProject = async (projectPath, metadata) => ({ path: projectPath, ...metadata }),
+  workspaceAnalyzer = analyzeWorkspace,
   onProgress = () => {},
   runner = createDefaultRunner(),
   fsImpl = fs,
@@ -147,11 +149,19 @@ function createProjectProvisioner({
         job, request, state, accounts, invoke,
       }));
       await stage(state, 'register', 96, 'Registering the project in Vibe IDE Coder.', async () => {
+        const workspace = await workspaceAnalyzer(projectPath);
         state.project = await registerProject(projectPath, {
           name: request.name,
           slug: request.slug,
           type: request.type,
+          stack: request.stack,
           backend: request.backend,
+          repositoryVisibility: request.repository?.visibility,
+          deploymentProvider: request.deployment?.provider,
+          origin: 'provisioned',
+          registeredAt: now(),
+          primaryTargetId: workspace.recommendedTargetId,
+          workspace,
         });
       });
       state.status = 'completed';
@@ -171,12 +181,20 @@ function createProjectProvisioner({
       state.deployment = state.remotes.vercel;
       if (fsImpl.existsSync(projectPath) && !state.project) {
         try {
+          const workspace = await workspaceAnalyzer(projectPath);
           state.project = await registerProject(projectPath, {
             name: request.name,
             slug: request.slug,
             type: request.type,
+            stack: request.stack,
             backend: request.backend,
+            repositoryVisibility: request.repository?.visibility,
+            deploymentProvider: request.deployment?.provider,
             provisioningStatus: 'partial',
+            origin: 'provisioned',
+            registeredAt: now(),
+            primaryTargetId: workspace.recommendedTargetId,
+            workspace,
           });
         } catch {}
       }

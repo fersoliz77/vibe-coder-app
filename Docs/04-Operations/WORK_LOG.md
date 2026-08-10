@@ -4,6 +4,32 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-10
+
+### Scope
+
+- Added safe analysis and guided import for projects created outside Vibe IDE Code.
+- Unified provisioned and imported projects under a target-based workspace model.
+- Replaced project-mode learning progress with operational project details.
+- Added direct sidebar access to the learning platform.
+
+### Key Changes
+
+- Added bounded static detection for common web, mobile, backend, native, and monorepo manifests without executing project code or reading environment files.
+- Added expiring import grants, target confirmation, confidence labels, partial-analysis warnings, and generic-workspace fallback.
+- Added target-aware preview and Vercel-link discovery for applications inside nested workspace folders.
+- Added responsive, focus-trapped import review UI with lazy-loaded JavaScript and CSS.
+- Added the trusted `auth:open-learning` bridge to open `/learn` in the operating system's default browser.
+- Persisted stack, privacy, deployment, workspace, and primary-target metadata for newly created projects.
+
+### Validation
+
+- `npm run check` with 333 passing tests.
+- Token, literal, accessibility, contrast, design-system, build, and bundle-budget checks passed.
+- `git diff --check` passed.
+
+---
+
 ## 2026-07-13
 
 ### Scope

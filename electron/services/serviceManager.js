@@ -6,6 +6,7 @@ const execFileAsync = util.promisify(execFile);
 const os = require('os');
 const { validateProjectCwd } = require('../ipc/fsGuards');
 const { buildSubprocessEnv } = require('./subprocessEnv');
+const { getProjects } = require('./projectManager');
 
 /**
  * Service Manager — Checks connection status for Vercel, Supabase, GitHub, Git, Firebase
@@ -94,7 +95,12 @@ async function checkVercel(projectPath, cliRunner = runCli) {
     return { id: 'vercel', name: 'Vercel', connected: globalConnected, authenticated: globalConnected, user, checking: false };
   }
   
-  const vercelDir = path.join(projectPath, '.vercel');
+  const project = getProjects().find((entry) => path.resolve(entry.path) === path.resolve(projectPath));
+  const targets = Array.isArray(project?.workspace?.targets) ? project.workspace.targets : [];
+  const primary = targets.find((target) => target.id === project?.primaryTargetId);
+  const webTarget = [primary, ...targets].find((target) => target?.capabilities?.webPreview);
+  const vercelRoot = webTarget?.relativePath && webTarget.relativePath !== '.' ? path.join(projectPath, webTarget.relativePath) : projectPath;
+  const vercelDir = path.join(vercelRoot, '.vercel');
   const isLinked = fs.existsSync(vercelDir);
   let vercelProject = null;
   if (isLinked) {

@@ -15,6 +15,7 @@ const AUTH_CHANNELS = new Set([
   'auth:revalidate',
   'auth:logout',
   'auth:open-help',
+  'auth:open-learning',
 ]);
 
 const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll', 'updates:get-state']);

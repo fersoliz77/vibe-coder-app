@@ -1,10 +1,12 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useState, useEffect } from 'react';
 import GlobalServices from '../services/GlobalServices';
 import CreateProjectWizard from './CreateProjectWizard';
 import './ProjectList.css';
 import { useI18n } from '../../i18n/I18nContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { ASYNC_STATES, loading, runAsync } from '../../utils/asyncState';
+
+const ImportWorkspaceDialog = lazy(() => import('./ImportWorkspaceDialog'));
 
 export default function ProjectList({ onProjectSelect, onOpenSetup, services = [], claudeAvailable = false, onRefreshServices }) {
   const { t, formatDate } = useI18n();
@@ -16,6 +18,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
   const [createdProject, setCreatedProject] = useState(null);
   const [environmentMissing, setEnvironmentMissing] = useState(false);
   const [projectError, setProjectError] = useState('');
+  const [importSelection, setImportSelection] = useState(null);
+  const [choosingImport, setChoosingImport] = useState(false);
   // Proyecto pendiente de confirmacion antes de quitarlo de la lista.
   const [pendingRemoval, setPendingRemoval] = useState(null);
 
@@ -36,13 +40,14 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
 
   const handleImport = async () => {
     setProjectError('');
+    setChoosingImport(true);
     try {
-      if (window.electronAPI && window.electronAPI.projects) {
-        const newProject = await window.electronAPI.projects.import();
-        if (newProject) onProjectSelect(newProject);
-      }
+      const selection = await window.electronAPI?.projects?.chooseImport?.();
+      if (selection) setImportSelection(selection);
     } catch (error) {
       setProjectError(error?.message || t('projects.importFailed'));
+    } finally {
+      setChoosingImport(false);
     }
   };
 
@@ -160,8 +165,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
             + {t('projects.create')}
           </button>
           <span className="project-actions-divider">·</span>
-          <button className="project-action-link" onClick={handleImport}>
-            {t('projects.import')}
+          <button className="project-action-link" onClick={handleImport} disabled={choosingImport}>
+            {choosingImport ? t('projects.opening') : t('projects.import')}
           </button>
         </div>
       </div>
@@ -170,6 +175,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         <GlobalServices services={services} onRefresh={onRefreshServices} />
       </div>
       {wizardOpen && <CreateProjectWizard onClose={closeWizard} onCreated={(response) => { setCreatedProject(response.project); loadProjects(); }} />}
+      {importSelection && <Suspense fallback={null}><ImportWorkspaceDialog selection={importSelection} onCancel={() => setImportSelection(null)} onChooseAnother={() => { window.electronAPI.projects.cancelImport(importSelection.id).catch(() => {}); setImportSelection(null); setTimeout(handleImport, 0); }} onImported={(project) => { setImportSelection(null); loadProjects(); onProjectSelect(project); }} /></Suspense>}
       <ConfirmDialog
         open={Boolean(pendingRemoval)}
         title={t('projects.removeTitle', { name: pendingRemoval?.name })}

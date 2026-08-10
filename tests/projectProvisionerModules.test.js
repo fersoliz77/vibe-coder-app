@@ -20,7 +20,10 @@ test('validation normalizes legacy requests and rejects command injection fields
     name: 'Legacy Web',
     slug: 'legacy-web',
     type: 'vite-react-ts',
+    stack: { web: 'react-vite-typescript' },
     backend: 'none',
+    repository: { visibility: 'private' },
+    deployment: { provider: 'vercel' },
   });
   assert.throws(
     () => validateRequest({ name: 'Unsafe Demo', type: 'next-ts', shell: 'calc.exe' }),

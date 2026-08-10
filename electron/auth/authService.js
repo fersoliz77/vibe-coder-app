@@ -544,6 +544,13 @@ class AuthService {
     }
     return shell.openExternal(this.config.helpUrl);
   }
+
+  openLearning() {
+    if (!this.config.helpUrl) {
+      throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'VIBE_AUTH_HELP_URL is not configured.');
+    }
+    return shell.openExternal(new URL('/learn', this.config.helpUrl).toString());
+  }
 }
 
 function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
@@ -579,6 +586,7 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
     return state;
   });
   ipcMain.handle('auth:open-help', () => authService.openHelp());
+  ipcMain.handle('auth:open-learning', () => authService.openLearning());
   return notify;
 }
 
