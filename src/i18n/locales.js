@@ -209,6 +209,11 @@ Object.assign(dictionaries.en.settings, {
   diagnosticsPrivacy: 'The report is created only when you request it. It is never sent automatically and excludes tokens, prompts, code, emails, and complete user paths.',
   exportDiagnostics: 'Export diagnostic report', exportingDiagnostics: 'Exporting...', diagnosticsExported: 'Diagnostic report exported.', diagnosticsFailed: 'The diagnostic report could not be exported.',
   restrictedSupportCopy: 'Local diagnostics remain available while access is restricted.',
+  application: 'Application', applicationUpdates: 'Application updates', updateCurrentStatus: 'Up to date', updateAutomatic: 'Automatic',
+  updateCopy: 'Check the private stable channel without leaving the application.', updateReady: 'Ready to check', updateRequiresAccess: 'Active access is required',
+  updateBackgroundCopy: 'Checks run in the background. If a required version is found, its persistent progress screen takes over.',
+  checkForUpdates: 'Check for updates', updateCheckingButton: 'Checking...', updateChecking: 'Checking for updates...',
+  updateCurrentToast: 'Vibe IDE Code is up to date.', updateCheckFailed: 'Updates could not be checked. Try again.', updateDownloading: 'Downloading update: {percentage}%',
 });
 Object.assign(dictionaries.es.settings, {
   tabs: { ...dictionaries.es.settings.tabs, support: 'Soporte', supportCopy: 'Diagnóstico local' },
@@ -217,6 +222,11 @@ Object.assign(dictionaries.es.settings, {
   diagnosticsPrivacy: 'El reporte se crea únicamente cuando lo solicitás. Nunca se envía automáticamente y excluye tokens, prompts, código, emails y rutas completas de usuario.',
   exportDiagnostics: 'Exportar reporte de diagnóstico', exportingDiagnostics: 'Exportando...', diagnosticsExported: 'Reporte de diagnóstico exportado.', diagnosticsFailed: 'No se pudo exportar el reporte de diagnóstico.',
   restrictedSupportCopy: 'El diagnóstico local sigue disponible mientras el acceso está restringido.',
+  application: 'Aplicación', applicationUpdates: 'Actualizaciones de la aplicación', updateCurrentStatus: 'Al día', updateAutomatic: 'Automáticas',
+  updateCopy: 'Consultá el canal privado estable sin salir de la aplicación.', updateReady: 'Listo para comprobar', updateRequiresAccess: 'Se necesita acceso activo',
+  updateBackgroundCopy: 'La consulta se ejecuta en segundo plano. Si aparece una versión obligatoria, su pantalla persistente toma el control.',
+  checkForUpdates: 'Buscar actualizaciones', updateCheckingButton: 'Buscando...', updateChecking: 'Buscando actualizaciones...',
+  updateCurrentToast: 'Vibe IDE Code está actualizado.', updateCheckFailed: 'No se pudieron buscar actualizaciones. Intentá nuevamente.', updateDownloading: 'Descargando actualización: {percentage}%',
 });
 
 // Copiar la respuesta de un agente. Va al final a proposito: los merges de

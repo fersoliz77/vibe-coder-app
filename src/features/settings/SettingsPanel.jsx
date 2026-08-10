@@ -91,7 +91,12 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   const [providers, setProviders] = useState({ loading: true, claude: null, openai: null, opencode: null, error: '' });
   const [delivery, setDelivery] = useState({ loading: true, services: [], commands: {}, error: '' });
   const [activeTab, setActiveTab] = useState('services');
+  const [updateState, setUpdateState] = useState({ status: 'disabled', progress: null, error: null, revision: -1 });
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [updateToast, setUpdateToast] = useState(null);
   const tabsRef = useRef(null);
+  const updateRevisionRef = useRef(-1);
+  const updateToastTimerRef = useRef(null);
 
   const handleTabKeyDown = (event) => {
     const current = SETTINGS_TABS.findIndex((tab) => tab.id === activeTab);
@@ -152,6 +157,24 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
     saveAccessibility(accessibility);
   }, [accessibility]);
 
+  useEffect(() => {
+    const updates = window.electronAPI?.updates;
+    if (!updates) return undefined;
+    let active = true;
+    const accept = (next) => {
+      if (!active || !next || next.revision < updateRevisionRef.current) return;
+      updateRevisionRef.current = next.revision;
+      setUpdateState(next);
+    };
+    Promise.resolve(updates.getState()).then(accept).catch(() => {});
+    const unsubscribe = updates.onStateChanged(accept);
+    return () => {
+      active = false;
+      unsubscribe?.();
+      clearTimeout(updateToastTimerRef.current);
+    };
+  }, []);
+
   const runAccountAction = async (action) => {
     setBusy(action);
     setMessage('');
@@ -175,8 +198,41 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
     }
   };
 
+  const showUpdateToast = (tone, text) => {
+    clearTimeout(updateToastTimerRef.current);
+    setUpdateToast({ tone, text });
+    updateToastTimerRef.current = setTimeout(() => setUpdateToast(null), tone === 'error' ? 6000 : 4000);
+  };
+
+  const checkForUpdates = async () => {
+    if (state.policy !== 'active' || !window.electronAPI?.updates) return;
+    setUpdateChecking(true);
+    setUpdateToast(null);
+    try {
+      const result = await window.electronAPI.updates.check();
+      if (result && (result.revision ?? -1) >= updateRevisionRef.current) {
+        updateRevisionRef.current = result.revision ?? updateRevisionRef.current;
+        setUpdateState(result);
+      }
+      if (result?.status === 'current') showUpdateToast('success', t('settings.updateCurrentToast'));
+      else if (result?.status === 'error' && !result.mandatory) showUpdateToast('error', t('settings.updateCheckFailed'));
+    } catch {
+      showUpdateToast('error', t('settings.updateCheckFailed'));
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
   const account = state.account || {};
   const lease = state.leaseExpiresAt ? new Date(state.leaseExpiresAt) : null;
+  const updateBusy = updateChecking || updateState.status === 'checking' || updateState.status === 'downloading';
+  const persistentUpdateToast = updateBusy ? {
+    tone: 'progress',
+    text: updateState.status === 'downloading'
+      ? t('settings.updateDownloading', { percentage: Math.round(updateState.progress?.percent || 0) })
+      : t('settings.updateChecking'),
+  } : null;
+  const visibleUpdateToast = persistentUpdateToast || updateToast;
 
   return (
     <div className="settings-panel">
@@ -278,6 +334,19 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
 
           {activeTab === 'support' && (
             <div id="settings-panel-support" role="tabpanel" aria-labelledby="settings-tab-support" className="settings-tab-panel">
+              <section className="settings-card settings-update-card">
+                <div className="settings-card__heading"><div><span>{t('settings.application')}</span><h2>{t('settings.applicationUpdates')}</h2></div><span className="settings-saved">{updateState.status === 'current' ? t('settings.updateCurrentStatus') : t('settings.updateAutomatic')}</span></div>
+                <p className="settings-copy">{t('settings.updateCopy')}</p>
+                <div className="settings-update-overview">
+                  <div>
+                    <strong>{updateBusy ? t('settings.updateChecking') : state.policy === 'active' ? t('settings.updateReady') : t('settings.updateRequiresAccess')}</strong>
+                    <span>{updateState.status === 'error' ? t('settings.updateCheckFailed') : t('settings.updateBackgroundCopy')}</span>
+                  </div>
+                  <button className="btn btn--primary" type="button" aria-busy={updateBusy} disabled={updateBusy || state.policy !== 'active' || !window.electronAPI?.updates} onClick={checkForUpdates}>
+                    {updateBusy ? t('settings.updateCheckingButton') : t('settings.checkForUpdates')}
+                  </button>
+                </div>
+              </section>
               <section className="settings-card">
                 <div className="settings-card__heading"><div><span>{t('settings.localDiagnostics')}</span><h2>{t('settings.supportReport')}</h2></div><span className="settings-saved">JSON</span></div>
                 <p className="settings-copy">{t('settings.diagnosticsCopy')}</p>
@@ -291,6 +360,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
           )}
         </div>
       </div>
+      {visibleUpdateToast && <div className={`vc-toast settings-update-toast settings-update-toast--${visibleUpdateToast.tone}`} role={visibleUpdateToast.tone === 'error' ? 'alert' : 'status'} aria-live={visibleUpdateToast.tone === 'error' ? 'assertive' : 'polite'}>{visibleUpdateToast.text}</div>}
     </div>
   );
 }
