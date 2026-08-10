@@ -194,10 +194,10 @@
   overflow-wrap: anywhere;
 }
 .terminal-panel__fallback {
-  padding: 16px;
+  padding: var(--vc-space-4);
   color: var(--vc-text-3);
   font-family: var(--vc-font-mono);
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
 }
 
 .terminal-panel__fallback span {

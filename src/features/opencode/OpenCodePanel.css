@@ -12,7 +12,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 12px 16px;
+  padding: var(--vc-space-3) var(--vc-space-4);
   background: var(--vc-surface-1);
   border-bottom: 1px solid var(--vc-line);
 }
@@ -20,9 +20,9 @@
 .opencode-panel__title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--vc-space-2);
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--vc-text-base);
 }
 
 .opencode-panel__content {
@@ -38,7 +38,7 @@
   left: 0;
   right: 0;
   bottom: 0;
-  padding: 8px;
+  padding: var(--vc-space-2);
 }
 
 .opencode-panel__loading {
@@ -47,9 +47,9 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: 12px;
+  gap: var(--vc-space-3);
   color: var(--vc-text-3);
-  font-size: 14px;
+  font-size: var(--vc-text-base);
 }
 
 /* Un arranque fallido no puede verse igual que un arranque en curso. */
@@ -59,8 +59,8 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  gap: 12px;
-  padding: 24px;
+  gap: var(--vc-space-3);
+  padding: var(--vc-space-6);
   text-align: center;
 }
 
@@ -90,9 +90,9 @@
 .opencode-panel__badge {
   background: rgba(var(--vc-accent-rgb), 0.1);
   color: var(--vc-accent);
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 12px;
+  padding: 2px var(--vc-space-2);
+  border-radius: var(--vc-radius-lg);
+  font-size: var(--vc-text-xs);
   font-weight: 500;
   border: 1px solid rgba(var(--vc-accent-rgb), 0.15);
 }

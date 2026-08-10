@@ -120,7 +120,7 @@ html, body, #root {
 
 body {
   font-family: var(--vc-font-sans);
-  font-size: 14px;
+  font-size: var(--vc-text-base);
   line-height: 1.5;
   color: var(--vc-text-1);
   background-color: var(--vc-surface-0);
@@ -193,7 +193,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   font-weight: 700;
   color: var(--vc-text-1);
   letter-spacing: 0.01em;
@@ -205,7 +205,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
   background: transparent;
   border: none;
@@ -234,13 +234,13 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 800;
   color: var(--vc-on-accent);
 }
 
 .titlebar__name {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 600;
   color: var(--vc-text-2);
   letter-spacing: 0.5px;

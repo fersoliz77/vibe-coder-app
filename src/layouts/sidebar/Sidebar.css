@@ -118,16 +118,16 @@
   justify-content: center;
   background: var(--vc-accent);
   color: var(--vc-on-accent);
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 700;
   border-radius: var(--vc-radius-full);
-  padding: 0 4px;
+  padding: 0 var(--vc-space-1);
   line-height: 1;
 }
 
 .sidebar__badge--success {
   background: var(--vc-success);
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
 }
 
 .sidebar__footer {

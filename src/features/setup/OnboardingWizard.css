@@ -12,7 +12,7 @@
   z-index: 9999;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
   color: var(--vc-text-1);
-  padding: 24px;
+  padding: var(--vc-space-6);
 }
 
 .onboarding-wizard__container {
@@ -58,7 +58,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 600;
-  font-size: 14px;
+  font-size: var(--vc-text-base);
   color: var(--vc-text-3);
   z-index: 2;
   position: relative;
@@ -93,12 +93,12 @@
 .onboarding-wizard__title {
   font-size: 28px;
   font-weight: 700;
-  margin: 0 0 12px 0;
+  margin: 0 0 var(--vc-space-3) 0;
   color: var(--vc-text-1);
 }
 
 .onboarding-wizard__subtitle {
-  font-size: 15px;
+  font-size: var(--vc-text-md);
   color: var(--vc-text-3);
   line-height: 1.6;
   margin: 0 0 28px 0;
@@ -108,18 +108,18 @@
 .onboarding-wizard__preferences {
   display: flex;
   flex-direction: column;
-  gap: 16px;
-  margin-bottom: 32px;
+  gap: var(--vc-space-4);
+  margin-bottom: var(--vc-space-8);
 }
 
 .onboarding-wizard__field {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--vc-space-2);
 }
 
 .onboarding-wizard__field label {
-  font-size: 14px;
+  font-size: var(--vc-text-base);
   font-weight: 500;
   color: var(--vc-text-2);
 }
@@ -128,9 +128,9 @@
   background: rgba(var(--vc-ink-rgb), 0.7);
   border: 1px solid var(--vc-line);
   color: var(--vc-text-1);
-  padding: 12px;
-  border-radius: 8px;
-  font-size: 15px;
+  padding: var(--vc-space-3);
+  border-radius: var(--vc-radius-md);
+  font-size: var(--vc-text-md);
   outline: none;
   cursor: pointer;
   transition: var(--vc-transition-fast);
@@ -144,11 +144,11 @@
 .onboarding-wizard__checkbox-card {
   display: flex;
   align-items: flex-start;
-  gap: 16px;
+  gap: var(--vc-space-4);
   background: rgba(var(--vc-ink-rgb), 0.4);
   border: 1px solid var(--vc-line);
-  padding: 16px;
-  border-radius: 8px;
+  padding: var(--vc-space-4);
+  border-radius: var(--vc-radius-md);
   cursor: pointer;
   transition: var(--vc-transition-fast);
 }
@@ -161,7 +161,7 @@
 .onboarding-wizard__checkbox-card input[type="checkbox"] {
   width: 20px;
   height: 20px;
-  border-radius: 4px;
+  border-radius: var(--vc-radius-xs);
   accent-color: var(--vc-accent);
   cursor: pointer;
   margin-top: 2px;
@@ -170,17 +170,17 @@
 .onboarding-wizard__checkbox-text {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--vc-space-1);
 }
 
 .onboarding-wizard__checkbox-title {
-  font-size: 15px;
+  font-size: var(--vc-text-md);
   font-weight: 600;
   color: var(--vc-text-1);
 }
 
 .onboarding-wizard__checkbox-desc {
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   color: var(--vc-text-3);
 }
 
@@ -188,11 +188,11 @@
 .onboarding-wizard__env-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--vc-space-3);
   max-height: 280px;
   overflow-y: auto;
-  margin-bottom: 24px;
-  padding-right: 8px;
+  margin-bottom: var(--vc-space-6);
+  padding-right: var(--vc-space-2);
 }
 
 .onboarding-wizard__env-item {
@@ -201,31 +201,31 @@
   justify-content: space-between;
   background: rgba(var(--vc-ink-rgb), 0.35);
   border: 1px solid var(--vc-line);
-  padding: 12px 16px;
-  border-radius: 8px;
+  padding: var(--vc-space-3) var(--vc-space-4);
+  border-radius: var(--vc-radius-md);
 }
 
 .onboarding-wizard__env-info {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--vc-space-1);
 }
 
 .onboarding-wizard__env-name {
-  font-size: 14px;
+  font-size: var(--vc-text-base);
   font-weight: 600;
   color: var(--vc-text-1);
 }
 
 .onboarding-wizard__env-status {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
 }
 
 .onboarding-wizard__badge {
   padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 12px;
+  border-radius: var(--vc-radius-xs);
+  font-size: var(--vc-text-xs);
   font-weight: 700;
   text-transform: uppercase;
 }
@@ -251,8 +251,8 @@
 .onboarding-wizard__status-indicator {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--vc-space-2);
+  font-size: var(--vc-text-sm);
   font-weight: 600;
 }
 
@@ -268,12 +268,12 @@
 .onboarding-wizard__agent-card {
   background: rgba(var(--vc-accent-rgb), 0.05);
   border: 1px solid rgba(var(--vc-accent-rgb), 0.15);
-  padding: 16px;
+  padding: var(--vc-space-4);
   border-radius: 10px;
-  margin-bottom: 24px;
+  margin-bottom: var(--vc-space-6);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--vc-space-4);
 }
 
 .onboarding-wizard__agent-header {
@@ -283,21 +283,21 @@
 }
 
 .onboarding-wizard__agent-badge {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 700;
   color: var(--vc-accent);
   background: rgba(var(--vc-accent-rgb), 0.12);
-  padding: 4px 8px;
-  border-radius: 4px;
+  padding: var(--vc-space-1) var(--vc-space-2);
+  border-radius: var(--vc-radius-xs);
 }
 
 /* Installation Logs */
 .onboarding-wizard__progress {
   background: var(--vc-surface-2);
   border: 1px solid var(--vc-line);
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 24px;
+  border-radius: var(--vc-radius-md);
+  padding: var(--vc-space-4);
+  margin-bottom: var(--vc-space-6);
 }
 
 .onboarding-wizard__progress-track {
@@ -305,7 +305,7 @@
   background: var(--vc-surface-3);
   border-radius: 3px;
   overflow: hidden;
-  margin-bottom: 12px;
+  margin-bottom: var(--vc-space-3);
 }
 
 .onboarding-wizard__progress-bar {
@@ -317,23 +317,23 @@
 .onboarding-wizard__progress-info {
   display: flex;
   justify-content: space-between;
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   color: var(--vc-text-2);
 }
 
 .onboarding-wizard__log {
   background: rgba(0, 0, 0, 0.3);
-  border-radius: 4px;
-  padding: 8px;
+  border-radius: var(--vc-radius-xs);
+  padding: var(--vc-space-2);
   font-family: monospace;
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-success);
   max-height: 80px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-top: 12px;
+  gap: var(--vc-space-1);
+  margin-top: var(--vc-space-3);
 }
 
 /* Footer & Buttons */
@@ -343,25 +343,25 @@
   align-items: center;
   margin-top: auto;
   border-top: 1px solid var(--vc-line);
-  padding-top: 24px;
+  padding-top: var(--vc-space-6);
 }
 
 .onboarding-wizard__footer-text {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
   max-width: 320px;
 }
 
 .onboarding-wizard__buttons {
   display: flex;
-  gap: 12px;
+  gap: var(--vc-space-3);
   margin-left: auto;
 }
 
 .onboarding-wizard__btn {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: var(--vc-space-2) var(--vc-space-4);
+  border-radius: var(--vc-radius-md);
+  font-size: var(--vc-text-base);
   font-weight: 600;
   cursor: pointer;
   transition: var(--vc-transition-fast);
@@ -410,7 +410,7 @@
   flex-direction: column;
   align-items: center;
   text-align: center;
-  padding: 16px 0;
+  padding: var(--vc-space-4) 0;
 }
 
 .onboarding-wizard__success-icon {
@@ -425,7 +425,7 @@
   justify-content: center;
   font-size: 32px;
   font-weight: 700;
-  margin-bottom: 24px;
+  margin-bottom: var(--vc-space-6);
 }
 
 /* Un cierre con pendientes no puede verse igual que uno completo. */
@@ -437,9 +437,9 @@
 
 .onboarding-wizard__outcome {
   display: grid;
-  gap: 12px;
-  margin-top: 8px;
-  padding: 16px;
+  gap: var(--vc-space-3);
+  margin-top: var(--vc-space-2);
+  padding: var(--vc-space-4);
   border: 1px solid var(--vc-line);
   border-radius: 14px;
   background: var(--vc-surface-2);
@@ -465,19 +465,19 @@
 }
 
 .onboarding-wizard__outcome-list strong {
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
 }
 
 .onboarding-wizard__outcome-list span {
   color: var(--vc-text-3);
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
 }
 
 .onboarding-wizard__outcome-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  gap: var(--vc-space-3);
 }
 
 .onboarding-wizard__spinner {

@@ -65,7 +65,7 @@
 }
 
 .service-card__status-text {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 500;
   color: var(--vc-text-3);
   text-transform: uppercase;
@@ -91,13 +91,13 @@
 }
 
 .service-card__user {
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   color: var(--vc-accent);
   font-weight: 500;
 }
 
 .service-card__hint {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
 }
 

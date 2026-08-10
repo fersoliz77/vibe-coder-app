@@ -3,10 +3,10 @@
   background: var(--vc-surface-3);
   border: 1px solid var(--vc-line);
   border-radius: var(--vc-radius-lg);
-  padding: 16px;
+  padding: var(--vc-space-4);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--vc-space-4);
 }
 
 .global-services--project {
@@ -23,14 +23,14 @@
 .global-services__header-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--vc-space-2);
 }
 
 .global-services__title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
+  gap: var(--vc-space-2);
+  font-size: var(--vc-text-sm);
   font-weight: 700;
   color: var(--vc-text-1);
 }
@@ -42,9 +42,9 @@
 }
 
 .global-services__badge {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 600;
-  padding: 4px 8px;
+  padding: var(--vc-space-1) var(--vc-space-2);
   border-radius: var(--vc-radius-xs);
   background: var(--vc-surface-2);
 }
@@ -70,7 +70,7 @@
   justify-content: center;
   width: 24px;
   height: 24px;
-  border-radius: 6px;
+  border-radius: var(--vc-radius-sm);
   background: transparent;
   border: 1px solid var(--vc-line);
   color: var(--vc-text-3);
@@ -103,7 +103,7 @@
 .global-services__list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--vc-space-3);
 }
 
 .global-service-item {
@@ -115,7 +115,7 @@
 .global-service-item__left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--vc-space-2);
   min-width: 0;
   flex: 1;
 }
@@ -128,7 +128,7 @@
 }
 
 .global-service-item__account {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-accent);
   opacity: 0.85;
   overflow: hidden;
@@ -138,7 +138,7 @@
 }
 
 .global-service-item__project {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -154,7 +154,7 @@
 .global-service-item__icon {
   width: 28px;
   height: 28px;
-  border-radius: 6px;
+  border-radius: var(--vc-radius-sm);
   background: var(--vc-surface-2);
   border: 1px solid var(--vc-line);
   display: flex;
@@ -177,7 +177,7 @@
 }
 
 .global-service-item__name {
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   font-weight: 500;
   color: var(--vc-text-2);
 }
@@ -206,7 +206,7 @@
 }
 
 .global-service-item__status-text {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   font-weight: 500;
 }
 

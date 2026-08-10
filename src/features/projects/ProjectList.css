@@ -10,13 +10,13 @@
   overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 32px;
+  gap: var(--vc-space-8);
 }
 
 .project-list-sidebar {
   width: 320px;
   border-left: 1px solid var(--vc-line);
-  padding: 40px 24px;
+  padding: 40px var(--vc-space-6);
   background: var(--vc-surface-1);
   overflow-y: auto;
 }
@@ -26,22 +26,22 @@
   flex-direction: row;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--vc-space-2);
 }
 
-.project-setup-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 16px; border: 1px solid rgba(var(--vc-warning-rgb), .28); border-radius: 12px; background: rgba(var(--vc-warning-rgb), .07); }
+.project-setup-banner { display: flex; align-items: center; justify-content: space-between; gap: var(--vc-space-4); padding: var(--vc-space-4) var(--vc-space-4); border: 1px solid rgba(var(--vc-warning-rgb), .28); border-radius: var(--vc-radius-lg); background: rgba(var(--vc-warning-rgb), .07); }
 .project-setup-banner > div { display: grid; gap: 3px; }
-.project-setup-banner strong { color: var(--vc-text-1); font-size: 13px; }
-.project-setup-banner span { color: var(--vc-text-2); font-size: 12px; }
-.project-setup-banner button { padding: 8px 12px; border: 1px solid rgba(var(--vc-warning-rgb), .35); border-radius: 8px; color: var(--vc-warning); background: transparent; cursor: pointer; }
-.project-error { padding: 12px 12px; border: 1px solid rgba(var(--vc-danger-rgb), .3); border-radius: 10px; color: var(--vc-danger); background: rgba(var(--vc-danger-rgb), .08); font-size: 13px; }
+.project-setup-banner strong { color: var(--vc-text-1); font-size: var(--vc-text-sm); }
+.project-setup-banner span { color: var(--vc-text-2); font-size: var(--vc-text-xs); }
+.project-setup-banner button { padding: var(--vc-space-2) var(--vc-space-3); border: 1px solid rgba(var(--vc-warning-rgb), .35); border-radius: var(--vc-radius-md); color: var(--vc-warning); background: transparent; cursor: pointer; }
+.project-error { padding: var(--vc-space-3) var(--vc-space-3); border: 1px solid rgba(var(--vc-danger-rgb), .3); border-radius: 10px; color: var(--vc-danger); background: rgba(var(--vc-danger-rgb), .08); font-size: var(--vc-text-sm); }
 /* Un listado que fallo tiene que ofrecer salida, no solo el color rojo. */
-.project-error--block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 16px 0; padding: 16px; }
-.project-error--block p { margin: 4px 0 0; color: var(--vc-text-2); }
+.project-error--block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--vc-space-3); margin: var(--vc-space-4) 0; padding: var(--vc-space-4); }
+.project-error--block p { margin: var(--vc-space-1) 0 0; color: var(--vc-text-2); }
 
 @media (max-width: 900px) {
   .project-list-sidebar { display: none; }
-  .project-list-main { padding: 24px; }
+  .project-list-main { padding: var(--vc-space-6); }
   .project-header, .project-setup-banner { align-items: flex-start; flex-direction: column; }
 }
 
@@ -62,15 +62,15 @@
 .project-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  gap: var(--vc-space-6);
 }
 
 .project-card {
-  padding: 24px;
-  border-radius: 16px;
+  padding: var(--vc-space-6);
+  border-radius: var(--vc-radius-xl);
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--vc-space-4);
   cursor: pointer;
   transition: var(--vc-transition-normal);
   position: relative;
@@ -105,7 +105,7 @@
 .project-card__icon-wrapper {
   width: 48px;
   height: 48px;
-  border-radius: 12px;
+  border-radius: var(--vc-radius-lg);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -131,8 +131,8 @@
   border: none;
   color: var(--vc-text-3);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: var(--vc-space-1);
+  border-radius: var(--vc-radius-xs);
   transition: var(--vc-transition-fast);
   opacity: 0;
 }
@@ -155,7 +155,7 @@
 .project-card__content {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--vc-space-1);
 }
 
 .project-card__content h3 {
@@ -166,7 +166,7 @@
 }
 
 .project-card__content p {
-  font-size: 13px;
+  font-size: var(--vc-text-sm);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -174,13 +174,13 @@
 }
 
 .project-card__meta {
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: var(--vc-space-3);
+  padding-top: var(--vc-space-3);
   border-top: 1px solid var(--vc-line);
 }
 
 .project-card__date {
-  font-size: 12px;
+  font-size: var(--vc-text-xs);
   color: var(--vc-text-3);
 }
 
@@ -189,16 +189,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16px;
+  gap: var(--vc-space-4);
   margin-top: auto;
-  padding: 24px 0 8px;
+  padding: var(--vc-space-6) 0 var(--vc-space-2);
 }
 
 .project-action-link {
   background: none;
   border: none;
   padding: 0;
-  font-size: 14px;
+  font-size: var(--vc-text-base);
   font-weight: 500;
   color: var(--vc-text-3);
   cursor: pointer;
@@ -223,5 +223,5 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 15px;
+  font-size: var(--vc-text-md);
 }

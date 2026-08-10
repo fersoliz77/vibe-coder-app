@@ -7,7 +7,7 @@
   align-items: center;
   gap: 5px;
   margin-top: var(--vc-space-2);
-  padding: 3px 8px;
+  padding: 3px var(--vc-space-2);
   border: 1px solid var(--vc-line);
   border-radius: var(--vc-radius-xs);
   background: var(--vc-surface-2);
