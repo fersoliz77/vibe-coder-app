@@ -108,16 +108,20 @@ jobs:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: npm run release:publish
 
-      - name: Preserve release evidence
+      - name: Record release evidence
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-        with:
-          name: desktop-release-${{ env.RELEASE_VERSION }}-evidence
-          path: |
-            dist-electron/latest.yml
-            dist-electron/Vibe-IDE-Code-Setup-*.exe
-            dist-electron/Vibe-IDE-Code-Setup-*.exe.blockmap
-            temp/build/release-manifest.json
-            temp/build/*.sha256
-          if-no-files-found: error
-          retention-days: 90
+        shell: pwsh
+        run: |
+          $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
+          $blockmap = "$installer.blockmap"
+          $metadata = 'dist-electron/latest.yml'
+          @(
+            '## Desktop release evidence'
+            ''
+            "- Version: ``$env:RELEASE_VERSION``"
+            "- Installer bytes: ``$((Get-Item -LiteralPath $installer).Length)``"
+            "- Installer SHA-256: ``$((Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant())``"
+            "- Blockmap SHA-256: ``$((Get-FileHash -LiteralPath $blockmap -Algorithm SHA256).Hash.ToLowerInvariant())``"
+            "- Signed metadata SHA-256: ``$((Get-FileHash -LiteralPath $metadata -Algorithm SHA256).Hash.ToLowerInvariant())``"
+            "- Private release: https://github.com/$env:GITHUB_REPOSITORY/releases/tag/v$env:RELEASE_VERSION"
+          ) | Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY

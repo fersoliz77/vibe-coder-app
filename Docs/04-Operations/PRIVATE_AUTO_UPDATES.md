@@ -135,7 +135,7 @@ Si falla antes de crear el borrador, no hay publicación parcial. Si falla despu
 
 1. Verificar backend, Worker y secrets.
 2. Publicar `v1.1.5` y comprobar que el release privado quedó activo con los tres assets.
-3. Descargar `Vibe-IDE-Code-Setup-1.1.5.exe` desde el artifact aprobado de Actions o el release privado, sin exponer tokens.
+3. Descargar `Vibe-IDE-Code-Setup-1.1.5.exe` desde el release privado, sin exponer tokens.
 4. Distribuirlo por el canal privado aprobado y ejecutarlo sobre `1.0.0`.
 5. Aceptar conscientemente `Editor desconocido`, confirmar versión `1.1.5`, reautenticación y estado `current` para una cuenta `active`.
 6. Registrar qué equipos completaron el bootstrap; Storage por sí solo no actualiza `1.0.0`.
