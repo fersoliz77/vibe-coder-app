@@ -25,6 +25,12 @@
     "--file-accent": "Color por tipo de archivo en el explorador; ExplorerTree lo asigna por fila segun la extension."
   },
 
+  "composed": {
+    "$comment": "Valen una composicion de tokens, no un token. No se pueden traducir mecanicamente: reemplazarlos por su descripcion escribiria CSS invalido. Se usan como `transition: <propiedad> var(--timing-fast)`.",
+    "--timing-fast": "Duracion rapida + easing canonicos, para transiciones de propiedad explicita en el escritorio.",
+    "--timing-normal": "Idem, duracion normal."
+  },
+
   "chrome": {
     "$comment": "Medidas del marco de la aplicacion de escritorio. No son candidatos a canonicos porque la web no tiene ni barra de titulo ni barra lateral fija: subirlos al contrato compartido obligaria al otro producto a cargar con un concepto que no tiene.",
     "--titlebar-height": "Alto de la barra de titulo propia de Electron, 40px.",

@@ -93,9 +93,7 @@
     "--radius-md": "--vc-radius-md",
     "--radius-lg": "--vc-radius-lg",
     "--radius-xl": "--vc-radius-xl",
-    "--radius-full": "--vc-radius-full",
-    "--timing-fast": "--vc-duration-fast + --vc-ease",
-    "--timing-normal": "--vc-duration-normal + --vc-ease"
+    "--radius-full": "--vc-radius-full"
   },
 
   "$notes": {

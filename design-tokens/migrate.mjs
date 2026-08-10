@@ -35,7 +35,21 @@ const exceptions = JSON.parse(await readFile(new URL('exceptions.json', contract
 
 /* Que producto es este, para elegir la mitad correcta del diccionario. */
 const product = existsSync(join(ownRoot, 'src/styles/tokens.css')) ? 'app' : 'web';
-const rules = Object.entries(map[product] ?? {}).filter(([, target]) => target.startsWith('--vc-'));
+
+/*
+ * Solo se traduce lo que es un token unico. Algunas entradas del mapa
+ * describen una composicion -`--timing-fast` vale duracion MAS easing- y no un
+ * reemplazo: sustituirlas mecanicamente escribiria `var(--vc-a + --vc-b)`, que
+ * es CSS invalido y que el navegador descarta en silencio, exactamente el tipo
+ * de error que este sistema existe para evitar.
+ */
+const SINGLE_TOKEN = /^--vc-[\w-]+$/;
+const composed = [];
+const rules = [];
+for (const [legacy, target] of Object.entries(map[product] ?? {})) {
+  if (SINGLE_TOKEN.test(target)) rules.push([legacy, target]);
+  else composed.push(`${legacy} (${target})`);
+}
 
 const excepted = new Set();
 for (const [group, entries] of Object.entries(exceptions)) {
@@ -44,6 +58,9 @@ for (const [group, entries] of Object.entries(exceptions)) {
 }
 
 console.log(`Producto: ${product}. ${rules.length} regla(s) de traduccion, ${excepted.size} excepcion(es) que no se tocan.`);
+if (composed.length > 0) {
+  console.log(`No se traducen automaticamente (valen una composicion, no un token): ${composed.join(', ')}`);
+}
 if (dry) console.log('Modo simulacion: no se escribe nada.\n');
 
 let totalChanges = 0;
@@ -72,7 +89,9 @@ for (const file of files) {
 
   /* Lo que queda sin migrar despues de pasar: o es excepcion, o falta en el mapa. */
   const remaining = new Set();
-  for (const [, name] of after.matchAll(/var\(\s*(--[a-z][\w-]*)\s*\)/g)) {
+  // Sin comentarios: un `var()` citado en una explicacion no es un consumo.
+  const code = after.replace(/\/\*[\s\S]*?\*\//g, '');
+  for (const [, name] of code.matchAll(/var\(\s*(--[a-z][\w-]*)\s*\)/g)) {
     if (name.startsWith('--vc-') || excepted.has(name)) continue;
     remaining.add(name);
   }

@@ -119,11 +119,11 @@ html, body, #root {
 }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--vc-font-sans);
   font-size: 14px;
   line-height: 1.5;
-  color: var(--text-primary);
-  background-color: var(--bg-deepest);
+  color: var(--vc-text-1);
+  background-color: var(--vc-surface-0);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   user-select: text;
@@ -140,8 +140,8 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--glass-border);
-  border-radius: var(--radius-full);
+  background: var(--vc-line);
+  border-radius: var(--vc-radius-full);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -158,18 +158,18 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 var(--space-sm);
-  background: var(--bg-deep);
+  padding: 0 var(--vc-space-2);
+  background: var(--vc-surface-1);
   -webkit-app-region: drag;
   z-index: 9999;
-  border-bottom: 1px solid var(--glass-border);
+  border-bottom: 1px solid var(--vc-line);
 }
 
 .titlebar__brand {
   display: flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding-left: var(--space-sm);
+  gap: var(--vc-space-2);
+  padding-left: var(--vc-space-2);
   position: relative;
   z-index: 2;
 }
@@ -195,7 +195,7 @@ body {
   white-space: nowrap;
   font-size: 13px;
   font-weight: 700;
-  color: var(--text-primary);
+  color: var(--vc-text-1);
   letter-spacing: 0.01em;
 }
 
@@ -206,7 +206,7 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   background: transparent;
   border: none;
   padding: 0;
@@ -217,11 +217,11 @@ body {
 }
 
 .titlebar__project-path:hover {
-  color: var(--accent-primary);
+  color: var(--vc-accent);
 }
 
 .titlebar__project-path:focus-visible {
-  outline: 1px solid var(--accent-primary);
+  outline: 1px solid var(--vc-accent);
   outline-offset: 2px;
   border-radius: 2px;
 }
@@ -230,7 +230,7 @@ body {
   width: 20px;
   height: 20px;
   background: var(--accent-gradient);
-  border-radius: var(--radius-sm);
+  border-radius: var(--vc-radius-xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -242,7 +242,7 @@ body {
 .titlebar__name {
   font-size: 12px;
   font-weight: 600;
-  color: var(--text-secondary);
+  color: var(--vc-text-2);
   letter-spacing: 0.5px;
   text-transform: uppercase;
 }
@@ -262,18 +262,18 @@ body {
   justify-content: center;
   border: none;
   background: transparent;
-  color: var(--text-secondary);
+  color: var(--vc-text-2);
   cursor: pointer;
   transition: background var(--timing-fast), color var(--timing-fast);
 }
 
 .titlebar__btn:hover {
-  background: var(--glass-hover);
-  color: var(--text-primary);
+  background: var(--vc-surface-3);
+  color: var(--vc-text-1);
 }
 
 .titlebar__btn--close:hover {
-  background: var(--status-error);
+  background: var(--vc-danger);
   color: white;
 }
 
@@ -294,7 +294,7 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  background: var(--bg-deep);
+  background: var(--vc-surface-1);
 }
 
 @media (max-width: 900px) {
@@ -309,15 +309,15 @@ body {
 
 /* ─── Superficie de panel ────────────────────────────────────────── */
 .glass-card {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-lg);
+  background: var(--vc-surface-2);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-lg);
   transition: var(--vc-transition-normal);
 }
 
 /* El hover no desplaza el elemento: solo cambia superficie y borde. */
 .glass-card:hover {
-  background: var(--glass-hover);
+  background: var(--vc-surface-3);
   border-color: var(--vc-line-strong);
 }
 
@@ -326,13 +326,13 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  border: 1px solid var(--glass-border);
-  border-radius: var(--radius-md);
-  background: var(--glass-bg);
-  color: var(--text-primary);
-  font-family: var(--font-sans);
+  gap: var(--vc-space-2);
+  padding: var(--vc-space-2) var(--vc-space-4);
+  border: 1px solid var(--vc-line);
+  border-radius: var(--vc-radius-md);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-1);
+  font-family: var(--vc-font-sans);
   font-size: var(--vc-text-base);
   font-weight: 500;
   cursor: pointer;
@@ -342,7 +342,7 @@ body {
 
 /* Los controles no se desplazan al pasar el mouse. */
 .btn:hover {
-  background: var(--glass-hover);
+  background: var(--vc-surface-3);
   border-color: var(--vc-line-strong);
 }
 
@@ -369,16 +369,16 @@ body {
 }
 
 .btn--small {
-  padding: var(--space-xs) var(--space-sm);
+  padding: var(--vc-space-1) var(--vc-space-2);
   font-size: var(--vc-text-sm);
-  border-radius: var(--radius-sm);
+  border-radius: var(--vc-radius-xs);
 }
 
 .btn--icon {
   width: 36px;
   height: 36px;
   padding: 0;
-  border-radius: var(--radius-md);
+  border-radius: var(--vc-radius-md);
 }
 
 /* ─── Status Indicators ─────────────────────────────────────────── */
@@ -392,15 +392,15 @@ body {
 /* Conectado es un estado estable: no debe latir indefinidamente.
    El pulso queda reservado para lo que realmente esta en curso. */
 .status-dot--connected {
-  background: var(--status-success);
+  background: var(--vc-success);
 }
 
 .status-dot--disconnected {
-  background: var(--text-tertiary);
+  background: var(--vc-text-3);
 }
 
 .status-dot--checking {
-  background: var(--status-checking);
+  background: var(--vc-accent);
   animation: pulse-glow 1.2s ease-in-out infinite;
 }
 
@@ -464,19 +464,19 @@ body {
 
 /* ─── Utility Classes ────────────────────────────────────────────── */
 .text-mono {
-  font-family: var(--font-mono);
+  font-family: var(--vc-font-mono);
 }
 
 .text-secondary {
-  color: var(--text-secondary);
+  color: var(--vc-text-2);
 }
 
 .text-tertiary {
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
 }
 
 .text-accent {
-  color: var(--accent-primary);
+  color: var(--vc-accent);
 }
 
 /* Sin degradado sobre texto: el acento se aplica plano y legible. */
