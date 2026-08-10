@@ -239,7 +239,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   return (
     <div className="settings-panel">
       <header className="settings-header">
-        <div><p className="settings-eyebrow">{t('settings.headingEyebrow')}</p><h1>{t('settings.heading')}</h1></div>
+        <div><p className="settings-eyebrow">{t('settings.headingEyebrow')}</p></div>
         <p>{t('settings.headingCopy')}</p>
       </header>
 
