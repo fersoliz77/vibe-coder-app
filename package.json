@@ -1,6 +1,6 @@
 {
   "name": "vibe-ide-coder",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "author": "Vibe IDE Code",
   "main": "electron/main.js",
@@ -97,8 +97,7 @@
     "publish": [
       {
         "provider": "generic",
-        "url": "https://updates.invalid/stable",
-        "channel": "stable"
+        "url": "https://updates.invalid/stable"
       }
     ],
     "nsis": {

@@ -173,3 +173,9 @@ test('packaging cannot automatically execute environment installation', () => {
   assert.match(setupCenter, /confirming &&/);
   assert.match(setupCenter, /onClick=\{install\}/);
 });
+
+test('packaging generates the latest.yml expected by the private stable feed', () => {
+  const packageConfig = require('../package.json');
+  assert.equal(packageConfig.build.publish[0].provider, 'generic');
+  assert.equal(Object.hasOwn(packageConfig.build.publish[0], 'channel'), false);
+});
