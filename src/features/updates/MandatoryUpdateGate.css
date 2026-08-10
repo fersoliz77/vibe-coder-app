@@ -83,6 +83,11 @@
 .update-progress__track { height: 8px; overflow: hidden; border-radius: var(--vc-radius-full); background: var(--vc-surface-4); }
 .update-progress__track span { display: block; height: 100%; border-radius: inherit; background: var(--vc-accent); transition: width var(--vc-duration-normal) ease; }
 .update-progress small { color: var(--vc-text-3); font: var(--vc-text-xs) var(--vc-font-mono); }
+.update-progress__mode { display: flex; align-items: center; gap: var(--vc-space-2); margin-top: var(--vc-space-2); color: var(--vc-text-2); font-size: var(--vc-text-xs); }
+.update-progress__mode::before { content: ''; width: 7px; height: 7px; flex: 0 0 auto; border-radius: var(--vc-radius-full); background: var(--vc-accent); }
+.update-progress__mode--differential { color: var(--vc-success); }
+.update-progress__mode--differential::before { background: var(--vc-success); }
+.update-progress__mode--full::before { background: var(--vc-warning); }
 
 .update-card__actions { display: grid; margin-top: var(--vc-space-6); }
 .update-card__actions:empty { display: none; }

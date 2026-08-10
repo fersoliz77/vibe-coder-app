@@ -7,6 +7,7 @@ const path = require('node:path');
 const {
   UpdateManager,
   buildFeed,
+  classifyUpdaterLog,
   setupUpdateHandlers,
 } = require('../electron/services/updateManager');
 const { installIpcAuthorization } = require('../electron/auth/ipcGuard');
@@ -103,8 +104,9 @@ test('active access configures conservative updater flags and reports current sa
   assert.equal(harness.updater.autoInstallOnAppQuit, false);
   assert.equal(harness.updater.allowPrerelease, false);
   assert.equal(harness.updater.allowDowngrade, false);
-  assert.equal(harness.updater.logger, null);
+  assert.deepEqual(Object.keys(harness.updater.logger).sort(), ['debug', 'error', 'info', 'warn']);
   assert.equal(harness.updater.feeds[0].provider, 'generic');
+  assert.equal(harness.updater.feeds[0].useMultipleRangeRequest, false);
   assert.equal(harness.updater.feeds[0].url, 'https://updates.example.test/stable');
   assert.deepEqual(harness.updater.feeds[0].requestHeaders, {
     Authorization: 'Bearer secret-access-token',
@@ -119,11 +121,12 @@ test('every available update blocks until download and explicit coordinated inst
   const harness = createHarness({
     checkForUpdates: async () => ({
       isUpdateAvailable: true,
-      updateInfo: { version: '2.4.1', files: [{ url: 'https://private/file.exe' }] },
+      updateInfo: { version: '2.4.1', files: [{ url: 'https://private/file.exe', size: 104857600 }] },
       cancellationToken,
     }),
     downloadUpdate: async (receivedToken) => {
       assert.equal(receivedToken, cancellationToken);
+      harness.updater.logger.info('Full: 100 MB, To download: 5 MB (5%)');
       harness.updater.emit('download-progress', {
         percent: 41.5,
         bytesPerSecond: 500,
@@ -138,17 +141,44 @@ test('every available update blocks until download and explicit coordinated inst
   const { revision, ...availableState } = available;
   assert.ok(revision > 0);
   assert.deepEqual(availableState, {
-    status: 'available', mandatory: true, blocking: true, version: '2.4.1', progress: null, error: null,
+    status: 'available', mandatory: true, blocking: true, version: '2.4.1', progress: null,
+    download: {
+      mode: 'evaluating', fallback: false, fallbackCategory: null,
+      installerSize: 104857600, transferred: 0, total: 0,
+    },
+    error: null,
   });
   const downloaded = await harness.manager.download();
   assert.equal(downloaded.status, 'downloaded');
   assert.equal(downloaded.blocking, true);
+  assert.deepEqual(downloaded.download, {
+    mode: 'differential', fallback: false, fallbackCategory: null,
+    installerSize: 104857600, transferred: 100, total: 240,
+  });
   assert.equal(JSON.stringify(downloaded).includes('private'), false);
 
   harness.manager.install();
   assert.equal(harness.prepared, 1);
   assert.deepEqual(harness.updater.installArgs, [true, true]);
   assert.throws(() => harness.manager.install(), (error) => error.code === 'UPDATE_STATE_INVALID');
+});
+
+test('updater logs expose only bounded differential telemetry categories', () => {
+  assert.deepEqual(classifyUpdaterLog('info', 'Full: 249.5 MB, To download: 12 KB (1%)'), {
+    event: 'differential-plan', mode: 'differential', installerSize: 261619712, total: 12288,
+  });
+  for (const [message, fallbackCategory] of [
+    ['Cannot download differentially, fallback to full download: multipart range failed', 'range-response-invalid'],
+    ['Cannot download differentially, fallback to full download: blockmap missing', 'blockmap-unavailable'],
+    ['Cannot download differentially, fallback to full download: ENOENT oldFile', 'installer-cache-missing'],
+    ['Cannot download differentially, fallback to full download: sha512 checksum mismatch', 'integrity-mismatch'],
+    ['Cannot download differentially, fallback to full download: private failure', 'differential-unavailable'],
+  ]) {
+    assert.deepEqual(classifyUpdaterLog('error', message), {
+      event: 'differential-fallback', mode: 'full', fallback: true, fallbackCategory,
+    });
+  }
+  assert.equal(classifyUpdaterLog('info', 'Bearer secret-access-token C:\\private\\file.exe'), null);
 });
 
 test('check failures before update knowledge do not block', async () => {

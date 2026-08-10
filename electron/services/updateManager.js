@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { writeJsonAtomic } = require('./atomicJson');
 const { verifySignedUpdateInfo } = require('./updateSignature');
+const { diagnostics } = require('../diagnostics/logger');
 
 const UPDATE_EVENT = 'updates:state-changed';
 const CHECK_RETRY_MS = 15 * 60 * 1000;
@@ -13,6 +14,7 @@ const EMPTY_PROGRESS = Object.freeze({
   transferred: 0,
   total: 0,
 });
+const EMPTY_DOWNLOAD = Object.freeze({ mode: 'evaluating', fallback: false, fallbackCategory: null, installerSize: 0, transferred: 0, total: 0 });
 
 class UpdateManagerError extends Error {
   constructor(code, message) {
@@ -53,6 +55,43 @@ function sanitizeProgress(progress) {
     transferred: finiteNumber(progress?.transferred),
     total: finiteNumber(progress?.total),
   };
+}
+
+function sanitizeDownload(download) {
+  return {
+    mode: ['evaluating', 'differential', 'full'].includes(download?.mode) ? download.mode : 'evaluating',
+    fallback: download?.fallback === true,
+    fallbackCategory: typeof download?.fallbackCategory === 'string' && /^[a-z-]{1,40}$/.test(download.fallbackCategory) ? download.fallbackCategory : null,
+    installerSize: finiteNumber(download?.installerSize),
+    transferred: finiteNumber(download?.transferred),
+    total: finiteNumber(download?.total),
+  };
+}
+
+function parseByteSize(value, unit) {
+  const amount = Number(value);
+  const multiplier = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 }[String(unit || '').toUpperCase()];
+  return Number.isFinite(amount) && multiplier ? Math.round(amount * multiplier) : 0;
+}
+
+function classifyUpdaterLog(level, message) {
+  const text = String(message || '');
+  const plan = text.match(/Full:\s*([0-9.]+)\s*(B|KB|MB|GB),\s*To download:\s*([0-9.]+)\s*(B|KB|MB|GB)/i);
+  if (plan) return { event: 'differential-plan', mode: 'differential', installerSize: parseByteSize(plan[1], plan[2]), total: parseByteSize(plan[3], plan[4]) };
+  if (/Cannot download differentially, fallback to full download/i.test(text)) {
+    const fallbackCategory = /multipart|range|content-range/i.test(text)
+      ? 'range-response-invalid'
+      : /blockmap/i.test(text)
+        ? 'blockmap-unavailable'
+        : /ENOENT|oldFile/i.test(text)
+          ? 'installer-cache-missing'
+          : /checksum|sha512|size mismatch/i.test(text)
+            ? 'integrity-mismatch'
+            : 'differential-unavailable';
+    return { event: 'differential-fallback', mode: 'full', fallback: true, fallbackCategory };
+  }
+  if (level === 'error' && /Cannot parse blockmap/i.test(text)) return { event: 'blockmap-invalid', mode: 'full', fallback: true, fallbackCategory: 'blockmap-unavailable' };
+  return null;
 }
 
 function buildFeed(credentials) {
@@ -122,6 +161,7 @@ class UpdateManager {
     this.installApprovalRelease = null;
     this.checkTimer = null;
     this.revision = 0;
+    this.downloadTelemetry = { ...EMPTY_DOWNLOAD };
     this.state = { ...this.makeState('disabled'), revision: this.revision };
     this.onProgress = (progress) => this.handleProgress(progress);
     this.onDownloaded = (info) => this.handleDownloaded(info);
@@ -136,6 +176,7 @@ class UpdateManager {
       blocking: mandatory,
       version: sanitizeVersion(options.version),
       progress: status === 'downloading' ? sanitizeProgress(options.progress || EMPTY_PROGRESS) : null,
+      download: options.version || this.knownVersion ? sanitizeDownload(options.download || this.downloadTelemetry) : null,
       error: status === 'error' ? {
         code: options.errorCode || (mandatory ? 'UPDATE_DOWNLOAD_FAILED' : 'UPDATE_CHECK_FAILED'),
         message: options.errorMessage || (mandatory
@@ -196,7 +237,12 @@ class UpdateManager {
     this.updater.autoInstallOnAppQuit = false;
     this.updater.allowPrerelease = false;
     this.updater.allowDowngrade = false;
-    this.updater.logger = null;
+    this.updater.logger = {
+      info: (message) => this.handleUpdaterLog('info', message),
+      warn: (message) => this.handleUpdaterLog('warn', message),
+      error: (message) => this.handleUpdaterLog('error', message),
+      debug: () => {},
+    };
     this.updater.on('download-progress', this.onProgress);
     this.updater.on('update-downloaded', this.onDownloaded);
     this.updater.on('error', this.onUpdaterError);
@@ -219,7 +265,7 @@ class UpdateManager {
   configureFeed() {
     this.requireActive();
     const feed = buildFeed(this.authService.getUpdateCredentials());
-    this.updater.setFeedURL({ provider: 'generic', url: feed.url, requestHeaders: feed.headers });
+    this.updater.setFeedURL({ provider: 'generic', url: feed.url, requestHeaders: feed.headers, useMultipleRangeRequest: false });
     this.updater.requestHeaders = feed.headers;
   }
 
@@ -329,6 +375,8 @@ class UpdateManager {
           throw new UpdateManagerError('UPDATE_METADATA_INVALID', 'Update metadata is older than the required version.');
         }
         this.rememberRequiredVersion(version);
+        const installerSize = finiteNumber(result.updateInfo?.files?.find((file) => String(file?.url || '').endsWith('.exe'))?.size);
+        this.downloadTelemetry = { ...EMPTY_DOWNLOAD, installerSize };
         this.cancellationToken = result.cancellationToken || null;
         return this.publish(this.makeState('available', { mandatory: true, version }));
       } catch {
@@ -363,6 +411,7 @@ class UpdateManager {
     }
     const generation = ++this.operationGeneration;
     this.operation = 'download';
+    this.downloadTelemetry = { ...EMPTY_DOWNLOAD, installerSize: this.downloadTelemetry.installerSize };
     this.publish(this.makeState('downloading', {
       mandatory: true,
       version: this.knownVersion,
@@ -374,7 +423,7 @@ class UpdateManager {
         this.updater.requestHeaders = feed.headers;
         await this.updater.downloadUpdate(this.cancellationToken || undefined);
         if (generation !== this.operationGeneration || !this.isActive()) return this.getState();
-        return this.publish(this.makeState('downloaded', { mandatory: true, version: this.knownVersion }));
+        return this.publish(this.makeState('downloaded', { mandatory: true, version: this.knownVersion, download: this.downloadTelemetry }));
       } catch {
         if (generation !== this.operationGeneration || !this.isActive()) return this.getState();
         return this.publish(this.makeState('error', {
@@ -395,16 +444,38 @@ class UpdateManager {
 
   handleProgress(progress) {
     if (this.operation !== 'download' || !this.isActive() || this.state.status !== 'downloading') return;
+    const clean = sanitizeProgress(progress);
+    this.downloadTelemetry = { ...this.downloadTelemetry, transferred: clean.transferred, total: clean.total };
     this.publish(this.makeState('downloading', {
       mandatory: true,
       version: this.knownVersion,
-      progress,
+      progress: clean,
+      download: this.downloadTelemetry,
+    }));
+  }
+
+  handleUpdaterLog(level, message) {
+    const update = classifyUpdaterLog(level, message);
+    if (!update) return;
+    this.downloadTelemetry = sanitizeDownload({ ...this.downloadTelemetry, ...update });
+    diagnostics.log('updates', update.event, {
+      mode: this.downloadTelemetry.mode,
+      fallback: this.downloadTelemetry.fallback,
+      fallbackCategory: this.downloadTelemetry.fallbackCategory,
+      installerSize: this.downloadTelemetry.installerSize,
+      networkBytes: this.downloadTelemetry.total,
+    });
+    if (this.state.status === 'downloading') this.publish(this.makeState('downloading', {
+      mandatory: true,
+      version: this.knownVersion,
+      progress: this.state.progress || EMPTY_PROGRESS,
+      download: this.downloadTelemetry,
     }));
   }
 
   handleDownloaded() {
     if (this.operation !== 'download' || !this.isActive()) return;
-    this.publish(this.makeState('downloaded', { mandatory: true, version: this.knownVersion }));
+    this.publish(this.makeState('downloaded', { mandatory: true, version: this.knownVersion, download: this.downloadTelemetry }));
   }
 
   handleUpdaterError() {
@@ -477,8 +548,10 @@ module.exports = {
   UpdateManager,
   UpdateManagerError,
   buildFeed,
+  classifyUpdaterLog,
   compareStableVersions,
   parseStableVersion,
   sanitizeProgress,
+  sanitizeDownload,
   setupUpdateHandlers,
 };

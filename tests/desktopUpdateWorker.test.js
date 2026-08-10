@@ -97,4 +97,35 @@ test('worker resolves versioned installers by immutable tag and preserves byte r
   assert.equal(response.headers.get('Content-Range'), 'bytes 0-4/100');
   assert.equal(calls[2].options.headers.Range, 'bytes=0-4');
   assert.equal(calls[3].options.headers.Range, 'bytes=0-4');
+  assert.equal(Object.hasOwn(calls[3].options.headers, 'Authorization'), false);
+});
+
+test('worker rejects ignored or mismatched single-range responses', async () => {
+  const { handleRequest } = await worker();
+  for (const upstream of [
+    new Response('whole installer'),
+    new Response('wrong bytes', { status: 206, headers: { 'Content-Range': 'bytes 5-9/100' } }),
+    new Response('missing range', { status: 206 }),
+  ]) {
+    const fetchImpl = async (url) => {
+      const href = String(url);
+      if (href.includes('has_active_desktop_entitlement')) return Response.json(true);
+      if (href.endsWith('/releases/tags/v1.2.3')) {
+        return Response.json({
+          tag_name: 'v1.2.3', draft: false, prerelease: false,
+          assets: [{ name: 'Vibe-IDE-Code-Setup-1.2.3.exe', url: 'https://api.github.com/assets/2' }],
+        });
+      }
+      if (href === 'https://api.github.com/assets/2') {
+        return new Response(null, { status: 302, headers: { Location: 'https://objects.example/signed-installer' } });
+      }
+      if (href === 'https://objects.example/signed-installer') return upstream;
+      throw new Error(`Unexpected request: ${href}`);
+    };
+    const response = await handleRequest(new Request('https://updates.example/stable/Vibe-IDE-Code-Setup-1.2.3.exe', {
+      headers: { Authorization: `Bearer ${'a'.repeat(20)}`, Range: 'bytes=0-4' },
+    }), env, fetchImpl);
+    assert.equal(response.status, 502);
+    assert.equal(await response.text(), 'Update storage returned an invalid range response.');
+  }
 });

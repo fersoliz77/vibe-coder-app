@@ -41,6 +41,15 @@ function bearerAuthorization(request) {
   return /^Bearer [^\s]{20,8192}$/.test(value) ? value : null;
 }
 
+function matchesSingleRange(requested, received) {
+  const requestMatch = /^bytes=(\d+)-(\d+)$/.exec(requested);
+  const responseMatch = /^bytes\s+(\d+)-(\d+)\/(?:\d+|\*)$/i.exec(received);
+  return Boolean(requestMatch
+    && responseMatch
+    && requestMatch[1] === responseMatch[1]
+    && requestMatch[2] === responseMatch[2]);
+}
+
 async function hasEntitlement(request, env, fetchImpl) {
   const authorization = bearerAuthorization(request);
   if (!authorization) return { allowed: false, status: 401 };
@@ -101,27 +110,29 @@ async function fetchAsset(request, asset, env, fetchImpl) {
     redirect: 'manual',
   });
   let upstream = apiResponse;
-  if (apiResponse.status >= 300 && apiResponse.status < 400) {
-    const location = apiResponse.headers.get('Location');
-    await apiResponse.body?.cancel();
+  for (let redirects = 0; upstream.status >= 300 && upstream.status < 400; redirects += 1) {
+    if (redirects >= 5) { await upstream.body?.cancel(); return textResponse(502, 'Update storage returned too many redirects.'); }
+    const location = upstream.headers.get('Location');
+    await upstream.body?.cancel();
     let redirectUrl;
-    try {
-      redirectUrl = new URL(location);
-    } catch {
-      return textResponse(502, 'Update storage returned an invalid redirect.');
-    }
+    try { redirectUrl = new URL(location); } catch { return textResponse(502, 'Update storage returned an invalid redirect.'); }
     if (redirectUrl.protocol !== 'https:') return textResponse(502, 'Update storage returned an invalid redirect.');
     const redirectHeaders = { 'User-Agent': 'vibe-desktop-updates-worker' };
     if (range) redirectHeaders.Range = range;
-    upstream = await fetchImpl(redirectUrl, {
-      method: request.method,
-      headers: redirectHeaders,
-      redirect: 'follow',
-    });
+    upstream = await fetchImpl(redirectUrl, { method: request.method, headers: redirectHeaders, redirect: 'manual' });
   }
   if (!upstream.ok && upstream.status !== 206) {
     await upstream.body?.cancel();
     return textResponse(502, 'Update storage is unavailable.');
+  }
+  if (range) {
+    const contentType = upstream.headers.get('Content-Type') || '';
+    const contentRange = upstream.headers.get('Content-Range') || '';
+    const multiple = range.includes(',');
+    const valid = upstream.status === 206 && (multiple
+      ? /^multipart\/byteranges\s*;\s*boundary=.+/i.test(contentType)
+      : matchesSingleRange(range, contentRange));
+    if (!valid) { await upstream.body?.cancel(); return textResponse(502, 'Update storage returned an invalid range response.'); }
   }
   const headers = new Headers({
     'Cache-Control': 'private, no-store',

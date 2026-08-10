@@ -11,6 +11,7 @@ const {
 } = require('./oauth');
 
 const AUTH_REQUEST_TIMEOUT_MS = 15_000;
+const LEARNING_HANDOFF_CODE = /^[A-Za-z0-9_-]{43}$/;
 
 class AuthError extends Error {
   constructor(code, message) {
@@ -43,6 +44,17 @@ function publicError(error) {
     code: error.code || 'AUTH_UNEXPECTED',
     message: error.message || 'Authentication failed.',
   };
+}
+
+function buildLearningUrl(helpUrl, code = null) {
+  let base;
+  try { base = new URL(helpUrl); } catch { throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'The learning platform URL is invalid.'); }
+  if (base.protocol !== 'https:' || base.username || base.password) {
+    throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'The learning platform URL is invalid.');
+  }
+  const url = new URL(code ? '/learn/handoff' : '/learn', base.origin);
+  if (code) url.hash = new URLSearchParams({ code }).toString();
+  return url.toString();
 }
 
 function isValidRecord(record) {
@@ -545,11 +557,36 @@ class AuthService {
     return shell.openExternal(this.config.helpUrl);
   }
 
-  openLearning() {
+  async openLearning() {
     if (!this.config.helpUrl) {
       throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'VIBE_AUTH_HELP_URL is not configured.');
     }
-    return shell.openExternal(new URL('/learn', this.config.helpUrl).toString());
+    let target;
+    let handoff = false;
+    try {
+      target = buildLearningUrl(this.config.helpUrl);
+      const accessToken = this.record?.session?.access_token;
+      if (accessToken) {
+        try {
+          const result = await this.request('/functions/v1/learning-handoff', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${accessToken}` },
+            body: JSON.stringify({ action: 'issue' }),
+          });
+          if (LEARNING_HANDOFF_CODE.test(result?.code || '')) {
+            target = buildLearningUrl(this.config.helpUrl, result.code);
+            handoff = true;
+          }
+        } catch {}
+      }
+      await this.openExternal(target);
+      return { ok: true, handoff };
+    } catch (error) {
+      const failure = error?.code === 'AUTH_HELP_NOT_CONFIGURED'
+        ? error
+        : new AuthError('AUTH_LEARNING_OPEN_FAILED', 'The learning platform could not be opened.');
+      return { ok: false, error: publicError(failure) };
+    }
   }
 }
 
@@ -590,4 +627,4 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
   return notify;
 }
 
-module.exports = { AUTH_REQUEST_TIMEOUT_MS, AuthService, readConfig, setupAuthHandlers };
+module.exports = { AUTH_REQUEST_TIMEOUT_MS, AuthService, buildLearningUrl, readConfig, setupAuthHandlers };

@@ -50,6 +50,17 @@ function UpdateScreen({ state, overlay, onDownload, onInstall, onRetry, busy, ac
   const progress = Math.round(state?.progress?.percent || 0);
   const transferred = formatSize(state?.progress?.transferred);
   const total = formatSize(state?.progress?.total);
+  const download = state?.download || {};
+  const optimizedBytes = download.mode === 'differential' && download.installerSize > download.total
+    ? formatSize(download.installerSize - download.total)
+    : '';
+  const modeCopy = download.mode === 'differential'
+    ? t('updates.differentialMode', { saved: optimizedBytes || t('updates.calculating') })
+    : download.mode === 'full' && download.fallback
+      ? t('updates.fullFallbackMode')
+      : download.mode === 'full'
+        ? t('updates.fullMode')
+        : t('updates.evaluatingMode');
 
   useFocusTrap({ active: true, containerRef: cardRef });
 
@@ -93,9 +104,12 @@ function UpdateScreen({ state, overlay, onDownload, onInstall, onRetry, busy, ac
             <div className="update-progress__track" role="progressbar" aria-label={t('updates.progress')} aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}>
               <span style={{ width: `${progress}%` }} />
             </div>
+            <p className={`update-progress__mode update-progress__mode--${download.mode || 'evaluating'}`}>{modeCopy}</p>
             {transferred && total && <small>{t('updates.transferred', { transferred, total })}</small>}
           </div>
         )}
+
+        {status === 'downloaded' && state?.download && <p className={`update-progress__mode update-progress__mode--${download.mode}`}>{modeCopy}</p>}
 
         {actionError && <p className="update-card__error" role="alert">{actionError}</p>}
 

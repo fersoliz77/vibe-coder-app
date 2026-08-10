@@ -281,3 +281,5 @@ Object.assign(dictionaries.en.projects, { opening: 'Opening...' });
 Object.assign(dictionaries.es.projects, { opening: 'Abriendo...' });
 Object.assign(dictionaries.en.dashboard, { projectRegistered: 'Imported' });
 Object.assign(dictionaries.es.dashboard, { projectRegistered: 'Importado' });
+Object.assign(dictionaries.en.updates, { evaluatingMode: 'Checking whether this update can reuse files already on your PC...', differentialMode: 'Optimized update · approximately {{saved}} of the full installer reused', fullMode: 'Full installer download required', fullFallbackMode: 'Full download required because the optimized update was unavailable', calculating: 'calculating' });
+Object.assign(dictionaries.es.updates, { evaluatingMode: 'Comprobando si esta actualización puede reutilizar archivos que ya están en tu PC...', differentialMode: 'Actualización optimizada · se reutilizan aproximadamente {{saved}} del instalador completo', fullMode: 'Se requiere descargar el instalador completo', fullFallbackMode: 'Se requiere la descarga completa porque la actualización optimizada no estuvo disponible', calculating: 'calculando' });
