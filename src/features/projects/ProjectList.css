@@ -15,9 +15,9 @@
 
 .project-list-sidebar {
   width: 320px;
-  border-left: 1px solid var(--glass-border);
+  border-left: 1px solid var(--vc-line);
   padding: 40px 24px;
-  background: var(--bg-deep);
+  background: var(--vc-surface-1);
   overflow-y: auto;
 }
 
@@ -31,8 +31,8 @@
 
 .project-setup-banner { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 16px; border: 1px solid rgba(var(--vc-warning-rgb), .28); border-radius: 12px; background: rgba(var(--vc-warning-rgb), .07); }
 .project-setup-banner > div { display: grid; gap: 3px; }
-.project-setup-banner strong { color: var(--text-primary); font-size: 13px; }
-.project-setup-banner span { color: var(--text-secondary); font-size: 12px; }
+.project-setup-banner strong { color: var(--vc-text-1); font-size: 13px; }
+.project-setup-banner span { color: var(--vc-text-2); font-size: 12px; }
 .project-setup-banner button { padding: 8px 12px; border: 1px solid rgba(var(--vc-warning-rgb), .35); border-radius: 8px; color: var(--vc-warning); background: transparent; cursor: pointer; }
 .project-error { padding: 12px 12px; border: 1px solid rgba(var(--vc-danger-rgb), .3); border-radius: 10px; color: var(--vc-danger); background: rgba(var(--vc-danger-rgb), .08); font-size: 13px; }
 /* Un listado que fallo tiene que ofrecer salida, no solo el color rojo. */
@@ -49,13 +49,13 @@
   font-size: 32px;
   font-weight: 700;
   letter-spacing: -0.5px;
-  background: linear-gradient(135deg, var(--text-primary), var(--text-secondary));
+  background: linear-gradient(135deg, var(--vc-text-1), var(--vc-text-2));
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .project-subtitle {
-  color: var(--text-secondary);
+  color: var(--vc-text-2);
   font-size: 16px;
 }
 
@@ -80,10 +80,10 @@
 .project-card:hover {
 }
 
-.project-card:focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 3px; }
+.project-card:focus-visible { outline: 2px solid var(--vc-accent); outline-offset: 3px; }
 
 .project-card--new {
-  border: 2px dashed var(--glass-border);
+  border: 2px dashed var(--vc-line);
   background: transparent;
   justify-content: center;
   align-items: center;
@@ -92,8 +92,8 @@
 }
 
 .project-card--new:hover {
-  border-color: var(--text-secondary);
-  background: var(--glass-bg);
+  border-color: var(--vc-text-2);
+  background: var(--vc-surface-2);
 }
 
 .project-card__header {
@@ -109,8 +109,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--glass-bg);
-  color: var(--text-secondary);
+  background: var(--vc-surface-2);
+  color: var(--vc-text-2);
 }
 
 .project-card__icon-wrapper--folder {
@@ -129,7 +129,7 @@
 .project-card__remove {
   background: transparent;
   border: none;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   cursor: pointer;
   padding: 4px;
   border-radius: 4px;
@@ -144,7 +144,7 @@
 
 .project-card__remove:hover {
   color: hsl(0, 80%, 60%);
-  background: var(--glass-hover);
+  background: var(--vc-surface-3);
 }
 
 .project-card__remove svg {
@@ -161,7 +161,7 @@
 .project-card__content h3 {
   font-size: 18px;
   font-weight: 600;
-  color: var(--text-primary);
+  color: var(--vc-text-1);
   margin: 0;
 }
 
@@ -176,12 +176,12 @@
 .project-card__meta {
   margin-top: 12px;
   padding-top: 12px;
-  border-top: 1px solid var(--glass-border);
+  border-top: 1px solid var(--vc-line);
 }
 
 .project-card__date {
   font-size: 12px;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
 }
 
 /* ─── Actions Bar ─────────────────────────────── */
@@ -200,18 +200,18 @@
   padding: 0;
   font-size: 14px;
   font-weight: 500;
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   cursor: pointer;
   transition: color 0.2s;
   letter-spacing: 0.2px;
 }
 
 .project-action-link:hover {
-  color: var(--text-primary);
+  color: var(--vc-text-1);
 }
 
 .project-actions-divider {
-  color: var(--text-tertiary);
+  color: var(--vc-text-3);
   opacity: 0.4;
   font-size: 18px;
   line-height: 1;
