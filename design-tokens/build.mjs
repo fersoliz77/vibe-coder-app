@@ -195,7 +195,14 @@ const targets = roots
  * asi que no se compone: se copia con encabezado, y el mismo --check impide
  * que alguien edite la copia.
  */
-const componentsSource = await readFile(new URL('components.css', import.meta.url), 'utf8');
+/*
+ * Se normalizan los saltos antes de reemplazar el encabezado. En un clon con
+ * CRLF el texto buscado -que lleva \n- no coincidia, la copia salia con el
+ * encabezado de fuente en vez del de generado, y --check fallaba solo en el
+ * runner de Windows.
+ */
+const componentsSource = (await readFile(new URL('components.css', import.meta.url), 'utf8'))
+  .replaceAll('\r\n', '\n');
 const componentsCss = componentsSource.replace(
   'ARCHIVO FUENTE. Se copia a cada producto al correr `npm run tokens`;\n   la copia lleva encabezado de generado y no se edita a mano.',
   `ARCHIVO GENERADO. No editar a mano: se regenera y se pierde el cambio.\n   Fuente:  design-tokens/components.css\n   Generar: npm run tokens\n   Contrato: v${contract.version} (${hash})`,
