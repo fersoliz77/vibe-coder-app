@@ -44,6 +44,14 @@ function getProcessEnv(extra = {}) {
   return buildSubprocessEnv({ extra: { PATH: getExtraPath(), FORCE_COLOR: '0', NO_COLOR: '1', ...extra } });
 }
 
+function getJavaRuntimeEnv(compilerPath) {
+  const binPath = path.dirname(compilerPath);
+  return {
+    JAVA_HOME: path.dirname(binPath),
+    PATH: `${binPath}${path.delimiter}${getExtraPath()}`,
+  };
+}
+
 function getDefaultAndroidSdkPath() {
   return path.join(process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local'), 'Android', 'Sdk');
 }
@@ -435,7 +443,7 @@ async function installAndroidCommandLineTools(run, sdkPath, progress) {
   return result;
 }
 
-function runAndroidBatch(run, managerPath, progress, sdkPath, acceptLicenses = false) {
+function runAndroidBatch(run, managerPath, progress, sdkPath, javaEnv, acceptLicenses = false) {
   const script = acceptLicenses
     ? "1..100 | ForEach-Object { 'y' } | & $env:VIBE_ANDROID_MANAGER '--licenses'; exit $LASTEXITCODE"
     : "& $env:VIBE_ANDROID_MANAGER 'platform-tools' 'platforms;android-35' 'build-tools;35.0.0' 'emulator' 'system-images;android-35;google_apis;x86_64'; exit $LASTEXITCODE";
@@ -443,6 +451,7 @@ function runAndroidBatch(run, managerPath, progress, sdkPath, acceptLicenses = f
     ANDROID_SDK_ROOT: sdkPath,
     ANDROID_HOME: sdkPath,
     VIBE_ANDROID_MANAGER: managerPath,
+    ...javaEnv,
   });
 }
 
@@ -473,8 +482,9 @@ function tuneAndroidAvd() {
   fs.writeFileSync(configPath, `${lines.join('\n')}\n`, 'utf8');
 }
 
-async function provisionAndroidSdk(run, progress) {
+async function provisionAndroidSdk(run, progress, javaCompilerPath) {
   const sdkPath = getAndroidSdkPath();
+  const javaEnv = getJavaRuntimeEnv(javaCompilerPath);
   fs.mkdirSync(sdkPath, { recursive: true });
   if (run.cancelled) return { success: false, cancelled: true };
   let result = await installAndroidCommandLineTools(run, sdkPath, progress);
@@ -485,11 +495,11 @@ async function provisionAndroidSdk(run, progress) {
   if (!sdkmanager || !avdmanager) return { success: false, error: 'No se encontraron sdkmanager y avdmanager despues de instalar las herramientas de linea de comandos.' };
 
   if (run.cancelled) return { success: false, cancelled: true };
-  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath, true);
+  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath, javaEnv, true);
   if (run.cancelled) return { success: false, cancelled: true };
   if (!result.success) return result;
   if (run.cancelled) return { success: false, cancelled: true };
-  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath);
+  result = await runAndroidBatch(run, sdkmanager, progress, sdkPath, javaEnv);
   if (run.cancelled) return { success: false, cancelled: true };
   if (!result.success) return result;
 
@@ -500,6 +510,7 @@ async function provisionAndroidSdk(run, progress) {
       ANDROID_SDK_ROOT: sdkPath,
       ANDROID_HOME: sdkPath,
       VIBE_ANDROID_MANAGER: avdmanager,
+      ...javaEnv,
     });
     if (run.cancelled) return { success: false, cancelled: true };
     if (!result.success) return result;
@@ -625,7 +636,7 @@ async function installAllEnvironment(options = {}, onProgress, dependencies = {}
         execution = { success: false, error: `No se puede preparar Android hasta que estén disponibles: ${missing}.` };
       } else {
         if (run.cancelled) return cancelledInstallation(progress, results);
-        execution = await provisionAndroid(run, (event) => emitProgress(progress, { ...baseEvent, ...event }));
+        execution = await provisionAndroid(run, (event) => emitProgress(progress, { ...baseEvent, ...event }), java.path);
         if (run.cancelled) return cancelledInstallation(progress, results);
       }
       const result = { id: 'android-sdk-provision', ...execution };
@@ -691,6 +702,7 @@ module.exports = {
   getAvdHardwareConfig,
   getAndroidAvdPath,
   getAndroidSdkPath,
+  getJavaRuntimeEnv,
   getProcessEnv,
   installAllEnvironment,
   normalizeOptions,

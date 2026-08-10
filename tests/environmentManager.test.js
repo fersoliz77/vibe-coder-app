@@ -14,6 +14,7 @@ const {
   buildInstallationPlan,
   cancelEnvironmentInstallation,
   getAvdHardwareConfig,
+  getJavaRuntimeEnv,
   installAllEnvironment,
   normalizeOptions,
   parseVersionOutput,
@@ -47,6 +48,13 @@ test('Android provisioning uses pinned Google packages and conservative adaptive
   assert.deepEqual(getAvdHardwareConfig(16 * 1024 ** 3, 12), { ramMb: 2048, cpuCores: 4, heapMb: 512, dataPartition: '8G' });
 });
 
+test('Android provisioning pins sdkmanager to the detected JDK 17 runtime', () => {
+  const compiler = 'C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.19.10-hotspot\\bin\\javac.exe';
+  const env = getJavaRuntimeEnv(compiler);
+  assert.equal(env.JAVA_HOME, 'C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.19.10-hotspot');
+  assert.equal(env.PATH.split(';')[0], 'C:\\Program Files\\Eclipse Adoptium\\jdk-17.0.19.10-hotspot\\bin');
+});
+
 test('installation plan is restricted to the fixed allowlist and preserves dependency order', () => {
   const plan = buildInstallationPlan(
     { includeMobile: true, backend: 'firebase' },
@@ -76,15 +84,17 @@ test('a missing Android SDK is provisioned directly without reinstalling Android
   let checks = 0;
   let tracked = 0;
   let provisioned = 0;
+  let provisionedWithJava = null;
   const result = await installAllEnvironment({ backend: 'supabase', includeMobile: true }, (event) => events.push(event), {
     checkEnvironment: async () => (++checks === 1 ? before : after),
     runTracked: async () => { tracked += 1; return { success: true }; },
-    probeEnvironmentItem: async () => ({ installed: true }),
-    provisionAndroidSdk: async () => { provisioned += 1; return { success: true }; },
+    probeEnvironmentItem: async (id) => ({ installed: true, ...(id === 'java' ? { path: 'C:\\jdk-17\\bin\\javac.exe' } : {}) }),
+    provisionAndroidSdk: async (_run, _progress, javaCompilerPath) => { provisioned += 1; provisionedWithJava = javaCompilerPath; return { success: true }; },
   });
   assert.equal(result.success, true);
   assert.equal(tracked, 0);
   assert.equal(provisioned, 1);
+  assert.equal(provisionedWithJava, 'C:\\jdk-17\\bin\\javac.exe');
   assert.equal(events.some((event) => /Android Studio/.test(event.message || '')), false);
 });
 
