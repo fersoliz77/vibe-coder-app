@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: desktop-release-stable
@@ -24,8 +24,8 @@ jobs:
     timeout-minutes: 50
     environment: production
     env:
-      VIBE_UPDATE_BUCKET: desktop-releases
       VIBE_UPDATE_CHANNEL: stable
+      VIBE_UPDATE_URL: https://vibe-desktop-updates.vibe-ide-coder.workers.dev
 
     steps:
       - name: Check out immutable release tag
@@ -58,10 +58,9 @@ jobs:
         env:
           VIBE_SUPABASE_URL: ${{ secrets.VIBE_SUPABASE_URL }}
           VIBE_SUPABASE_ANON_KEY: ${{ secrets.VIBE_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           UPDATE_SIGNING_PRIVATE_KEY: ${{ secrets.UPDATE_SIGNING_PRIVATE_KEY }}
         run: |
-          foreach ($name in @('VIBE_SUPABASE_URL', 'VIBE_SUPABASE_ANON_KEY', 'SUPABASE_SERVICE_ROLE_KEY', 'UPDATE_SIGNING_PRIVATE_KEY')) {
+          foreach ($name in @('VIBE_SUPABASE_URL', 'VIBE_SUPABASE_ANON_KEY', 'UPDATE_SIGNING_PRIVATE_KEY')) {
             $value = [Environment]::GetEnvironmentVariable($name)
             if ([string]::IsNullOrWhiteSpace($value)) { throw "Required release secret is missing: $name" }
           }
@@ -98,16 +97,16 @@ jobs:
         run: |
           $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $remoteName = "Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
-          $url = "$env:VIBE_SUPABASE_URL/storage/v1/object/authenticated/$env:VIBE_UPDATE_BUCKET/$env:VIBE_UPDATE_CHANNEL/$remoteName"
+          $url = "$env:VIBE_UPDATE_URL/$env:VIBE_UPDATE_CHANNEL/$remoteName"
           $checksum = "temp/build/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe.sha256"
           npm run release:manifest -- --installer "$installer" --version "$env:RELEASE_VERSION" --channel stable --url "$url" --minimum-backend 1.0.0 --minimum-client "$env:RELEASE_VERSION" --output temp/build/release-manifest.json --checksum "$checksum"
           npm run release:validate -- temp/build/release-manifest.json "$installer" "$checksum"
 
       - name: Publish binaries and activate metadata
         env:
-          VIBE_SUPABASE_URL: ${{ secrets.VIBE_SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: node scripts/publish-supabase-release.js
+          GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
+        run: npm run release:publish
 
       - name: Preserve release evidence
         if: ${{ !cancelled() }}

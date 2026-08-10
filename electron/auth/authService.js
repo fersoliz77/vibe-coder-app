@@ -29,11 +29,11 @@ function readConfig() {
     anonKey: process.env.VIBE_SUPABASE_ANON_KEY || packaged.anonKey,
     accessRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || packaged.accessRpc || 'get_desktop_access',
     helpUrl: process.env.VIBE_AUTH_HELP_URL || packaged.helpUrl || null,
-    updateBucket: process.env.VIBE_UPDATE_BUCKET || packaged.updateBucket || 'desktop-releases',
+    updateUrl: process.env.VIBE_UPDATE_URL?.replace(/\/$/, '') || packaged.updateUrl || 'https://vibe-desktop-updates.vibe-ide-coder.workers.dev',
     updateChannel: process.env.VIBE_UPDATE_CHANNEL || packaged.updateChannel || 'stable',
   };
   const missing = Object.entries(config)
-    .filter(([key, value]) => !['helpUrl', 'updateBucket', 'updateChannel'].includes(key) && !value)
+    .filter(([key, value]) => !['helpUrl', 'updateChannel'].includes(key) && !value)
     .map(([key]) => key);
   return { ...config, missing };
 }
@@ -250,10 +250,9 @@ class AuthService {
   getUpdateCredentials() {
     if (this.getPolicy() !== 'active' || !this.record?.session?.access_token) return null;
     return {
-      supabaseUrl: this.config.supabaseUrl,
+      updateUrl: this.config.updateUrl,
       accessToken: this.record.session.access_token,
       apiKey: this.config.anonKey,
-      bucket: this.config.updateBucket,
       channel: this.config.updateChannel,
     };
   }

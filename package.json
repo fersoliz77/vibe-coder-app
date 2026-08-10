@@ -1,6 +1,6 @@
 {
   "name": "vibe-ide-coder",
-  "version": "1.1.4",
+  "version": "1.1.5",
   "description": "Vibe IDE Code - IDE para Vibecoding con IA",
   "author": "Vibe IDE Code",
   "main": "electron/main.js",
@@ -27,7 +27,8 @@
     "release:validate": "node scripts/validate-release-manifest.js",
     "release:verify-installer": "node scripts/verify-windows-installer.js",
     "release:smoke": "node scripts/release-smoke.js",
-    "release:sign-update": "node scripts/sign-update-metadata.js"
+    "release:sign-update": "node scripts/sign-update-metadata.js",
+    "release:publish": "node scripts/publish-github-release.js"
   },
   "dependencies": {
     "@codemirror/lang-css": "^6.3.1",
@@ -61,7 +62,6 @@
     "electron": "^43.3.0",
     "electron-builder": "^26.15.3",
     "playwright": "^1.61.1",
-    "tus-js-client": "^4.3.1",
     "vite": "^6.3.0",
     "wait-on": "^9.1.0",
     "yaml": "2.9.0"

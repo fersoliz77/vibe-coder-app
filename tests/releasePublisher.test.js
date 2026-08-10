@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { parseLatestMetadata, publishRelease, resumableEndpoint } = require('../scripts/publish-supabase-release');
+const { parseLatestMetadata, publishRelease } = require('../scripts/publish-github-release');
 const packageVersion = require('../package.json').version;
 
 function createReleaseFixture() {
@@ -42,36 +42,27 @@ test('latest metadata accepts only a stable version and a basename executable', 
   assert.throws(() => parseLatestMetadata('version: 1.2.3\npath: app.exe\nfiles: []\n'));
 });
 
-test('private publication uploads metadata last and never places credentials in URLs', async (t) => {
+test('private publication uploads all assets to a draft before activation', async (t) => {
   const outputDirectory = createReleaseFixture();
   t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
   const requests = [];
-  const events = [];
-  class FakeUpload {
-    constructor(stream, options) {
-      this.stream = stream;
-      this.options = options;
-      requests.push({ url: options.endpoint, headers: options.headers, metadata: options.metadata, chunkSize: options.chunkSize });
-    }
-    start() {
-      events.push(this.options.metadata.objectName);
-      this.stream.once('close', () => this.options.onSuccess());
-      this.stream.destroy();
-    }
-  }
   const fetchImpl = async (url, options) => {
-    for await (const _chunk of options.body) {}
-    requests.push({ url, headers: options.headers });
-    events.push('latest.yml');
-    return { ok: true, status: 200 };
+    const href = String(url);
+    if (options?.body && typeof options.body !== 'string') for await (const _chunk of options.body) {}
+    requests.push({ url: href, options });
+    if (href.endsWith(`/releases/tags/v${packageVersion}`)) return new Response(null, { status: 404 });
+    if (href.endsWith('/releases') && options.method === 'POST') return Response.json({ id: 42 }, { status: 201 });
+    if (href.includes('uploads.github.com')) return Response.json({ id: requests.length }, { status: 201 });
+    if (href.endsWith('/releases/42') && options.method === 'PATCH') return Response.json({ html_url: 'https://github.com/private/release' });
+    throw new Error(`Unexpected request: ${href}`);
   };
 
   const result = await publishRelease({
-    supabaseUrl: 'https://project.supabase.co',
-    serviceRoleKey: 'server-secret',
+    repository: 'owner/private-repo',
+    token: 'github-secret',
+    tag: `v${packageVersion}`,
     outputDirectory,
     fetchImpl,
-    UploadClass: FakeUpload,
     verifySignature: () => true,
   });
 
@@ -81,38 +72,24 @@ test('private publication uploads metadata last and never places credentials in 
     `Vibe-IDE-Code-Setup-${packageVersion}.exe.blockmap`,
     'latest.yml',
   ]);
-  assert.equal(requests.at(-1).url.endsWith('/desktop-releases/stable/latest.yml'), true);
-  assert.equal(requests.every((request) => !request.url.includes('server-secret')), true);
-  assert.equal(requests.every((request) => request.headers.Authorization === 'Bearer server-secret'), true);
-  assert.deepEqual(events, [
-    `stable/Vibe-IDE-Code-Setup-${packageVersion}.exe`,
-    `stable/Vibe-IDE-Code-Setup-${packageVersion}.exe.blockmap`,
-    'latest.yml',
-  ]);
-  assert.equal(requests[0].url, 'https://project.storage.supabase.co/storage/v1/upload/resumable');
-  assert.equal(requests[0].chunkSize, 6 * 1024 * 1024);
-  assert.deepEqual(requests.map((request) => request.headers['x-upsert']), ['false', 'false', 'true']);
+  assert.equal(result.releaseUrl, 'https://github.com/private/release');
+  assert.deepEqual(requests.slice(2, 5).map((request) => new URL(request.url).searchParams.get('name')), result.files);
+  assert.equal(requests.at(-1).options.method, 'PATCH');
+  assert.deepEqual(JSON.parse(requests.at(-1).options.body), { draft: false, make_latest: 'true' });
+  assert.equal(requests.every((request) => !request.url.includes('github-secret')), true);
+  assert.equal(requests.every((request) => request.options.headers.Authorization === 'Bearer github-secret'), true);
 });
 
 test('a collision aborts before metadata can be activated', async (t) => {
   const outputDirectory = createReleaseFixture();
   t.after(() => fs.rmSync(outputDirectory, { recursive: true, force: true }));
   let requests = 0;
-  class ConflictingUpload {
-    constructor(stream, options) { this.stream = stream; this.options = options; }
-    start() {
-      requests += 1;
-      this.stream.once('close', () => this.options.onError({ originalResponse: { getStatus: () => 409 } }));
-      this.stream.destroy();
-    }
-  }
+  const fetchImpl = async () => {
+    requests += 1;
+    return Response.json({ id: 1 });
+  };
   await assert.rejects(publishRelease({
-    supabaseUrl: 'https://project.supabase.co', serviceRoleKey: 'secret', outputDirectory, UploadClass: ConflictingUpload, verifySignature: () => true,
-  }), /HTTP 409/);
+    repository: 'owner/private-repo', token: 'secret', outputDirectory, fetchImpl, verifySignature: () => true,
+  }), /already exists/);
   assert.equal(requests, 1);
-});
-
-test('resumable endpoint uses the direct storage host without changing custom domains', () => {
-  assert.equal(resumableEndpoint('https://project.supabase.co'), 'https://project.storage.supabase.co/storage/v1/upload/resumable');
-  assert.equal(resumableEndpoint('https://updates.example.test'), 'https://updates.example.test/storage/v1/upload/resumable');
 });

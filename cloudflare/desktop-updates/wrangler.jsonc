@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vibe-desktop-updates",
+  "main": "src/index.mjs",
+  "compatibility_date": "2026-08-10",
+  "workers_dev": true,
+  "vars": {
+    "GITHUB_REPOSITORY": "fersoliz77/vibe-coder-app",
+    "SUPABASE_URL": "https://rhyjgstipvyqlhdlmihf.supabase.co",
+    "UPDATE_CHANNEL": "stable"
+  }
+}

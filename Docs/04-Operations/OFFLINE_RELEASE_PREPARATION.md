@@ -78,7 +78,7 @@ npm run release:smoke -- --manifest "temp/build/release-manifest.json" --install
 ## Explicitly Pending
 
 - **OUTSIDE THIS FLOW: update metadata signing.** These offline commands never sign `latest.yml`; the production workflow uses the free `UPDATE_SIGNING_PRIVATE_KEY`, and the app verifies it with its embedded public key. Windows Authenticode is intentionally not used in this initial no-cost stage.
-- **OUTSIDE THIS FLOW: updater validation.** This workflow does not exercise private Storage, JWT/RLS, mandatory states, download, restart, or installation.
+- **OUTSIDE THIS FLOW: updater validation.** This workflow does not exercise the private Worker, Supabase entitlement, GitHub assets, mandatory states, download, restart, or installation.
 - **OUTSIDE THIS FLOW: release publication.** No command in this workflow uploads an installer, blockmap, `latest.yml`, or manifest.
 - **PENDING: production URL and compatibility approval.** Placeholder values are not release approval.
 - **PENDING: signed-install manual validation.** Do not silently install a candidate; use an approved disposable test environment when this gate is authorized.

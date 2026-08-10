@@ -365,16 +365,15 @@ test('update credentials are available only to active main-process policy', () =
     missing: [],
     supabaseUrl: 'https://project.supabase.co',
     anonKey: 'anon-key',
-    updateBucket: 'desktop-releases',
+    updateUrl: 'https://updates.example.test',
     updateChannel: 'stable',
   };
   service.record = createSessionRecord();
 
   assert.deepEqual(service.getUpdateCredentials(), {
-    supabaseUrl: 'https://project.supabase.co',
+    updateUrl: 'https://updates.example.test',
     accessToken: 'old-access',
     apiKey: 'anon-key',
-    bucket: 'desktop-releases',
     channel: 'stable',
   });
 
@@ -382,22 +381,22 @@ test('update credentials are available only to active main-process policy', () =
   assert.equal(service.getUpdateCredentials(), null);
 });
 
-test('update storage config has safe defaults and accepts explicit environment overrides', () => {
-  const previousBucket = process.env.VIBE_UPDATE_BUCKET;
+test('update gateway config has safe defaults and accepts explicit environment overrides', () => {
+  const previousUrl = process.env.VIBE_UPDATE_URL;
   const previousChannel = process.env.VIBE_UPDATE_CHANNEL;
   try {
-    delete process.env.VIBE_UPDATE_BUCKET;
+    delete process.env.VIBE_UPDATE_URL;
     delete process.env.VIBE_UPDATE_CHANNEL;
-    assert.equal(readConfig().updateBucket, 'desktop-releases');
+    assert.equal(readConfig().updateUrl, 'https://vibe-desktop-updates.vibe-ide-coder.workers.dev');
     assert.equal(readConfig().updateChannel, 'stable');
 
-    process.env.VIBE_UPDATE_BUCKET = 'private-desktop';
+    process.env.VIBE_UPDATE_URL = 'https://updates.example.test/';
     process.env.VIBE_UPDATE_CHANNEL = 'preview';
-    assert.equal(readConfig().updateBucket, 'private-desktop');
+    assert.equal(readConfig().updateUrl, 'https://updates.example.test');
     assert.equal(readConfig().updateChannel, 'preview');
   } finally {
-    if (previousBucket == null) delete process.env.VIBE_UPDATE_BUCKET;
-    else process.env.VIBE_UPDATE_BUCKET = previousBucket;
+    if (previousUrl == null) delete process.env.VIBE_UPDATE_URL;
+    else process.env.VIBE_UPDATE_URL = previousUrl;
     if (previousChannel == null) delete process.env.VIBE_UPDATE_CHANNEL;
     else process.env.VIBE_UPDATE_CHANNEL = previousChannel;
   }

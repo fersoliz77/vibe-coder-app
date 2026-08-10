@@ -27,6 +27,6 @@ fs.writeFileSync(target, JSON.stringify({
   anonKey,
   accessRpc: process.env.VIBE_SUPABASE_MEMBERSHIP_RPC || 'get_desktop_access',
   helpUrl: process.env.VIBE_AUTH_HELP_URL || null,
-  updateBucket: process.env.VIBE_UPDATE_BUCKET || 'desktop-releases',
+  updateUrl: process.env.VIBE_UPDATE_URL?.replace(/\/$/, '') || 'https://vibe-desktop-updates.vibe-ide-coder.workers.dev',
   updateChannel: process.env.VIBE_UPDATE_CHANNEL || 'stable',
 }, null, 2));

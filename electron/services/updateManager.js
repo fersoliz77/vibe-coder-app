@@ -57,27 +57,26 @@ function sanitizeProgress(progress) {
 
 function buildFeed(credentials) {
   if (!credentials
-    || typeof credentials.supabaseUrl !== 'string'
+    || typeof credentials.updateUrl !== 'string'
     || typeof credentials.accessToken !== 'string'
     || typeof credentials.apiKey !== 'string'
-    || typeof credentials.bucket !== 'string'
     || typeof credentials.channel !== 'string') {
     throw new UpdateManagerError('UPDATE_CREDENTIALS_UNAVAILABLE', 'Update access is unavailable.');
   }
   let origin;
   try {
-    const parsed = new URL(credentials.supabaseUrl);
+    const parsed = new URL(credentials.updateUrl);
     if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) throw new Error('invalid');
     parsed.pathname = parsed.pathname.replace(/\/$/, '');
     origin = parsed.toString().replace(/\/$/, '');
   } catch {
     throw new UpdateManagerError('UPDATE_CREDENTIALS_INVALID', 'Update access is invalid.');
   }
-  if (!credentials.accessToken || !credentials.apiKey || !credentials.bucket.trim() || !credentials.channel.trim()) {
+  if (!credentials.accessToken || !credentials.apiKey || !credentials.channel.trim()) {
     throw new UpdateManagerError('UPDATE_CREDENTIALS_UNAVAILABLE', 'Update access is unavailable.');
   }
   return {
-    url: `${origin}/storage/v1/object/authenticated/${encodeURIComponent(credentials.bucket.trim())}/${encodeURIComponent(credentials.channel.trim())}`,
+    url: `${origin}/${encodeURIComponent(credentials.channel.trim())}`,
     headers: {
       Authorization: `Bearer ${credentials.accessToken}`,
       apikey: credentials.apiKey,

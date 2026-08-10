@@ -33,10 +33,9 @@ function createHarness(options = {}) {
     getPolicy() { return this.policy; },
     getUpdateCredentials() {
       return {
-        supabaseUrl: 'https://project.supabase.co',
+        updateUrl: 'https://updates.example.test',
         accessToken: 'secret-access-token',
         apiKey: 'secret-api-key',
-        bucket: 'desktop releases',
         channel: 'stable',
       };
     },
@@ -65,22 +64,20 @@ function createHarness(options = {}) {
   return { updater, authService, manager, sent, get prepared() { return prepared; }, get revoked() { return revoked; } };
 }
 
-test('private generic feed is encoded and carries both Supabase auth headers', () => {
+test('private generic feed is encoded and carries the Supabase auth headers', () => {
   assert.deepEqual(buildFeed({
-    supabaseUrl: 'https://project.supabase.co/',
+    updateUrl: 'https://updates.example.test/',
     accessToken: 'access',
     apiKey: 'anon',
-    bucket: 'desktop releases',
     channel: 'stable/beta',
   }), {
-    url: 'https://project.supabase.co/storage/v1/object/authenticated/desktop%20releases/stable%2Fbeta',
+    url: 'https://updates.example.test/stable%2Fbeta',
     headers: { Authorization: 'Bearer access', apikey: 'anon' },
   });
   assert.throws(() => buildFeed({
-    supabaseUrl: 'http://unsafe.test',
+    updateUrl: 'http://unsafe.test',
     accessToken: 'access',
     apiKey: 'anon',
-    bucket: 'desktop-releases',
     channel: 'stable',
   }), (error) => error.code === 'UPDATE_CREDENTIALS_INVALID');
 });
@@ -108,7 +105,7 @@ test('active access configures conservative updater flags and reports current sa
   assert.equal(harness.updater.allowDowngrade, false);
   assert.equal(harness.updater.logger, null);
   assert.equal(harness.updater.feeds[0].provider, 'generic');
-  assert.equal(harness.updater.feeds[0].url, 'https://project.supabase.co/storage/v1/object/authenticated/desktop%20releases/stable');
+  assert.equal(harness.updater.feeds[0].url, 'https://updates.example.test/stable');
   assert.deepEqual(harness.updater.feeds[0].requestHeaders, {
     Authorization: 'Bearer secret-access-token',
     apikey: 'secret-api-key',
