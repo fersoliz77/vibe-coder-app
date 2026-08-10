@@ -129,7 +129,7 @@ test('local generator binds package and artifact versions and writes a verifiabl
 test('Windows artifact verifier checks bounded PE overlay and x64 unpacked app without claiming format trust', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-pe-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const installerPath = path.join(root, `Vibe IDE Code Setup ${packageJson.version}.exe`);
+  const installerPath = path.join(root, `Vibe-IDE-Code-Setup-${packageJson.version}.exe`);
   const appPath = path.join(root, 'win-unpacked', 'Vibe IDE Code.exe');
   createPe(installerPath, { machine: 'x86', overlayBytes: 1024 * 1024 });
   createPe(appPath, { machine: 'x64' });
@@ -144,7 +144,7 @@ test('Windows artifact verifier checks bounded PE overlay and x64 unpacked app w
 test('release smoke path guard rejects installer and Setup paths before execution', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-smoke-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const installerPath = path.join(root, `Vibe IDE Code Setup ${packageJson.version}.exe`);
+  const installerPath = path.join(root, `Vibe-IDE-Code-Setup-${packageJson.version}.exe`);
   const otherSetupPath = path.join(root, 'win-unpacked', 'Other Setup.exe');
   fs.mkdirSync(path.dirname(otherSetupPath), { recursive: true });
   fs.writeFileSync(installerPath, 'installer');
@@ -156,7 +156,7 @@ test('release smoke path guard rejects installer and Setup paths before executio
 test('release smoke path guard rejects a hard link to the installer', (context) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-smoke-link-'));
   context.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  const installerPath = path.join(root, `Vibe IDE Code Setup ${packageJson.version}.exe`);
+  const installerPath = path.join(root, `Vibe-IDE-Code-Setup-${packageJson.version}.exe`);
   const appPath = path.join(root, 'win-unpacked', 'Vibe IDE Code.exe');
   fs.mkdirSync(path.dirname(appPath), { recursive: true });
   fs.writeFileSync(installerPath, 'installer');

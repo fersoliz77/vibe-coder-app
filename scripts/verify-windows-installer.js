@@ -67,7 +67,7 @@ function inspectPe(filePath) {
 
 function inspectWindowsInstaller(installerPath, unpackedAppPath) {
   const packageVersion = require('../package.json').version;
-  const expectedInstallerName = `Vibe IDE Code Setup ${packageVersion}.exe`;
+  const expectedInstallerName = `Vibe-IDE-Code-Setup-${packageVersion}.exe`;
   if (path.basename(installerPath) !== expectedInstallerName) throw new Error(`installer must be named ${expectedInstallerName}`);
   const installer = inspectPe(installerPath);
   if (installer.size < MIN_INSTALLER_BYTES) throw new Error(`installer must be at least ${MIN_INSTALLER_BYTES} bytes`);

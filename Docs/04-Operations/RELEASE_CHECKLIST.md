@@ -110,6 +110,6 @@ Before pushing or manually dispatching a release tag:
 - [ ] target account has effective `active` desktop entitlement and the bucket remains private
 - [ ] workflow uploads installer, blockmap, and `latest.yml` in that order
 - [ ] real signed-update validation and a forward-only rollback version are planned
-- [ ] `1.0.0` users are covered by the manual `1.1.2` bootstrap; Storage publication alone cannot update them
+- [ ] `1.0.0` users are covered by the manual `1.1.3` bootstrap; Storage publication alone cannot update them
 
 Do not publish from the offline preparation flow or manually upload `latest.yml` ahead of its versioned artifacts. A rollback must be a new higher version, never a downgrade or a moved tag.
