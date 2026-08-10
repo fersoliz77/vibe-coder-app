@@ -162,6 +162,7 @@ if (siblingRoot) {
     'scripts/check_font_loading.mjs',
     'scripts/check_legacy_tokens.mjs',
     'scripts/check_breakpoints.mjs',
+    'scripts/check_literals.mjs',
     // La fuente del contrato tambien: si se bifurca, los dos productos generan
     // capas distintas y la paridad se pierde en el origen, no en la copia.
     'design-tokens/tokens.json',
