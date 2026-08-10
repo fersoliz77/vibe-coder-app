@@ -332,13 +332,13 @@ export default function CreateProjectWizard({ onClose, onCreated }) {
             el asistente sigue teniendo los mismos pasos y las mismas
             exigencias, pero ahora sabes desde el principio si vas a llegar. */}
         <div className={`cpw-requirements${missingProviders.length ? ' cpw-requirements--pending' : ''}`}>
-          <strong>{t('createProject.requirementsTitle')}</strong>
+          <strong>{t(missingProviders.length ? 'createProject.requirementsTitle' : 'createProject.requirementsReadyTitle')}</strong>
           <ul>
             <li className={options.githubUser ? 'is-ready' : ''}>
-              GitHub — {options.githubUser || t('createProject.githubDisconnected')}
+              GitHub — {options.githubUser ? t('createProject.connectedAs', { user: options.githubUser }) : t('createProject.githubDisconnected')}
             </li>
             <li className={options.vercelUser ? 'is-ready' : ''}>
-              Vercel — {options.vercelUser || t('createProject.accountDisconnected')}
+              Vercel — {options.vercelUser ? t('createProject.connectedAs', { user: options.vercelUser }) : t('createProject.accountDisconnected')}
             </li>
           </ul>
           {missingProviders.length > 0 && <p>{t('createProject.requirementsPending')}</p>}

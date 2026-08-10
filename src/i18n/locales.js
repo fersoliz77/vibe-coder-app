@@ -252,8 +252,8 @@ Object.assign(dictionaries.en.explorer, { clearSearch: 'Clear search' });
 Object.assign(dictionaries.es.explorer, { clearSearch: 'Limpiar búsqueda' });
 
 // Requisitos de cuenta anticipados al primer paso del asistente.
-Object.assign(createProjectEn, { requirementsTitle: 'What this needs', requirementsPending: 'Connect them from Settings, Services, Code and delivery before the last step.' });
-Object.assign(createProjectEs, { requirementsTitle: 'Qué hace falta', requirementsPending: 'Conectalos en Configuración, Servicios, Código y entrega antes del último paso.' });
+Object.assign(createProjectEn, { requirementsTitle: 'Required connections', requirementsReadyTitle: 'Connections ready', connectedAs: 'Connected as {{user}}', requirementsPending: 'Connect the missing accounts from Settings > Connections before the last step.' });
+Object.assign(createProjectEs, { requirementsTitle: 'Conexiones necesarias', requirementsReadyTitle: 'Conexiones listas', connectedAs: 'Conectado como {{user}}', requirementsPending: 'Conectá las cuentas pendientes desde Configuración > Conexiones antes del último paso.' });
 
 // La toolbar de preview competia consigo misma: lo secundario pasa a un menu.
 Object.assign(dictionaries.en.preview, { moreActions: 'More' });
