@@ -48,4 +48,5 @@ test('learning falls back to the normal browser route without exposing failed ha
 test('learning URL validation rejects insecure or credentialed origins', () => {
   assert.throws(() => buildLearningUrl('http://example.test'), (error) => error.code === 'AUTH_HELP_NOT_CONFIGURED');
   assert.throws(() => buildLearningUrl('https://user:pass@example.test'), (error) => error.code === 'AUTH_HELP_NOT_CONFIGURED');
+  assert.throws(() => buildLearningUrl('https://vibe-ide-coder.vercel.app'), (error) => error.code === 'AUTH_HELP_NOT_CONFIGURED');
 });

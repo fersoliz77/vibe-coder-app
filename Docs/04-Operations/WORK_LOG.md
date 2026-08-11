@@ -14,6 +14,7 @@ This log records implementation history in chronological order. Each entry shoul
 
 ### Key Changes
 
+- Corrected the packaged learning URL and added a shared canonical-origin policy plus a release-time mismatch gate.
 - Added read-only requirement derivation for nested applications, npm and pnpm workspaces, lockfile ownership, and hoisted dependencies.
 - Added short-lived single-use grants for reviewed actions and restricted managed execution to `npm ci --ignore-scripts --no-audit --no-fund` without lifecycle scripts or shell invocation.
 - Added disk-space preflight, staged progress, safe cancellation, and verification-only retry after a completed install.

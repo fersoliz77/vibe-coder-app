@@ -42,6 +42,7 @@
 
 ### Fixed
 
+- Embedded Courses and Progress now uses the canonical learning origin, and packaging rejects mismatched learning domains.
 - Dependency actions now check free disk space before execution and retry only post-install verification when verification is inconclusive.
 - Corrupt or oversized project registries are repaired or recovered without exposing internal paths or errors to the renderer.
 - Android SDK provisioning no longer tries to upgrade an existing Android Studio package through WinGet.

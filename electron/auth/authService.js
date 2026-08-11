@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { app, safeStorage, shell } = require('electron');
 const { ACCOUNT_ROLES, ACCOUNT_STATUSES, getEffectivePolicy, getLeaseExpiry } = require('./policy');
+const { LEARNING_ORIGIN } = require('./learningPolicy');
 const {
   createOAuthAuthorizeUrl,
   createPkceTransaction,
@@ -49,7 +50,7 @@ function publicError(error) {
 function buildLearningUrl(helpUrl, code = null) {
   let base;
   try { base = new URL(helpUrl); } catch { throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'The learning platform URL is invalid.'); }
-  if (base.protocol !== 'https:' || base.username || base.password) {
+  if (base.origin !== LEARNING_ORIGIN || base.username || base.password) {
     throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'The learning platform URL is invalid.');
   }
   const url = new URL(code ? '/learn/handoff' : '/learn', base.origin);

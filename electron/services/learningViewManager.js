@@ -1,17 +1,8 @@
 const { randomUUID } = require('crypto');
+const { LEARNING_ORIGIN, isTrustedLearningUrl } = require('../auth/learningPolicy');
 
-const LEARNING_ORIGIN = 'https://vibe-ide-code.vercel.app';
 const SIDEBAR_WIDTH = 72;
 const TITLEBAR_HEIGHT = 40;
-
-function isTrustedLearningUrl(rawUrl) {
-  try {
-    const url = new URL(rawUrl);
-    return url.origin === LEARNING_ORIGIN && !url.username && !url.password;
-  } catch {
-    return false;
-  }
-}
 
 function publicFailure() {
   return {
