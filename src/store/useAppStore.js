@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { getSystemLocale, SUPPORTED_LOCALES } from '../i18n/locales';
 import { normalizeTheme } from '../utils/theme';
+import { applyCurrentProjectPatch, normalizeCurrentProject } from '../utils/currentProject';
 
 let initializationPromise = null;
 
@@ -30,8 +31,8 @@ export const useAppStore = create((set, get) => ({
             initialized: true,
             initializationStatus: 'ready',
             initializationError: '',
-            currentProject: config.currentProject || null,
-            recentProjects: config.recentProjects || [],
+            currentProject: normalizeCurrentProject(config.currentProject),
+            recentProjects: Array.isArray(config.recentProjects) ? config.recentProjects.map(normalizeCurrentProject).filter(Boolean) : [],
             theme: normalizeTheme(config.theme),
             language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
             lastView: typeof config.lastView === 'string' ? config.lastView : null,
@@ -49,10 +50,19 @@ export const useAppStore = create((set, get) => ({
   },
 
   setCurrentProject: async (project) => {
-    set({ currentProject: project });
+    const normalized = normalizeCurrentProject(project);
+    set({ currentProject: normalized });
     if (window.electronAPI?.store) {
-      await window.electronAPI.store.set('currentProject', project);
+      await window.electronAPI.store.set('currentProject', normalized);
     }
+  },
+
+  patchCurrentProject: async (projectId, patch) => {
+    const next = applyCurrentProjectPatch(get().currentProject, projectId, patch);
+    if (!next) return false;
+    set({ currentProject: next });
+    if (window.electronAPI?.store) await window.electronAPI.store.set('currentProject', next);
+    return true;
   },
 
   clearCurrentProject: async () => {
@@ -63,10 +73,12 @@ export const useAppStore = create((set, get) => ({
   },
 
   addRecentProject: async (project) => {
+    const normalized = normalizeCurrentProject(project);
+    if (!normalized) return;
     const { recentProjects } = get();
     // Avoid duplicates, move to top
-    const filtered = recentProjects.filter(p => p.path !== project.path);
-    const newRecent = [project, ...filtered].slice(0, 10); // keep max 10
+    const filtered = recentProjects.filter(p => p.path !== normalized.path);
+    const newRecent = [normalized, ...filtered].slice(0, 10); // keep max 10
     
     set({ recentProjects: newRecent });
     if (window.electronAPI?.store) {

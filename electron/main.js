@@ -11,7 +11,7 @@ const { setupTerminalHandlers, terminateAllTerminals } = require('./services/ter
 const { installClaudeCode, setupClaudeHandlers, terminateAllClaudeProcesses } = require('./services/claudeManager');
 const { setupOpenAIHandlers, terminateAllOpenAIProcesses } = require('./services/openaiManager');
 const { installOpenCode, setupOpenCodeHandlers, terminateAllOpenCodeProcesses } = require('./services/openCodeManager');
-const { initProjectManager, setupProjectHandlers, registerProject } = require('./services/projectManager');
+const { getProjectById, initProjectManager, setupProjectHandlers, registerProject, updateProject } = require('./services/projectManager');
 const { installAllEnvironment, setupEnvironmentHandlers, cancelEnvironmentInstallation } = require('./services/environmentManager');
 const { setupProjectProvisionerHandlers } = require('./services/projectProvisioner');
 const { setupPreviewHandlers, terminateAllPreviews } = require('./services/previewManager');
@@ -27,6 +27,7 @@ const { classifyError, diagnostics, recordUnhandledRejection } = require('./diag
 const { setupDiagnosticsHandlers } = require('./diagnostics/reportManager');
 const { UpdateManager, setupUpdateHandlers } = require('./services/updateManager');
 const { LearningViewManager } = require('./services/learningViewManager');
+const { createRequirementsManager, setupRequirementsHandlers } = require('./services/requirementsManager');
 
 process.on('uncaughtExceptionMonitor', (error, origin) => {
   diagnostics.log('main', 'uncaught-error', { ...classifyError(error, 'uncaught-exception'), origin });
@@ -398,6 +399,7 @@ if (isSandboxSmokeTest) {
   let studentBroadcastAlerts;
   let projectProvisioner;
   let updateManager;
+  let requirementsManager;
   const learningViewManager = new LearningViewManager({
     WebContentsView,
     authService,
@@ -424,6 +426,7 @@ if (isSandboxSmokeTest) {
     });
     if (previousPolicy === 'active' && state.policy !== 'active') {
       learningViewManager.close();
+      requirementsManager?.cancelAll();
       terminateAllTerminals();
       terminateAllClaudeProcesses();
       terminateAllOpenAIProcesses();
@@ -477,6 +480,7 @@ if (isSandboxSmokeTest) {
     studentBroadcastAlerts.stop().catch(() => {});
     updateManager.dispose();
     learningViewManager.close(false);
+    requirementsManager?.cancelAll();
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
     terminateAllOpenCodeProcesses();
@@ -489,12 +493,14 @@ if (isSandboxSmokeTest) {
   // Initialize Managers
   setupStoreHandlers();
   initProjectManager();
+  requirementsManager = createRequirementsManager({ getProjectById, updateProject, clipboard });
   setupWindowHandlers(() => mainWindow);
   setupDialogHandlers(() => mainWindow);
   setupFileSystemHandlers();
 
   // Setup IPC handlers for each subsystem
-  setupProjectHandlers(ipcMain, () => mainWindow);
+  setupProjectHandlers(ipcMain, () => mainWindow, { onProjectRemoved: (projectId) => requirementsManager.cancelProject(projectId) });
+  setupRequirementsHandlers(ipcMain, requirementsManager);
   setupEnvironmentHandlers(ipcMain, () => mainWindow);
   projectProvisioner = setupProjectProvisionerHandlers(ipcMain, () => mainWindow, registerProject);
   setupServiceHandlers(ipcMain, diagnostics);

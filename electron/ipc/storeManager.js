@@ -2,6 +2,7 @@ const { ipcMain, app } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { writeJsonAtomic } = require('../services/atomicJson');
+const { toPublicProject } = require('../services/projectContracts');
 
 function purgeLegacyChatHistory(data) {
   const next = { ...data };
@@ -9,6 +10,25 @@ function purgeLegacyChatHistory(data) {
     if (key.startsWith('chat:')) delete next[key];
   }
   return next;
+}
+
+function sanitizeStoredConfig(data) {
+  const next = purgeLegacyChatHistory(data);
+  const validProject = (project) => project && typeof project.id === 'string' && typeof project.name === 'string' && typeof project.path === 'string' && path.isAbsolute(project.path);
+  if (next.currentProject !== undefined) {
+    if (validProject(next.currentProject)) next.currentProject = toPublicProject(next.currentProject);
+    else delete next.currentProject;
+  }
+  if (next.recentProjects !== undefined) {
+    next.recentProjects = Array.isArray(next.recentProjects) ? next.recentProjects.filter(validProject).slice(0, 10).map((project) => toPublicProject(project)) : [];
+  }
+  return next;
+}
+
+function sanitizeStoredValue(key, value) {
+  if (key === 'currentProject') return sanitizeStoredConfig({ currentProject: value }).currentProject || null;
+  if (key === 'recentProjects') return sanitizeStoredConfig({ recentProjects: value }).recentProjects;
+  return value;
 }
 
 class StoreManager {
@@ -31,8 +51,8 @@ class StoreManager {
     }
     if (!parsed) return {};
 
-    const data = purgeLegacyChatHistory(parsed);
-    if (Object.keys(data).length !== Object.keys(parsed).length) {
+    const data = sanitizeStoredConfig(parsed);
+    if (JSON.stringify(data) !== JSON.stringify(parsed)) {
       try {
         this.writeData(data);
       } catch (error) {
@@ -51,7 +71,7 @@ class StoreManager {
   }
 
   set(key, value) {
-    const next = { ...this.data, [key]: value };
+    const next = { ...this.data, [key]: sanitizeStoredValue(key, value) };
     this.writeData(next);
     this.data = next;
   }
@@ -101,4 +121,6 @@ module.exports = {
   setupStoreHandlers,
   getStore,
   purgeLegacyChatHistory,
+  sanitizeStoredConfig,
+  sanitizeStoredValue,
 };

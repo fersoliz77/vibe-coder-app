@@ -4,6 +4,9 @@
 
 ### Added
 
+- Post-onboarding Requirements Center with per-action review, explicit consent, progress reporting, and safe cancellation.
+- Read-only workspace requirement detection for npm workspaces, pnpm workspaces, nested applications, and hoisted dependencies.
+- Recoverable project-registry backups with a dismissible application-level recovery notice.
 - Safe external-workspace analysis with bounded manifest discovery, multi-application detection, confidence evidence, and primary-target selection.
 - External import review for monorepos and mixed stacks, with editing-only fallback when automatic preview is unavailable.
 - Sidebar access to courses and learning progress through the trusted system-browser bridge.
@@ -24,6 +27,8 @@
 
 ### Changed
 
+- Renderer project data now uses minimal public contracts instead of persisted main-process records.
+- Managed dependency installation is limited to validated lockfiles and `npm ci --ignore-scripts --no-audit --no-fund` with an isolated npm configuration.
 - Project creation and import now persist the same target-based workspace model for details, preview, and linked Vercel status.
 - Project details now describe applications, stacks, backend, repository, deployment, Git state, dates, and local location instead of repeating learning progress.
 - Private GitHub repository copy now explains who can access the generated repository.
@@ -37,6 +42,8 @@
 
 ### Fixed
 
+- Dependency actions now check free disk space before execution and retry only post-install verification when verification is inconclusive.
+- Corrupt or oversized project registries are repaired or recovered without exposing internal paths or errors to the renderer.
 - Android SDK provisioning no longer tries to upgrade an existing Android Studio package through WinGet.
 - Service checks now receive project context correctly.
 - Claude panel prop wiring and multiple IPC cleanup issues.

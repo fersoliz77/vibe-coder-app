@@ -4,6 +4,30 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-11
+
+### Scope
+
+- Added a separate Requirements Center after workspace onboarding.
+- Hardened project persistence and renderer-facing project contracts.
+- Added safe, individually consented dependency remediation.
+
+### Key Changes
+
+- Added read-only requirement derivation for nested applications, npm and pnpm workspaces, lockfile ownership, and hoisted dependencies.
+- Added short-lived single-use grants for reviewed actions and restricted managed execution to `npm ci --ignore-scripts --no-audit --no-fund` without lifecycle scripts or shell invocation.
+- Added disk-space preflight, staged progress, safe cancellation, and verification-only retry after a completed install.
+- Added bounded project-registry validation, backups, automatic repair and recovery, and a global recovery notice.
+- Reduced renderer and persisted-store project data to explicit public contracts that exclude private configuration and analysis internals.
+
+### Validation
+
+- `npm run check` with 375 passing tests.
+- Token, font, literal, accessibility, contrast, design-system, build, and bundle-budget checks passed.
+- `git diff --check` passed.
+
+---
+
 ## 2026-08-10
 
 ### Scope

@@ -46,7 +46,7 @@ function AccountCard({ authState, account, progress, completedLessons, totalLess
   );
 }
 
-export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOpenCode, onOpenProjects, onOpenPreview, onOpenFiles, onRefreshAll, currentProject }) {
+export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOpenCode, onOpenProjects, onOpenPreview, onOpenFiles, onOpenRequirements, onRefreshAll, currentProject }) {
   const { services: serviceList } = services;
   const { state: authState } = useAuth();
   const { language, t, formatDate } = useI18n();
@@ -120,6 +120,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const issueCount = Array.isArray(web.issues) ? web.issues.length : 0;
   const previewHasProblems = web.state === 'stopped' || web.state === 'error' || issueCount > 0 || web.diagnostics?.status === 'error';
   const deliveryNeedsSetup = deliveryState === 'attention';
+  const pendingRequirements = (currentProject?.requirements?.items || []).filter((item) => item.status === 'pending');
   /*
    * Capa basica y capa completa.
    *
@@ -142,7 +143,8 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const revealServices = () => document.querySelector('.dashboard__sidebar')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 
   let nextAction = { title: t('dashboard.nextReviewTitle'), copy: t('dashboard.nextReviewCopy'), cta: t('dashboard.openPreview'), onClick: onOpenPreview, tone: 'ready' };
-  if (previewHasProblems) nextAction = { title: t('dashboard.nextPreviewTitle'), copy: t('dashboard.nextPreviewCopy'), cta: t('dashboard.inspectPreview'), onClick: onOpenPreview, tone: 'warning' };
+  if (pendingRequirements.length) nextAction = { title: t('dashboard.nextRequirementsTitle'), copy: t('dashboard.nextRequirementsCopy', { count: pendingRequirements.length }), cta: t('dashboard.reviewRequirements'), onClick: onOpenRequirements, tone: 'warning' };
+  else if (previewHasProblems) nextAction = { title: t('dashboard.nextPreviewTitle'), copy: t('dashboard.nextPreviewCopy'), cta: t('dashboard.inspectPreview'), onClick: onOpenPreview, tone: 'warning' };
   else if (git.state === 'ready' && git.entries.length > 0) nextAction = { title: t('dashboard.nextGitTitle'), copy: t('dashboard.nextGitCopy', { count: git.entries.length }), cta: t('dashboard.reviewFiles'), onClick: onOpenFiles, tone: 'accent' };
   else if (deliveryNeedsSetup) nextAction = { title: t('dashboard.nextDeliveryTitle'), copy: t('dashboard.nextDeliveryCopy'), cta: t('dashboard.viewServices'), onClick: revealServices, tone: 'warning' };
 
@@ -210,7 +212,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                     {android.available !== false && <span className={`outcome-signal is-${android.appState === 'running' ? 'ready' : android.available === null ? 'loading' : 'neutral'}`}><i />{t('dashboard.androidStatus', { status: statusLabel(android.available === null ? android.emulatorState : android.appState, 'androidStates') })}</span>}
                   </div>
                 </div>
-                <button className="project-outcome__cta" type="button" onClick={onOpenPreview}>{t('dashboard.openPreview')}<ArrowIcon /></button>
+                <button className="project-outcome__cta" type="button" onClick={pendingRequirements.length ? onOpenRequirements : onOpenPreview}>{pendingRequirements.length ? t('dashboard.reviewRequirements') : t('dashboard.openPreview')}<ArrowIcon /></button>
               </section>
 
               {detailed && <section className="project-details glass-card" aria-labelledby="project-details-title">

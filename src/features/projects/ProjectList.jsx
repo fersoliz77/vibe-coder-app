@@ -63,7 +63,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
 
   const handleSelect = async (project) => {
     if (window.electronAPI && window.electronAPI.projects) {
-      await window.electronAPI.projects.updateLastOpened(project.id);
+      const result = await window.electronAPI.projects.updateLastOpened(project.id);
+      if (result?.project) project = result.project;
     }
     onProjectSelect(project);
   };
@@ -175,7 +176,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         <GlobalServices services={services} onRefresh={onRefreshServices} />
       </div>
       {wizardOpen && <CreateProjectWizard onClose={closeWizard} onCreated={(response) => { setCreatedProject(response.project); loadProjects(); }} />}
-      {importSelection && <Suspense fallback={null}><ImportWorkspaceDialog selection={importSelection} onCancel={() => setImportSelection(null)} onChooseAnother={() => { window.electronAPI.projects.cancelImport(importSelection.id).catch(() => {}); setImportSelection(null); setTimeout(handleImport, 0); }} onImported={(project) => { setImportSelection(null); loadProjects(); onProjectSelect(project); }} /></Suspense>}
+      {importSelection && <Suspense fallback={null}><ImportWorkspaceDialog selection={importSelection} onCancel={() => setImportSelection(null)} onChooseAnother={() => { window.electronAPI.projects.cancelImport(importSelection.id).catch(() => {}); setImportSelection(null); setTimeout(handleImport, 0); }} onImported={(project) => { setImportSelection(null); loadProjects(); onProjectSelect(project, { initialView: 'requirements' }); }} /></Suspense>}
       <ConfirmDialog
         open={Boolean(pendingRemoval)}
         title={t('projects.removeTitle', { name: pendingRemoval?.name })}

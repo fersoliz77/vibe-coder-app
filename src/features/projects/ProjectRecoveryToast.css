@@ -1,0 +1,4 @@
+.project-recovery-toast { top: calc(var(--titlebar-height) + var(--vc-space-4)); right: var(--vc-space-6); bottom: auto; display: grid; width: min(calc(var(--vc-space-24) * 4), calc(100vw - var(--vc-space-12))); gap: var(--vc-space-2); border-color: color-mix(in srgb, var(--vc-success) 50%, var(--vc-line)); }
+.project-recovery-toast.is-unavailable { border-color: color-mix(in srgb, var(--vc-warning) 55%, var(--vc-line)); }
+.project-recovery-toast p { margin: 0; color: var(--vc-text-2); font-size: var(--vc-text-sm); }
+.project-recovery-toast button { justify-self: end; border: 0; color: var(--vc-accent); background: transparent; font-weight: 700; cursor: pointer; }

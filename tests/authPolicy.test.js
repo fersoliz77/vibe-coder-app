@@ -356,6 +356,11 @@ test('restricted IPC permits state reads but denies productive actions', () => {
   assert.equal(canAccessChannel('denied', 'updates:get-state'), true);
   assert.equal(canAccessChannel('denied', 'updates:check'), false);
   assert.equal(canAccessChannel('restricted', 'updates:download'), false);
+  assert.equal(canAccessChannel('restricted', 'requirements:list'), false);
+  assert.equal(canAccessChannel('restricted', 'requirements:refresh'), false);
+  assert.equal(canAccessChannel('restricted', 'requirements:preview'), false);
+  assert.equal(canAccessChannel('denied', 'requirements:apply'), false);
+  assert.equal(canAccessChannel('active', 'requirements:apply'), true);
   assert.equal(canAccessChannel('active', 'fs:write-file'), true);
 });
 

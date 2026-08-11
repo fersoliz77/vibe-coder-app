@@ -9,12 +9,13 @@ export const VIEWS = {
   OPENCODE: 'opencode',
   PREVIEW: 'preview',
   LEARNING: 'learning',
+  REQUIREMENTS: 'requirements',
 };
 
 /** Vistas que solo tienen sentido con un proyecto abierto. */
 export const PROJECT_VIEWS = Object.freeze([
   VIEWS.DASHBOARD, VIEWS.FILES, VIEWS.TERMINAL,
-  VIEWS.CLAUDE, VIEWS.OPENAI, VIEWS.PREVIEW,
+  VIEWS.CLAUDE, VIEWS.OPENAI, VIEWS.PREVIEW, VIEWS.REQUIREMENTS,
 ]);
 
 /*

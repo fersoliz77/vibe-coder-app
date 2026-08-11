@@ -316,6 +316,78 @@ Object.assign(dictionaries.es.importWorkspace, {
   },
 });
 
+Object.assign(dictionaries.en.sidebar, { requirements: 'Requirements' });
+Object.assign(dictionaries.es.sidebar, { requirements: 'Requerimientos' });
+Object.assign(dictionaries.en.dashboard, { nextRequirementsTitle: 'Finish preparing this project', nextRequirementsCopy: '{{count}} requirement(s) are waiting for review. Nothing changes until you approve one action.', reviewRequirements: 'Review requirements' });
+Object.assign(dictionaries.es.dashboard, { nextRequirementsTitle: 'Terminá de preparar este proyecto', nextRequirementsCopy: 'Hay {{count}} requerimiento(s) para revisar. Nada cambia hasta que apruebes una acción.', reviewRequirements: 'Revisar requerimientos' });
+
+dictionaries.en.requirements = {
+  eyebrow: 'Project readiness', title: 'Requirements', description: 'Review what this project needs after import. Analysis remains read-only; every applicable change is isolated and requires its own approval.', refresh: 'Reanalyze project', refreshing: 'Analyzing...', readOnlyTitle: 'Import remains read-only', readOnlyCopy: 'This screen is separate from import. Reanalysis reads bounded metadata only, and there is no bulk apply action.', pending: 'Pending', blocking: 'Blocking', lastAnalysis: 'Last analysis', notAvailable: 'Not available', problem: 'Requirements need attention', loading: 'Loading requirements...', emptyTitle: 'No pending requirements', emptyCopy: 'The supported Vibe workflow is ready, or all remaining setup is outside managed automation.', listLabel: 'Project requirements', reviewAction: 'Review action', loadFailed: 'Requirements could not be loaded.', refreshFailed: 'The project could not be reanalyzed.', previewFailed: 'The action preview could not be prepared.', applyFailed: 'The approved action could not be completed.', copyFailed: 'The manual command could not be copied.', consentEyebrow: 'One action, one approval', exactCommand: 'Exact managed command', commandLocation: 'Working directory: {{path}}', requiredNames: 'Required names only; values stay on your device', effectsTitle: 'Declared effects', explicitConsent: 'I reviewed these exact effects and approve only this action.', copied: 'Copied', copyCommand: 'Copy manual command', openDestination: 'Open destination', applying: 'Applying...', applyThisAction: 'Approve this action',
+  severity: { blocking: 'Required', advisory: 'Advisory' },
+  status: { pending: 'Waiting for review', deferred: 'Deferred by the user', dismissed: 'Dismissed by the user', completed: 'Completed with explicit approval', superseded: 'No longer applicable' },
+  types: {
+    INSTALL_DEPENDENCIES: { title: 'Install declared dependencies', copy: 'Dependencies for {{path}} are not present. Managed installation is available only for a validated npm lockfile.' },
+    CONFIGURE_ENVIRONMENT: { title: 'Complete environment configuration', copy: '{{count}} required variable name(s) are not represented in a local environment file. Vibe never asks for or stores their values.' },
+    REVIEW_PREVIEW: { title: 'Review Preview configuration', copy: 'No managed Preview profile was detected. Starting Preview remains a separate action because it executes project code.' },
+    REVIEW_PARTIAL_SCAN: { title: 'Acknowledge partial analysis', copy: 'Some paths were skipped by bounded safety limits. Review the project structure before relying on the report.' },
+    CONFIRM_PROJECT_ROOT: { title: 'Confirm the project root', copy: 'Project evidence is limited. Confirm that this folder is the intended workspace root.' },
+  },
+  actions: {
+    INSTALL_NPM_DEPENDENCIES: { title: 'Install npm dependencies safely', copy: 'This uses the validated lockfile and disables every package lifecycle script. It changes node_modules and accesses the npm registry.' },
+    MANUAL_DEPENDENCY_INSTALL: { title: 'Manual dependency installation', copy: 'This package manager does not yet have a constrained managed executor. You can copy the main-process-generated command and decide where to run it.' },
+    MANUAL_ENVIRONMENT_SETUP: { title: 'Configure environment manually', copy: 'Environment values remain exclusively user-owned. Vibe lists required names but will not create or edit an environment file.' },
+    OPEN_PREVIEW: { title: 'Continue in Preview', copy: 'Opening Preview does not start the project. Starting it later is a separate explicit action that may execute project code.' },
+    ACKNOWLEDGE_REQUIREMENT: { title: 'Record this review', copy: 'This changes only Vibe local metadata and records that you reviewed this advisory requirement.' },
+  },
+  effects: { projectFiles: 'Project files may change', dependencies: 'Dependency directory changes', network: 'Network access', projectCode: 'Project code may execute', appMetadata: 'Vibe metadata changes' },
+  warnings: {
+    LIFECYCLE_SCRIPTS_DISABLED: { title: 'Project scripts stay disabled', copy: 'preinstall, install, postinstall and other lifecycle scripts will not run. Packages that require them may still need manual preparation.' },
+    MANUAL_ACTION_REQUIRED: { title: 'No automatic execution', copy: 'Vibe will only copy a fixed recommendation. It will not write to the terminal or run a shell.' },
+    SECRET_VALUES_STAY_USER_OWNED: { title: 'Secret boundary', copy: 'Only variable names are shown. Values are never requested, copied or persisted by this module.' },
+    PROJECT_CODE_REQUIRES_SEPARATE_START: { title: 'Project code boundary', copy: 'Preview can execute project code only after a separate user action from the Preview screen.' },
+  },
+};
+
+dictionaries.es.requirements = {
+  eyebrow: 'Preparación del proyecto', title: 'Requerimientos', description: 'Revisá qué necesita el proyecto después de importarlo. El análisis sigue siendo de solo lectura; cada cambio aplicable está aislado y requiere su propia aprobación.', refresh: 'Volver a analizar', refreshing: 'Analizando...', readOnlyTitle: 'La importación sigue siendo de solo lectura', readOnlyCopy: 'Esta pantalla está separada de la importación. El reanálisis solo lee metadatos acotados y no existe una acción para aplicar todo.', pending: 'Pendientes', blocking: 'Bloqueantes', lastAnalysis: 'Último análisis', notAvailable: 'No disponible', problem: 'Los requerimientos necesitan atención', loading: 'Cargando requerimientos...', emptyTitle: 'No hay requerimientos pendientes', emptyCopy: 'El flujo compatible de Vibe está listo o la preparación restante queda fuera de la automatización administrada.', listLabel: 'Requerimientos del proyecto', reviewAction: 'Revisar acción', loadFailed: 'No se pudieron cargar los requerimientos.', refreshFailed: 'No se pudo volver a analizar el proyecto.', previewFailed: 'No se pudo preparar la vista previa de la acción.', applyFailed: 'No se pudo completar la acción aprobada.', copyFailed: 'No se pudo copiar el comando manual.', consentEyebrow: 'Una acción, una aprobación', exactCommand: 'Comando administrado exacto', commandLocation: 'Directorio de trabajo: {{path}}', requiredNames: 'Solo nombres requeridos; los valores quedan en tu equipo', effectsTitle: 'Efectos declarados', explicitConsent: 'Revisé estos efectos exactos y apruebo únicamente esta acción.', copied: 'Copiado', copyCommand: 'Copiar comando manual', openDestination: 'Abrir destino', applying: 'Aplicando...', applyThisAction: 'Aprobar esta acción',
+  severity: { blocking: 'Requerido', advisory: 'Recomendado' },
+  status: { pending: 'Esperando revisión', deferred: 'Postergado por el usuario', dismissed: 'Descartado por el usuario', completed: 'Completado con aprobación explícita', superseded: 'Ya no corresponde' },
+  types: {
+    INSTALL_DEPENDENCIES: { title: 'Instalar dependencias declaradas', copy: 'No están presentes las dependencias de {{path}}. La instalación administrada solo está disponible con un lockfile de npm validado.' },
+    CONFIGURE_ENVIRONMENT: { title: 'Completar la configuración de entorno', copy: 'Hay {{count}} nombre(s) de variables requeridas sin representar en un archivo de entorno local. Vibe nunca solicita ni guarda sus valores.' },
+    REVIEW_PREVIEW: { title: 'Revisar la configuración de Vista previa', copy: 'No se detectó un perfil administrado. Iniciar Vista previa sigue siendo otra acción porque ejecuta código del proyecto.' },
+    REVIEW_PARTIAL_SCAN: { title: 'Reconocer el análisis parcial', copy: 'Algunas rutas fueron omitidas por límites seguros. Revisá la estructura antes de depender del informe.' },
+    CONFIRM_PROJECT_ROOT: { title: 'Confirmar la raíz del proyecto', copy: 'La evidencia es limitada. Confirmá que esta carpeta sea la raíz correcta del workspace.' },
+  },
+  actions: {
+    INSTALL_NPM_DEPENDENCIES: { title: 'Instalar dependencias npm de forma segura', copy: 'Usa el lockfile validado y desactiva todos los scripts de ciclo de vida. Modifica node_modules y accede al registro de npm.' },
+    MANUAL_DEPENDENCY_INSTALL: { title: 'Instalación manual de dependencias', copy: 'Este gestor todavía no tiene un ejecutor administrado y acotado. Podés copiar el comando generado por main y decidir dónde ejecutarlo.' },
+    MANUAL_ENVIRONMENT_SETUP: { title: 'Configurar el entorno manualmente', copy: 'Los valores permanecen bajo control exclusivo del usuario. Vibe muestra nombres pero no crea ni edita archivos de entorno.' },
+    OPEN_PREVIEW: { title: 'Continuar en Vista previa', copy: 'Abrir Vista previa no inicia el proyecto. Iniciarlo luego es una acción explícita separada que puede ejecutar su código.' },
+    ACKNOWLEDGE_REQUIREMENT: { title: 'Registrar esta revisión', copy: 'Solo modifica metadatos locales de Vibe y registra que revisaste este requerimiento informativo.' },
+  },
+  effects: { projectFiles: 'Pueden cambiar archivos del proyecto', dependencies: 'Cambia el directorio de dependencias', network: 'Acceso a la red', projectCode: 'Puede ejecutarse código del proyecto', appMetadata: 'Cambian metadatos de Vibe' },
+  warnings: {
+    LIFECYCLE_SCRIPTS_DISABLED: { title: 'Los scripts del proyecto permanecen desactivados', copy: 'No se ejecutan preinstall, install, postinstall ni otros scripts de ciclo de vida. Algunos paquetes pueden requerir preparación manual.' },
+    MANUAL_ACTION_REQUIRED: { title: 'Sin ejecución automática', copy: 'Vibe solo copiará una recomendación fija. No escribirá en la terminal ni ejecutará un shell.' },
+    SECRET_VALUES_STAY_USER_OWNED: { title: 'Límite de secretos', copy: 'Solo se muestran nombres de variables. Este módulo nunca solicita, copia ni persiste sus valores.' },
+    PROJECT_CODE_REQUIRES_SEPARATE_START: { title: 'Límite de código del proyecto', copy: 'Vista previa puede ejecutar código únicamente después de otra acción del usuario desde su propia pantalla.' },
+  },
+};
+
+dictionaries.en.requirements.warnings.LIFECYCLE_SCRIPTS_DISABLED.copy = 'preinstall, install, postinstall and other lifecycle scripts will not run. User and global npm configuration are isolated, so private registry credentials are not used.';
+dictionaries.es.requirements.warnings.LIFECYCLE_SCRIPTS_DISABLED.copy = 'No se ejecutan preinstall, install, postinstall ni otros scripts de ciclo de vida. La configuración npm global y del usuario queda aislada, por lo que no se usan credenciales de registros privados.';
+dictionaries.en.requirements.warnings.MANUAL_ACTION_REQUIRED.copy = 'Vibe only copies this recommendation and never runs it. Running it manually may change project files and execute package lifecycle scripts.';
+dictionaries.es.requirements.warnings.MANUAL_ACTION_REQUIRED.copy = 'Vibe solo copia esta recomendación y nunca la ejecuta. Ejecutarla manualmente puede modificar archivos del proyecto y ejecutar scripts de los paquetes.';
+dictionaries.en.requirements.exactCommand = 'Exact command';
+dictionaries.es.requirements.exactCommand = 'Comando exacto';
+dictionaries.en.requirements.effects.temporaryCache = 'Temporary package cache changes';
+dictionaries.es.requirements.effects.temporaryCache = 'Cambia la caché temporal de paquetes';
+Object.assign(dictionaries.en.requirements, { progressLabel: 'Installation progress', elapsed: '{{time}} elapsed', estimatedDuration: 'Estimated {{min}}-{{max}} min; may vary', progress: { starting: 'Starting safely', validating: 'Checking approval', saving: 'Saving review', preparing: 'Checking project files', installing: 'Installing dependencies', verifying: 'Verifying result', complete: 'Installation complete', failed: 'Installation stopped' }, errors: { project: 'Project unavailable. Open it again from Projects.', changed: 'This item changed. Reanalyze before continuing.', manual: 'Automatic setup is unavailable. Follow the manual option.', expired: 'Approval expired. Review and confirm again.', busy: 'Another action is running. Wait for it to finish.', failed: 'Installation stopped. Review the project and try again.', cancelled: 'Action cancelled. You can try again.', clipboard: 'Could not copy the command. Enter it manually.', generic: 'Could not finish. Reanalyze and try again.' } });
+Object.assign(dictionaries.es.requirements, { progressLabel: 'Progreso de instalación', elapsed: '{{time}} transcurrido', estimatedDuration: 'Estimado {{min}}-{{max}} min; puede variar', progress: { starting: 'Inicio seguro', validating: 'Comprobando aprobación', saving: 'Guardando revisión', preparing: 'Revisando archivos', installing: 'Instalando dependencias', verifying: 'Verificando resultado', complete: 'Instalación completada', failed: 'Instalación detenida' }, errors: { project: 'Proyecto no disponible. Abrilo nuevamente desde Proyectos.', changed: 'Este punto cambió. Volvé a analizar antes de continuar.', manual: 'La preparación automática no está disponible. Seguí la opción manual.', expired: 'La aprobación venció. Revisá y confirmá nuevamente.', busy: 'Hay otra acción en curso. Esperá a que termine.', failed: 'La instalación se detuvo. Revisá el proyecto e intentá nuevamente.', cancelled: 'Acción cancelada. Podés intentarlo nuevamente.', clipboard: 'No se pudo copiar el comando. Ingresalo manualmente.', generic: 'No se pudo terminar. Volvé a analizar e intentá nuevamente.' } });
+Object.assign(dictionaries.en.requirements.errors, { disk: 'Free space and retry.', verify: 'Not verified. Retry without reinstalling.', incomplete: 'Dependencies incomplete. Reanalyze.' });
+Object.assign(dictionaries.es.requirements.errors, { disk: 'Liberá espacio y reintentá.', verify: 'Sin verificar. Reintentá sin reinstalar.', incomplete: 'Dependencias incompletas. Volvé a analizar.' });
+
 Object.assign(dictionaries.en.sidebar, { learning: 'Courses and progress' });
 Object.assign(dictionaries.es.sidebar, { learning: 'Cursos y progreso' });
 Object.assign(dictionaries.en.dashboard, { projectTargets: 'Workspace applications', targetCount: '{{count}} detected targets' });

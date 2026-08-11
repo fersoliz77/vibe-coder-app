@@ -18,6 +18,16 @@ const NAV_ITEMS = [
     ),
   },
   {
+    id: 'requirements',
+    labelKey: 'sidebar.requirements',
+    icon: (
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 5h10M9 12h10M9 19h10" />
+        <path d="m3 5 1.5 1.5L7 3.5M3 12l1.5 1.5L7 10.5M3 19l1.5 1.5L7 17.5" />
+      </svg>
+    ),
+  },
+  {
     id: 'files',
     labelKey: 'sidebar.explorer',
     icon: (
@@ -67,7 +77,7 @@ const NAV_ITEMS = [
   },
 ];
 
-export default function Sidebar({ activeView, onNavigate, connectedCount, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, onLogout, loggingOut, currentProject, onBackToProjects, authState }) {
+export default function Sidebar({ activeView, onNavigate, connectedCount, requirementCount = 0, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, onLogout, loggingOut, currentProject, onBackToProjects, authState }) {
   const { t } = useI18n();
   return (
     <aside className="sidebar">
@@ -112,6 +122,9 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
                 <span className="sidebar__label">{item.labelKey ? t(item.labelKey) : item.label}</span>
                 {item.id === 'dashboard' && connectedCount > 0 && (
                   <span className="sidebar__badge sidebar__badge--success">{connectedCount}</span>
+                )}
+                {item.id === 'requirements' && requirementCount > 0 && (
+                  <span className="sidebar__badge">{requirementCount}</span>
                 )}
                 {item.id === 'claude' && claudeAvailable && (
                   <span className="sidebar__badge sidebar__badge--success"><CheckIcon size={12} label={t('sidebar.connected')} /></span>

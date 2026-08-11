@@ -6,6 +6,16 @@ function subscribe(channel, callback, mapArgs = (...args) => args) {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 
+async function invokeRequirement(channel, ...args) {
+  const response = await ipcRenderer.invoke(channel, ...args);
+  if (!response || typeof response !== 'object' || !Object.hasOwn(response, 'ok')) return response;
+  if (response.ok) return response.data;
+  const error = new Error('The requirement action needs attention.');
+  error.code = response.error?.code || 'REQUIREMENTS_FAILED';
+  if (response.error?.retry?.id) error.retry = response.error.retry;
+  throw error;
+}
+
 contextBridge.exposeInMainWorld('electronAPI', {
   // Authentication tokens never cross into the renderer.
   auth: {
@@ -56,6 +66,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ─── Projects ──────────────────────────────────────
   projects: {
     list: () => ipcRenderer.invoke('projects:list'),
+    getRecoveryState: () => ipcRenderer.invoke('projects:get-recovery-state'),
+    acknowledgeRecovery: () => ipcRenderer.invoke('projects:acknowledge-recovery'),
     chooseImport: () => ipcRenderer.invoke('projects:choose-import'),
     analyzeImport: (grantId) => ipcRenderer.invoke('projects:analyze-import', grantId),
     planImport: (grantId, choices) => ipcRenderer.invoke('projects:plan-import', grantId, choices),
@@ -65,6 +77,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     updateLastOpened: (id) => ipcRenderer.invoke('projects:update-last-opened', id),
     openDirectoryDialog: () => ipcRenderer.invoke('dialog:open-directory'),
     createDirectoryDialog: () => ipcRenderer.invoke('dialog:create-directory'),
+  },
+  requirements: {
+    list: (projectId) => invokeRequirement('requirements:list', projectId),
+    refresh: (projectId) => invokeRequirement('requirements:refresh', projectId),
+    preview: (projectId, requirementId) => invokeRequirement('requirements:preview', projectId, requirementId),
+    apply: (grantId, confirmationNonce) => invokeRequirement('requirements:apply', grantId, confirmationNonce),
+    retry: (retryId) => invokeRequirement('requirements:retry', retryId),
+    cancel: (grantId) => invokeRequirement('requirements:cancel', grantId),
+    copyGuidance: (projectId, requirementId) => invokeRequirement('requirements:copy-guidance', projectId, requirementId),
+    onProgress: (callback) => subscribe('requirements:progress', callback, (progress) => [progress]),
   },
   dialog: {
     confirmDirtyTabs: (fileNames) => ipcRenderer.invoke('dialog:confirm-dirty-tabs', fileNames),

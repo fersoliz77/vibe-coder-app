@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { validateProjectCwd, isSubPath } = require('../ipc/fsGuards');
 const { classifyWebScript } = require('./previewCommands');
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const DEFAULT_LIMITS = Object.freeze({ maxDepth: 6, maxEntries: 5000, maxFiles: 256, maxBytes: 4 * 1024 * 1024, maxFileBytes: 256 * 1024, timeoutMs: 2500 });
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', 'node_modules', 'bower_components', '.next', '.nuxt', '.output', '.svelte-kit', '.angular',
@@ -15,7 +15,7 @@ const IGNORED_DIRECTORIES = new Set([
 const EXACT_MANIFESTS = new Set([
   'package.json', 'pubspec.yaml', 'pyproject.toml', 'Cargo.toml', 'go.mod', 'go.work', 'pom.xml', 'composer.json',
   'Gemfile', 'settings.gradle', 'settings.gradle.kts', 'build.gradle', 'build.gradle.kts', 'Package.swift',
-  'CMakeLists.txt', 'mix.exs', 'deno.json', 'deno.jsonc', 'build.zig',
+  'CMakeLists.txt', 'mix.exs', 'deno.json', 'deno.jsonc', 'build.zig', 'pnpm-workspace.yaml',
 ]);
 const FRAMEWORKS = new Map([
   ['next', ['Next.js', 'web']], ['nuxt', ['Nuxt', 'web']], ['@angular/core', ['Angular', 'web']],
@@ -41,6 +41,58 @@ const STRUCTURAL_MARKERS = new Set(['.git', 'node_modules', 'pnpm-workspace.yaml
 const toRelative = (root, target) => path.relative(root, target).split(path.sep).join('/') || '.';
 const targetId = (kind, relativePath) => `${kind}-${crypto.createHash('sha1').update(`${kind}:${relativePath}`).digest('hex').slice(0, 10)}`;
 const unique = (values) => [...new Set(values.filter(Boolean))];
+
+function normalizeWorkspacePatterns(value) {
+  const source = Array.isArray(value) ? value : (value && Array.isArray(value.packages) ? value.packages : []);
+  return source.map((item) => String(item || '').trim().replace(/^['"]|['"]$/g, '').replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/$/, ''))
+    .filter((item) => item.length > 0 && item.length <= 240 && !path.posix.isAbsolute(item.replace(/^!/, '')) && !item.replace(/^!/, '').split('/').includes('..'))
+    .slice(0, 100);
+}
+
+function parsePnpmWorkspacePatterns(content) {
+  const inline = content.match(/^packages\s*:\s*\[([^\]]*)\]/m)?.[1];
+  if (inline !== undefined) return normalizeWorkspacePatterns(inline.split(','));
+  const lines = content.split(/\r?\n/);
+  const start = lines.findIndex((line) => /^packages\s*:\s*$/.test(line.trim()));
+  if (start < 0) return [];
+  const patterns = [];
+  for (const line of lines.slice(start + 1)) {
+    if (/^\S/.test(line) && line.trim()) break;
+    const match = line.match(/^\s+-\s+(.+?)\s*(?:#.*)?$/);
+    if (match) patterns.push(match[1]);
+  }
+  return normalizeWorkspacePatterns(patterns);
+}
+
+function globPatternMatches(pattern, relativePath) {
+  let expression = '';
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === '*' && pattern[index + 1] === '*') { expression += '.*'; index += 1; }
+    else if (character === '*') expression += '[^/]*';
+    else if (character === '?') expression += '[^/]';
+    else expression += character.replace(/[|\\{}()[\]^$+?.]/g, '\\$&');
+  }
+  return new RegExp(`^${expression}$`).test(relativePath);
+}
+
+function workspaceDefinitionMatches(definition, packagePath) {
+  const relative = definition.rootPath === '.' ? packagePath : path.posix.relative(definition.rootPath, packagePath);
+  if (!relative || relative === '.' || relative.startsWith('../')) return false;
+  const positives = definition.patterns.filter((pattern) => !pattern.startsWith('!'));
+  const exclusions = definition.patterns.filter((pattern) => pattern.startsWith('!')).map((pattern) => pattern.slice(1));
+  return positives.some((pattern) => globPatternMatches(pattern, relative)) && !exclusions.some((pattern) => globPatternMatches(pattern, relative));
+}
+
+function resolvedDependencyRoot(root, directory, packageName) {
+  let current = directory;
+  while (isSubPath(root, current)) {
+    if (fs.existsSync(path.join(current, 'node_modules', ...packageName.split('/'), 'package.json'))) return toRelative(root, path.join(current, 'node_modules'));
+    if (current === root) break;
+    current = path.dirname(current);
+  }
+  return null;
+}
 
 function scriptCategory(name) {
   if (/^(dev|serve|watch)$/.test(name)) return 'development';
@@ -249,6 +301,8 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   const services = new Set();
   const scripts = [];
   const dependencies = [];
+  const packageRecords = [];
+  const workspaceDefinitions = [];
   const runtimes = [];
   const lockfiles = [];
   const environmentNames = new Map();
@@ -286,7 +340,6 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
       packageManagers.add(manager);
       lockfiles.push({ manager, path: toRelative(root, path.join(directory, fileName)) });
     }
-    if (names.has('pnpm-workspace.yaml')) workspaceSignals.push('pnpm workspace');
     if (names.has('turbo.json')) workspaceSignals.push('Turborepo');
     if (names.has('nx.json')) workspaceSignals.push('Nx');
     if (names.has('lerna.json')) workspaceSignals.push('Lerna');
@@ -347,12 +400,17 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
           if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
           const detectedTarget = packageTarget(root, directory, parsed, relativeFile);
           const packageManagerDeclaration = typeof parsed.packageManager === 'string' ? parsed.packageManager : null;
-          if (packageManagerDeclaration) {
+           if (packageManagerDeclaration) {
             const [manager, version] = packageManagerDeclaration.split('@');
             if (PACKAGE_MANAGERS.has(manager)) {
               packageManagers.add(manager);
               runtimes.push({ id: `package-manager:${detectedTarget.id}`, targetId: detectedTarget.id, runtime: manager, declaredRange: /^\d[0-9A-Za-z.+-]{0,39}$/.test(version || '') ? version : null, source: relativeFile, requiredFor: ['dependencies'] });
-            }
+           }
+          const declaredWorkspacePatterns = normalizeWorkspacePatterns(parsed.workspaces);
+          if (declaredWorkspacePatterns.length) {
+            workspaceSignals.push('JavaScript workspace');
+            workspaceDefinitions.push({ rootPath: toRelative(root, directory), patterns: declaredWorkspacePatterns, managerHint: null, source: relativeFile });
+          }
           }
           if (typeof parsed.engines?.node === 'string') runtimes.push({ id: `node:${detectedTarget.id}`, targetId: detectedTarget.id, runtime: 'node', declaredRange: parsed.engines.node.slice(0, 80), source: relativeFile, requiredFor: ['dependencies', 'preview', 'build'] });
           if (parsed.workspaces) workspaceSignals.push('JavaScript workspace');
@@ -367,14 +425,27 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
             const packageNames = Object.keys(values || {}).filter((packageName) => PACKAGE_NAME.test(packageName)).sort();
             return { name, packageNames: packageNames.slice(0, 100), count: packageNames.length };
           }).filter((group) => group.count);
-          dependencies.push({
+          packageRecords.push({
             targetId: detectedTarget.id,
+            directory,
+            relativePath: toRelative(root, directory),
             ecosystem: 'npm',
             groups,
-            lockfiles: lockfiles.filter((item) => path.posix.dirname(item.path) === path.posix.dirname(relativeFile)).map((item) => item.path),
-            installState: names.has('node_modules') ? 'appears-installed' : groups.length ? 'install-needed' : 'not-required',
+            requiredPackageNames: unique([
+              ...Object.keys(parsed.dependencies || {}),
+              ...Object.keys(parsed.devDependencies || {}),
+            ].filter((packageName) => PACKAGE_NAME.test(packageName))),
+            manager: PACKAGE_MANAGERS.has(packageManagerDeclaration?.split('@')[0]) ? packageManagerDeclaration.split('@')[0] : null,
+            managerVersion: PACKAGE_MANAGERS.has(packageManagerDeclaration?.split('@')[0]) ? packageManagerDeclaration.split('@')[1]?.slice(0, 40) || null : null,
           });
         } catch { warnings.push({ code: 'MALFORMED_MANIFEST', path: toRelative(root, absolute), message: 'A package.json file is malformed.' }); }
+      } else if (entry.name === 'pnpm-workspace.yaml') {
+        const patterns = parsePnpmWorkspacePatterns(content);
+        if (patterns.length) {
+          packageManagers.add('pnpm');
+          workspaceSignals.push('pnpm workspace');
+          workspaceDefinitions.push({ rootPath: toRelative(root, directory), patterns, managerHint: 'pnpm', source: relativeFile });
+        }
       } else {
         const detected = textTarget(root, directory, entry.name, content);
         if (detected) {
@@ -413,13 +484,53 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   const sortedScripts = scripts.sort((a, b) => a.targetId.localeCompare(b.targetId) || a.name.localeCompare(b.name));
   const sortedRuntimes = runtimes.sort((a, b) => a.id.localeCompare(b.id));
   const sortedLockfiles = lockfiles.sort((a, b) => a.path.localeCompare(b.path));
+  const mergedDefinitions = [...workspaceDefinitions.reduce((definitions, definition) => {
+    const current = definitions.get(definition.rootPath) || { rootPath: definition.rootPath, patterns: [], managerHint: null, sources: [] };
+    current.patterns = unique([...current.patterns, ...definition.patterns]);
+    current.managerHint = definition.managerHint || current.managerHint;
+    current.sources.push(definition.source);
+    definitions.set(definition.rootPath, current);
+    return definitions;
+  }, new Map()).values()];
+  const recordsByPath = new Map(packageRecords.map((record) => [record.relativePath, record]));
+  for (const record of packageRecords) {
+    const matchingDefinitions = mergedDefinitions.filter((definition) => workspaceDefinitionMatches(definition, record.relativePath))
+      .sort((left, right) => right.rootPath.split('/').length - left.rootPath.split('/').length);
+    const ownDefinition = mergedDefinitions.find((definition) => definition.rootPath === record.relativePath);
+    const owner = matchingDefinitions[0] || ownDefinition || null;
+    const scopePath = owner?.rootPath || record.relativePath;
+    const scopeRecord = recordsByPath.get(scopePath);
+    const scopeLockfiles = sortedLockfiles.filter((item) => path.posix.dirname(item.path) === scopePath);
+    const lockManagers = unique(scopeLockfiles.map((item) => item.manager));
+    const declaredManager = owner?.managerHint || scopeRecord?.manager || null;
+    const manager = declaredManager || (lockManagers.length === 1 ? lockManagers[0] : null);
+    if (declaredManager && lockManagers.length && !lockManagers.includes(declaredManager)) warnings.push({ code: 'PACKAGE_MANAGER_CONFLICT', path: scopePath, message: 'Package manager declarations and lockfiles conflict.' });
+    const lockfile = manager ? scopeLockfiles.find((item) => item.manager === manager)?.path || null : null;
+    const resolvedNodeModules = unique(record.requiredPackageNames.map((packageName) => resolvedDependencyRoot(root, record.directory, packageName)));
+    dependencies.push({
+      targetId: record.targetId,
+      ecosystem: record.ecosystem,
+      groups: record.groups,
+      lockfiles: scopeLockfiles.map((item) => item.path),
+      installScope: {
+        relativePath: scopePath,
+        workspaceRoot: owner?.rootPath || null,
+        isWorkspaceMember: Boolean(owner && owner.rootPath !== record.relativePath),
+        manager,
+        managerVersion: scopeRecord?.managerVersion || null,
+        lockfile,
+      },
+      resolvedNodeModules,
+      installState: !record.requiredPackageNames.length ? 'not-required' : record.requiredPackageNames.every((packageName) => resolvedDependencyRoot(root, record.directory, packageName)) ? 'appears-installed' : 'install-needed',
+    });
+  }
   const environment = publicEnvironment(environmentNames);
   const projectAssessment = assessProject({ targets: deduplicated, workspaceSignals: workspaceSignalList, packageManagers: packageManagerList, git, warnings });
   const readiness = buildReadiness({ assessment: projectAssessment, targets: deduplicated, dependencies, environment, warnings, complete });
   const decisionProfile = {
     layout, complete, packageManagers: packageManagerList, packageManagerDetails: sortedLockfiles, workspaceSignals: workspaceSignalList,
     services: serviceList, integrations, targets: deduplicated, roots, scripts: sortedScripts, dependencies, environment, git, runtimes: sortedRuntimes,
-    warnings: warnings.map(({ code, path: warningPath }) => ({ code, path: warningPath || null })), evidence: fingerprintEntries.sort(),
+    workspaceDefinitions: mergedDefinitions, warnings: warnings.map(({ code, path: warningPath }) => ({ code, path: warningPath || null })), evidence: fingerprintEntries.sort(),
   };
   const fingerprint = crypto.createHash('sha256').update(JSON.stringify(decisionProfile)).digest('hex');
   return {

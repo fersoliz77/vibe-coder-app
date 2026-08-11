@@ -38,6 +38,20 @@ test('sandboxed preload loads using only Electron and exposes a working bridge',
   assert.deepEqual(calls[4], ['invoke', 'updates:download']);
   assert.equal(await exposed.electronAPI.updates.install(), 'ok');
   assert.deepEqual(calls[5], ['invoke', 'updates:install']);
+  assert.equal(await exposed.electronAPI.requirements.preview('project-id', 'requirement-id'), 'ok');
+  assert.deepEqual(calls[6], ['invoke', 'requirements:preview', 'project-id', 'requirement-id']);
+  assert.equal(await exposed.electronAPI.requirements.apply('grant-id', 'nonce'), 'ok');
+  assert.deepEqual(calls[7], ['invoke', 'requirements:apply', 'grant-id', 'nonce']);
+
+  let requirementProgress;
+  const unsubscribeRequirementProgress = exposed.electronAPI.requirements.onProgress((progress) => { requirementProgress = progress; });
+  ipcRenderer.emit('requirements:progress', {}, { projectId: 'project-id', stage: 'installing', percent: 45 });
+  assert.equal(requirementProgress.percent, 45);
+  unsubscribeRequirementProgress();
+  assert.equal(await exposed.electronAPI.requirements.retry('retry-id'), 'ok');
+  assert.deepEqual(calls.at(-1), ['invoke', 'requirements:retry', 'retry-id']);
+  assert.equal(await exposed.electronAPI.projects.getRecoveryState(), 'ok');
+  assert.deepEqual(calls.at(-1), ['invoke', 'projects:get-recovery-state']);
 
   let closeRequested = false;
   const unsubscribe = exposed.electronAPI.window.onCloseRequested(() => { closeRequested = true; });

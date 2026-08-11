@@ -14,6 +14,9 @@ test('English and Spanish dictionaries initialize with required sections', async
     assert.equal(typeof dictionaries[locale].ai, 'object');
     assert.equal(typeof dictionaries[locale].preview, 'object');
     assert.equal(typeof dictionaries[locale].dashboard, 'object');
+    assert.equal(typeof dictionaries[locale].requirements, 'object');
+    assert.equal(typeof dictionaries[locale].sidebar.requirements, 'string');
+    assert.equal(typeof dictionaries[locale].requirements.actions.INSTALL_NPM_DEPENDENCIES.title, 'string');
     assert.equal(typeof dictionaries[locale].auth.platformAccess, 'string');
     assert.equal(typeof dictionaries[locale].auth.checkingAccountAccess, 'string');
     assert.equal(typeof dictionaries[locale].auth.continueWithGoogle, 'string');

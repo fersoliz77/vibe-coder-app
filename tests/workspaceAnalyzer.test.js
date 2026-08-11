@@ -104,7 +104,7 @@ test('audits readiness without returning environment values or script bodies', a
 
     const result = await analyzeWorkspace(root);
     const serialized = JSON.stringify(result);
-    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.schemaVersion, 3);
     assert.equal(result.projectAssessment.classification, 'project');
     assert.match(result.fingerprint, /^[a-f0-9]{64}$/);
     assert.equal(result.git.detected, true);
@@ -116,6 +116,66 @@ test('audits readiness without returning environment values or script bodies', a
     assert.equal(result.environment.valuesReturned, false);
     assert.ok(result.runtimes.some((item) => item.runtime === 'node' && item.declaredRange === '>=22'));
     assert.doesNotMatch(serialized, /real-secret|example-secret|secret-build-command|https:\/\/real\.invalid/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('npm workspace members share one explicit root install scope', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ private: true, workspaces: ['apps/*'], packageManager: 'npm@11.0.0' }));
+    write(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: {} }));
+    write(root, 'apps/admin/package.json', JSON.stringify({ name: 'admin', dependencies: { react: '19' } }));
+    write(root, 'apps/store/package.json', JSON.stringify({ name: 'store', dependencies: { vue: '3' } }));
+    const result = await analyzeWorkspace(root);
+    const members = result.dependencies.filter((item) => item.installState === 'install-needed' && item.installScope.isWorkspaceMember);
+    assert.equal(members.length, 2);
+    assert.ok(members.every((item) => item.installScope.relativePath === '.' && item.installScope.manager === 'npm' && item.installScope.lockfile === 'package-lock.json'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('an unrelated root lockfile is not assigned to a nested standalone app', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'root' }));
+    write(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: {} }));
+    write(root, 'apps/standalone/package.json', JSON.stringify({ name: 'standalone', dependencies: { react: '19' } }));
+    const result = await analyzeWorkspace(root);
+    const standalone = result.dependencies.find((item) => result.targets.find((target) => target.id === item.targetId)?.name === 'standalone');
+    assert.equal(standalone.installScope.relativePath, 'apps/standalone');
+    assert.equal(standalone.installScope.manager, null);
+    assert.equal(standalone.installScope.lockfile, null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('hoisted root modules satisfy workspace member dependencies', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ private: true, workspaces: { packages: ['apps/*'] } }));
+    write(root, 'package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: {} }));
+    write(root, 'apps/web/package.json', JSON.stringify({ name: 'web', dependencies: { react: '19' } }));
+    write(root, 'node_modules/react/package.json', JSON.stringify({ name: 'react', version: '19.0.0' }));
+    const result = await analyzeWorkspace(root);
+    const web = result.dependencies.find((item) => result.targets.find((target) => target.id === item.targetId)?.name === 'web');
+    assert.equal(web.installState, 'appears-installed');
+    assert.deepEqual(web.resolvedNodeModules, ['node_modules']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('pnpm workspace patterns and exclusions choose the correct install owners', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ private: true }));
+    write(root, 'pnpm-workspace.yaml', "packages:\n  - 'apps/*'\n  - '!apps/legacy'\n");
+    write(root, 'pnpm-lock.yaml', 'lockfileVersion: 9');
+    write(root, 'apps/web/package.json', JSON.stringify({ name: 'web', dependencies: { react: '19' } }));
+    write(root, 'apps/legacy/package.json', JSON.stringify({ name: 'legacy', dependencies: { vue: '3' } }));
+    write(root, 'apps/legacy/package-lock.json', JSON.stringify({ lockfileVersion: 3, packages: {} }));
+    const result = await analyzeWorkspace(root);
+    const byName = (name) => result.dependencies.find((item) => result.targets.find((target) => target.id === item.targetId)?.name === name);
+    assert.equal(byName('web').installScope.relativePath, '.');
+    assert.equal(byName('web').installScope.manager, 'pnpm');
+    assert.equal(byName('legacy').installScope.relativePath, 'apps/legacy');
+    assert.equal(byName('legacy').installScope.manager, 'npm');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

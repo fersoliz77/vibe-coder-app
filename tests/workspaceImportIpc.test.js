@@ -31,6 +31,8 @@ test('import IPC rejects a stale plan, keeps the grant, and applies only a newly
     const selection = await ipc.handlers.get('projects:choose-import')();
     assert.match(selection.id, /^opaque-/);
     const firstAnalysis = await ipc.handlers.get('projects:analyze-import')(null, selection.id);
+    assert.equal('fingerprint' in firstAnalysis, false);
+    assert.equal('evidence' in firstAnalysis.targets[0], false);
     const firstPlan = await ipc.handlers.get('projects:plan-import')(null, selection.id, { primaryTargetId: firstAnalysis.recommendedTargetId, acknowledgeLowConfidence: false });
 
     fs.writeFileSync(path.join(root, 'package.json'), JSON.stringify({ name: 'changed', scripts: { dev: 'vite' }, dependencies: { react: '19' }, devDependencies: { vite: '6' } }));
@@ -41,8 +43,9 @@ test('import IPC rejects a stale plan, keeps the grant, and applies only a newly
     const currentPlan = await ipc.handlers.get('projects:plan-import')(null, selection.id, { primaryTargetId: currentAnalysis.recommendedTargetId, acknowledgeLowConfidence: false });
     const result = await ipc.handlers.get('projects:confirm-import')(null, selection.id, currentPlan.planId);
     assert.equal(result.project.name, path.basename(root));
-    assert.equal(result.project.workspace.fingerprint, currentAnalysis.fingerprint);
-    assert.equal(result.project.onboarding.guarantees.sourceFilesChanged, false);
+    assert.equal(result.project.workspace.targets.length, currentAnalysis.targets.length);
+    assert.equal('fingerprint' in result.project.workspace, false);
+    assert.equal('onboarding' in result.project, false);
     assert.equal(registrations.length, 1);
     await assert.rejects(() => ipc.handlers.get('projects:confirm-import')(null, selection.id, currentPlan.planId));
   } finally {

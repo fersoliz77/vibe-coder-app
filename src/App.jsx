@@ -26,6 +26,8 @@ const OpenAIPanel = lazy(() => import('./features/openai/OpenAIPanel'));
 const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'));
 const OnboardingWizard = lazy(() => import('./features/setup/OnboardingWizard'));
 const PreviewCenter = lazy(() => import('./features/preview/PreviewCenter'));
+const RequirementsCenter = lazy(() => import('./features/requirements/RequirementsCenter'));
+const ProjectRecoveryToast = lazy(() => import('./features/projects/ProjectRecoveryToast'));
 
 
 const OPENCODE_BOOTSTRAP_KEY = 'opencodeBootstrapCompleted';
@@ -42,6 +44,7 @@ function Workspace({ setCloseCheck }) {
   const [loggingOut, setLoggingOut] = useState(false);
   const [environmentInstallation, setEnvironmentInstallation] = useState({ status: 'idle', progress: null });
   const [learningState, setLearningState] = useState({ status: 'closed', error: null });
+  const [projectRecovery, setProjectRecovery] = useState(null);
   const openCodeRequest = useRef(0);
   const explorerRef = useRef(null);
 
@@ -54,6 +57,7 @@ function Workspace({ setCloseCheck }) {
     initialized,
     lastView,
     setCurrentProject,
+    patchCurrentProject,
     clearCurrentProject,
     setTheme,
     setLastView,
@@ -64,6 +68,19 @@ function Workspace({ setCloseCheck }) {
   const serviceHook = useServices(currentProject?.path);
   const terminalHook = useTerminal(currentProject?.path);
   const claudeHook = useClaude(currentProject?.path);
+
+  useEffect(() => {
+    let active = true;
+    window.electronAPI?.projects?.getRecoveryState?.()
+      .then((state) => { if (active) setProjectRecovery(state); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  const dismissProjectRecovery = async () => {
+    setProjectRecovery(null);
+    try { await window.electronAPI?.projects?.acknowledgeRecovery?.(); } catch {}
+  };
 
   // Window controls
   const handleMinimize = () => window.electronAPI?.window?.minimize();
@@ -311,7 +328,7 @@ function Workspace({ setCloseCheck }) {
     else setActiveView(view);
   }, [handleOpenCode]);
 
-  const handleProjectSelect = useCallback(async (project) => {
+  const handleProjectSelect = useCallback(async (project, options = {}) => {
     if (currentProject?.path && currentProject.path !== project.path && await explorerRef.current?.prepareToLeave?.() === false) return;
     claudeHook.cancel();
     window.electronAPI?.openai?.cancel();
@@ -322,7 +339,7 @@ function Workspace({ setCloseCheck }) {
       window.electronAPI?.preview?.android?.stopEmulator(currentProject.path).catch(() => {});
     }
     setCurrentProject(project);
-    setActiveView(VIEWS.DASHBOARD);
+    setActiveView(options.initialView === VIEWS.REQUIREMENTS ? VIEWS.REQUIREMENTS : VIEWS.DASHBOARD);
   }, [terminalHook.closeAllTerminals, closeOpenCodeSetup, currentProject, setCurrentProject]);
 
   const handleBackToProjects = useCallback(async () => {
@@ -395,6 +412,8 @@ function Workspace({ setCloseCheck }) {
         return null;
       case VIEWS.PREVIEW:
         return currentProject ? <PreviewCenter project={currentProject} /> : null;
+      case VIEWS.REQUIREMENTS:
+        return currentProject ? <RequirementsCenter project={currentProject} onProjectPatch={patchCurrentProject} onOpenPreview={() => setActiveView(VIEWS.PREVIEW)} onOpenSettings={() => setActiveView(VIEWS.SETTINGS)} /> : null;
       case VIEWS.LEARNING:
         return (
           <div className="learning-placeholder" role="status" aria-live="polite">
@@ -416,6 +435,7 @@ function Workspace({ setCloseCheck }) {
             onOpenPreview={() => setActiveView(VIEWS.PREVIEW)}
             onOpenFiles={() => setActiveView(VIEWS.FILES)}
             onOpenProjects={() => setActiveView(VIEWS.PROJECTS)}
+            onOpenRequirements={() => setActiveView(VIEWS.REQUIREMENTS)}
           />
         );
     }
@@ -483,6 +503,7 @@ function Workspace({ setCloseCheck }) {
           activeView={activeView}
           onNavigate={handleNavigate}
           connectedCount={serviceHook.connectedCount}
+          requirementCount={(currentProject?.requirements?.items || []).filter((item) => item.status === 'pending').length}
           claudeAvailable={claudeHook.isAvailable}
           openCodeAvailable={Boolean(openCodeStatus?.installed)}
           openAIAvailable={openAIAvailable}
@@ -536,6 +557,9 @@ function Workspace({ setCloseCheck }) {
             <button type="button" onClick={() => setActiveView(VIEWS.SETTINGS)}>{t('setup.viewProgress')}</button>
           </div>
         </aside>
+      )}
+      {projectRecovery && (
+        <Suspense fallback={null}><ProjectRecoveryToast recovery={projectRecovery} onDismiss={dismissProjectRecovery} /></Suspense>
       )}
     </>
   );

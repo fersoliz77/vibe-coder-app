@@ -8,6 +8,7 @@ const { deployVercel, getRuntimeOptions, preflightProviders, publishGitHub } = r
 const { installBackendClients, scaffoldProject } = require('./projectProvisioner/scaffold');
 const { configureSupabase, createSupabaseProjectViaApi } = require('./projectProvisioner/supabaseAdapter');
 const { analyzeWorkspace } = require('./workspaceAnalyzer');
+const { toPublicProject } = require('./projectContracts');
 const {
   assertWindows,
   createGrantStore,
@@ -17,7 +18,9 @@ const {
 } = require('./projectProvisioner/validation');
 
 function clonePublicState(state) {
-  return JSON.parse(JSON.stringify(state));
+  const cloned = JSON.parse(JSON.stringify(state));
+  if (cloned.project) cloned.project = toPublicProject(cloned.project);
+  return cloned;
 }
 
 function createProjectProvisioner({
