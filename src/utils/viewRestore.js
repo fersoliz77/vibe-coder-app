@@ -8,6 +8,7 @@ export const VIEWS = {
   SETTINGS: 'settings',
   OPENCODE: 'opencode',
   PREVIEW: 'preview',
+  LEARNING: 'learning',
 };
 
 /** Vistas que solo tienen sentido con un proyecto abierto. */
@@ -29,7 +30,7 @@ export const PROJECT_VIEWS = Object.freeze([
  */
 export function restoreView(saved, hasProject) {
   const known = Object.values(VIEWS).includes(saved);
-  if (!known || saved === VIEWS.OPENCODE) {
+  if (!known || saved === VIEWS.OPENCODE || saved === VIEWS.LEARNING) {
     return hasProject ? VIEWS.DASHBOARD : VIEWS.PROJECTS;
   }
   if (PROJECT_VIEWS.includes(saved) && !hasProject) {

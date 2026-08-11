@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const { validateProjectCwd, isSubPath } = require('../ipc/fsGuards');
 const { classifyWebScript } = require('./previewCommands');
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const DEFAULT_LIMITS = Object.freeze({ maxDepth: 6, maxEntries: 5000, maxFiles: 256, maxBytes: 4 * 1024 * 1024, maxFileBytes: 256 * 1024, timeoutMs: 2500 });
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', 'node_modules', 'bower_components', '.next', '.nuxt', '.output', '.svelte-kit', '.angular',
@@ -29,10 +29,138 @@ const BACKEND_PACKAGES = new Map([
   ['@supabase/supabase-js', 'Supabase'], ['firebase', 'Firebase'], ['prisma', 'Prisma'], ['@prisma/client', 'Prisma'],
   ['drizzle-orm', 'Drizzle'], ['mongoose', 'MongoDB'], ['pg', 'PostgreSQL'], ['mysql2', 'MySQL'], ['redis', 'Redis'],
 ]);
+const LOCKFILES = Object.freeze({ 'package-lock.json': 'npm', 'pnpm-lock.yaml': 'pnpm', 'yarn.lock': 'yarn', 'bun.lock': 'bun', 'bun.lockb': 'bun' });
+const ENV_FILE = /^\.env(?:\.(?:example|sample|template|local|development|production|test))?$/i;
+const ENV_REFERENCE_FILE = /\.(?:js|jsx|ts|tsx|mjs|cjs|vue|svelte)$/i;
+const ENV_NAME = /^[A-Z_][A-Z0-9_]{1,127}$/;
+const SCRIPT_NAME = /^[A-Za-z0-9:_-]{1,80}$/;
+const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
+const PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
+const STRUCTURAL_MARKERS = new Set(['.git', 'node_modules', 'pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json', 'firebase.json', 'vercel.json', '.vercel', 'Dockerfile', 'compose.yaml', 'docker-compose.yml', 'supabase', 'prisma']);
 
 const toRelative = (root, target) => path.relative(root, target).split(path.sep).join('/') || '.';
 const targetId = (kind, relativePath) => `${kind}-${crypto.createHash('sha1').update(`${kind}:${relativePath}`).digest('hex').slice(0, 10)}`;
 const unique = (values) => [...new Set(values.filter(Boolean))];
+
+function scriptCategory(name) {
+  if (/^(dev|serve|watch)$/.test(name)) return 'development';
+  if (/^(start|preview)$/.test(name)) return 'start';
+  if (/^(build|compile|bundle)/.test(name)) return 'build';
+  if (/^(test|spec)(:|$)/.test(name)) return 'test';
+  if (/^lint(:|$)/.test(name)) return 'lint';
+  if (/^format(:|$)/.test(name)) return 'format';
+  if (/^(deploy|release)(:|$)/.test(name)) return 'deploy';
+  return 'other';
+}
+
+function addEnvironmentName(environmentNames, name, source, kind) {
+  if (!ENV_NAME.test(name)) return;
+  const current = environmentNames.get(name) || { name, sources: [] };
+  if (!current.sources.some((item) => item.path === source && item.kind === kind)) current.sources.push({ path: source, kind });
+  environmentNames.set(name, current);
+}
+
+function inspectEnvironmentContent(environmentNames, content, source, kind) {
+  if (kind === 'code-reference') {
+    const patterns = [/\bprocess\.env\.([A-Z_][A-Z0-9_]*)/g, /\bimport\.meta\.env\.([A-Z_][A-Z0-9_]*)/g];
+    for (const pattern of patterns) {
+      for (const match of content.matchAll(pattern)) addEnvironmentName(environmentNames, match[1], source, kind);
+    }
+    return;
+  }
+  for (const line of content.split(/\r?\n/, 500)) {
+    if (line.length > 1024) continue;
+    const match = line.match(/^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*=/);
+    if (match) addEnvironmentName(environmentNames, match[1], source, kind);
+  }
+}
+
+async function inspectEnvironmentFile(environmentNames, filePath, source, kind) {
+  let prefix = '';
+  let ignoreRemainder = false;
+  const reset = () => { prefix = ''; ignoreRemainder = false; };
+  for await (const chunk of fs.createReadStream(filePath, { highWaterMark: 4096 })) {
+    for (const byte of chunk) {
+      if (byte === 10) { reset(); continue; }
+      if (ignoreRemainder || byte === 13) continue;
+      if (byte === 61) {
+        const match = prefix.match(/^\s*(?:export\s+)?([A-Z_][A-Z0-9_]*)\s*$/);
+        if (match) addEnvironmentName(environmentNames, match[1], source, kind);
+        ignoreRemainder = true;
+        continue;
+      }
+      if (prefix.length < 160) prefix += String.fromCharCode(byte);
+      else ignoreRemainder = true;
+    }
+  }
+}
+
+function publicEnvironment(environmentNames) {
+  const names = [...environmentNames.values()]
+    .map((entry) => ({
+      ...entry,
+      sources: entry.sources.sort((a, b) => a.path.localeCompare(b.path) || a.kind.localeCompare(b.kind)),
+      required: entry.sources.some((source) => source.kind === 'example'),
+      configuredLocally: entry.sources.some((source) => source.kind === 'local-env'),
+      publicClientVariable: /^(?:VITE_|NEXT_PUBLIC_|PUBLIC_|EXPO_PUBLIC_)/.test(entry.name),
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { names: names.slice(0, 200), valuesStored: false, valuesReturned: false };
+}
+
+function assessProject({ targets, workspaceSignals, packageManagers, git, warnings }) {
+  const concreteTargets = targets.filter((item) => item.kind !== 'generic');
+  let score = 0;
+  if (concreteTargets.length) score += 55;
+  if (concreteTargets.some((item) => ['high', 'strong'].includes(item.confidence))) score += 20;
+  if (packageManagers.length) score += 10;
+  if (workspaceSignals.length) score += 10;
+  if (git.detected) score += 5;
+  if (warnings.some((warning) => warning.code === 'MALFORMED_MANIFEST')) score = Math.max(score, 20);
+  score = Math.min(100, score);
+  const classification = score >= 50 ? 'project' : score >= 25 ? 'probable-project' : 'folder';
+  return {
+    classification,
+    score,
+    importAllowed: true,
+    requiresAcknowledgement: classification !== 'project',
+    reasons: [
+      concreteTargets.length ? { code: 'MANIFESTS_FOUND', tone: 'positive', count: concreteTargets.length } : { code: 'NO_MANIFESTS', tone: 'warning', count: 0 },
+      git.detected ? { code: 'GIT_FOUND', tone: 'positive', count: 1 } : { code: 'NO_GIT', tone: 'neutral', count: 0 },
+      workspaceSignals.length ? { code: 'WORKSPACE_FOUND', tone: 'positive', count: workspaceSignals.length } : null,
+    ].filter(Boolean),
+  };
+}
+
+function buildReadiness({ assessment, targets, dependencies, environment, warnings, complete }) {
+  const supportedPreview = targets.some((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
+  const installNeeded = dependencies.some((item) => item.installState === 'install-needed');
+  const missingEnvironment = environment.names.filter((item) => item.required && !item.configuredLocally).map((item) => item.name);
+  const checks = [
+    { id: 'project', status: assessment.classification === 'project' ? 'ready' : 'attention' },
+    { id: 'target', status: targets.some((item) => item.kind !== 'generic') ? 'ready' : 'attention' },
+    { id: 'dependencies', status: installNeeded ? 'action' : 'ready' },
+    { id: 'environment', status: missingEnvironment.length ? 'action' : 'ready', count: missingEnvironment.length },
+    { id: 'preview', status: supportedPreview ? 'ready' : 'optional' },
+    { id: 'analysis', status: complete && !warnings.length ? 'ready' : 'attention' },
+  ];
+  let status = 'ready';
+  if (assessment.classification === 'folder') status = 'not-a-project';
+  else if (installNeeded || missingEnvironment.length) status = 'configuration-needed';
+  else if (!supportedPreview || warnings.length || !complete || assessment.classification !== 'project') status = 'ready-with-warnings';
+  return {
+    status,
+    checks,
+    missingEnvironment,
+    recommendations: unique([
+      installNeeded ? 'INSTALL_DEPENDENCIES' : null,
+      missingEnvironment.length ? 'CONFIGURE_ENVIRONMENT' : null,
+      !supportedPreview ? 'REVIEW_PREVIEW' : null,
+      !complete ? 'REVIEW_PARTIAL_SCAN' : null,
+      assessment.classification !== 'project' ? 'CONFIRM_PROJECT_ROOT' : null,
+    ]),
+  };
+}
 
 function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null }) {
   const relativePath = toRelative(root, directory);
@@ -119,27 +247,45 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   const workspaceSignals = [];
   const packageManagers = new Set();
   const services = new Set();
+  const scripts = [];
+  const dependencies = [];
+  const runtimes = [];
+  const lockfiles = [];
+  const environmentNames = new Map();
+  const gitRoots = [];
+  const fingerprintEntries = [];
+  let environmentFilesRead = 0;
   let entriesVisited = 0;
   let filesRead = 0;
   let bytesRead = 0;
   let complete = true;
+  const markScanLimit = () => {
+    complete = false;
+    if (!warnings.some((warning) => warning.code === 'SCAN_LIMIT')) warnings.push({ code: 'SCAN_LIMIT', message: 'Analysis reached its safety limit and returned partial results.' });
+  };
+  const limitReached = () => Date.now() - startedAt > limits.timeoutMs || entriesVisited >= limits.maxEntries || filesRead >= limits.maxFiles || bytesRead >= limits.maxBytes;
 
   while (queue.length) {
-    if (Date.now() - startedAt > limits.timeoutMs || entriesVisited >= limits.maxEntries || filesRead >= limits.maxFiles || bytesRead >= limits.maxBytes) {
-      complete = false;
-      warnings.push({ code: 'SCAN_LIMIT', message: 'Analysis reached its safety limit and returned partial results.' });
-      break;
-    }
+    if (limitReached()) { markScanLimit(); break; }
     const { directory, depth } = queue.shift();
-    let entries;
-    try { entries = await fs.promises.readdir(directory, { withFileTypes: true }); }
+    const entries = [];
+    let truncatedDirectory = false;
+    try {
+      const handle = await fs.promises.opendir(directory);
+      for await (const entry of handle) {
+        if (entries.length >= limits.maxEntries - entriesVisited) { truncatedDirectory = true; break; }
+        entries.push(entry);
+      }
+    }
     catch { warnings.push({ code: 'ACCESS_DENIED', path: toRelative(root, directory), message: 'A directory could not be inspected.' }); continue; }
+    if (truncatedDirectory) { markScanLimit(); queue.length = 0; }
     entries.sort((a, b) => a.name.localeCompare(b.name));
     const names = new Set(entries.map((entry) => entry.name));
-    if (names.has('pnpm-lock.yaml')) packageManagers.add('pnpm');
-    if (names.has('yarn.lock')) packageManagers.add('yarn');
-    if (names.has('bun.lock') || names.has('bun.lockb')) packageManagers.add('bun');
-    if (names.has('package-lock.json')) packageManagers.add('npm');
+    for (const [fileName, manager] of Object.entries(LOCKFILES)) {
+      if (!names.has(fileName)) continue;
+      packageManagers.add(manager);
+      lockfiles.push({ manager, path: toRelative(root, path.join(directory, fileName)) });
+    }
     if (names.has('pnpm-workspace.yaml')) workspaceSignals.push('pnpm workspace');
     if (names.has('turbo.json')) workspaceSignals.push('Turborepo');
     if (names.has('nx.json')) workspaceSignals.push('Nx');
@@ -149,36 +295,95 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
     if (names.has('Dockerfile') || names.has('compose.yaml') || names.has('docker-compose.yml')) services.add('Docker');
     if (names.has('supabase')) services.add('Supabase');
     if (names.has('prisma')) services.add('Prisma');
+    if (names.has('.git')) gitRoots.push(toRelative(root, directory));
 
     for (const entry of entries) {
+      if (limitReached()) { markScanLimit(); queue.length = 0; break; }
       entriesVisited += 1;
       const absolute = path.join(directory, entry.name);
       if (!isSubPath(root, absolute)) continue;
       let stats;
       try { stats = await fs.promises.lstat(absolute); } catch { continue; }
       if (stats.isSymbolicLink()) { warnings.push({ code: 'LINK_SKIPPED', path: toRelative(root, absolute), message: 'A linked path was skipped.' }); continue; }
+      if (STRUCTURAL_MARKERS.has(entry.name) || Object.hasOwn(LOCKFILES, entry.name)) {
+        fingerprintEntries.push(`${toRelative(root, absolute)}:${stats.isDirectory() ? 'directory' : stats.size}:${Math.trunc(stats.mtimeMs)}`);
+      }
       if (stats.isDirectory()) {
         if (/\.xcodeproj$/i.test(entry.name)) targets.push(target({ root, directory, kind: 'apple', framework: 'Xcode', language: 'Swift / Objective-C', confidence: 'strong', evidence: [toRelative(root, absolute)], technologies: ['Xcode', 'Apple platforms'] }));
         if (depth < limits.maxDepth && !IGNORED_DIRECTORIES.has(entry.name)) queue.push({ directory: absolute, depth: depth + 1 });
         continue;
       }
+      const relativeFile = toRelative(root, absolute);
       const candidate = EXACT_MANIFESTS.has(entry.name) || /\.(?:csproj|sln)$/i.test(entry.name);
-      if (!candidate || stats.size > limits.maxFileBytes || filesRead >= limits.maxFiles || bytesRead + stats.size > limits.maxBytes) continue;
+      const environmentKind = ENV_FILE.test(entry.name)
+        ? (/\.(?:example|sample|template)$/i.test(entry.name) ? 'example' : 'local-env')
+        : (ENV_REFERENCE_FILE.test(entry.name) ? 'code-reference' : null);
+      const inspectEnvironment = environmentKind && environmentFilesRead < 64 && stats.size <= Math.min(limits.maxFileBytes, 128 * 1024);
+      if (!candidate && !inspectEnvironment) continue;
+      if (stats.size > limits.maxFileBytes) continue;
+      if (filesRead >= limits.maxFiles || bytesRead + stats.size > limits.maxBytes) { markScanLimit(); queue.length = 0; break; }
+      if (inspectEnvironment && environmentKind !== 'code-reference' && !candidate) {
+        try { await inspectEnvironmentFile(environmentNames, absolute, relativeFile, environmentKind); } catch { continue; }
+        filesRead += 1;
+        environmentFilesRead += 1;
+        bytesRead += stats.size;
+        fingerprintEntries.push(`${relativeFile}:${stats.size}:${Math.trunc(stats.mtimeMs)}`);
+        continue;
+      }
       let content;
       try { content = await fs.promises.readFile(absolute, 'utf8'); } catch { continue; }
       filesRead += 1;
       bytesRead += Buffer.byteLength(content);
+      fingerprintEntries.push(`${relativeFile}:${stats.size}:${Math.trunc(stats.mtimeMs)}`);
+      if (inspectEnvironment) {
+        environmentFilesRead += 1;
+        inspectEnvironmentContent(environmentNames, content, relativeFile, environmentKind);
+      }
+      if (!candidate) continue;
+      fingerprintEntries.push(`${relativeFile}:sha256:${crypto.createHash('sha256').update(content).digest('hex')}`);
       if (entry.name === 'package.json') {
         try {
           const parsed = JSON.parse(content);
           if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('invalid');
-          if (parsed.packageManager) packageManagers.add(String(parsed.packageManager).split('@')[0]);
+          const detectedTarget = packageTarget(root, directory, parsed, relativeFile);
+          const packageManagerDeclaration = typeof parsed.packageManager === 'string' ? parsed.packageManager : null;
+          if (packageManagerDeclaration) {
+            const [manager, version] = packageManagerDeclaration.split('@');
+            if (PACKAGE_MANAGERS.has(manager)) {
+              packageManagers.add(manager);
+              runtimes.push({ id: `package-manager:${detectedTarget.id}`, targetId: detectedTarget.id, runtime: manager, declaredRange: /^\d[0-9A-Za-z.+-]{0,39}$/.test(version || '') ? version : null, source: relativeFile, requiredFor: ['dependencies'] });
+            }
+          }
+          if (typeof parsed.engines?.node === 'string') runtimes.push({ id: `node:${detectedTarget.id}`, targetId: detectedTarget.id, runtime: 'node', declaredRange: parsed.engines.node.slice(0, 80), source: relativeFile, requiredFor: ['dependencies', 'preview', 'build'] });
           if (parsed.workspaces) workspaceSignals.push('JavaScript workspace');
-          targets.push(packageTarget(root, directory, parsed, toRelative(root, absolute)));
+          targets.push(detectedTarget);
+          const previewProfile = classifyWebScript(parsed);
+          for (const name of Object.keys(parsed.scripts || {}).filter((name) => SCRIPT_NAME.test(name)).sort().slice(0, 80)) {
+            scripts.push({ targetId: detectedTarget.id, ecosystem: 'npm', name: name.slice(0, 80), category: scriptCategory(name), executableByIde: name === 'dev' && Boolean(previewProfile), managedPreviewProfile: name === 'dev' ? previewProfile : null });
+          }
+          const groups = [
+            ['runtime', parsed.dependencies], ['development', parsed.devDependencies], ['peer', parsed.peerDependencies], ['optional', parsed.optionalDependencies],
+          ].map(([name, values]) => {
+            const packageNames = Object.keys(values || {}).filter((packageName) => PACKAGE_NAME.test(packageName)).sort();
+            return { name, packageNames: packageNames.slice(0, 100), count: packageNames.length };
+          }).filter((group) => group.count);
+          dependencies.push({
+            targetId: detectedTarget.id,
+            ecosystem: 'npm',
+            groups,
+            lockfiles: lockfiles.filter((item) => path.posix.dirname(item.path) === path.posix.dirname(relativeFile)).map((item) => item.path),
+            installState: names.has('node_modules') ? 'appears-installed' : groups.length ? 'install-needed' : 'not-required',
+          });
         } catch { warnings.push({ code: 'MALFORMED_MANIFEST', path: toRelative(root, absolute), message: 'A package.json file is malformed.' }); }
       } else {
         const detected = textTarget(root, directory, entry.name, content);
-        if (detected) targets.push(detected);
+        if (detected) {
+          targets.push(detected);
+          if (entry.name === 'pubspec.yaml') {
+            const declaredRange = content.match(/^\s*sdk\s*:\s*['"]?([^'"\r\n#]+)/m)?.[1]?.trim().slice(0, 80) || null;
+            runtimes.push({ id: `dart:${detected.id}`, targetId: detected.id, runtime: detected.kind === 'flutter' ? 'flutter' : 'dart', declaredRange, source: relativeFile, requiredFor: ['dependencies', 'preview', 'build'] });
+          }
+        }
       }
     }
   }
@@ -192,16 +397,52 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   const supported = deduplicated.filter((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
   const recommended = supported.find((item) => item.relativePath === 'web') || supported.find((item) => item.relativePath === '.') || supported[0] || deduplicated[0];
   const layout = deduplicated.length > 1 || workspaceSignals.length ? 'workspace' : deduplicated[0].kind === 'generic' ? 'unknown' : 'single';
+  const git = {
+    detected: gitRoots.length > 0,
+    repositoryKind: gitRoots.length ? 'normal' : 'none',
+    roots: unique(gitRoots).sort(),
+    branch: null,
+    dirty: null,
+    remote: { present: null, provider: null },
+  };
+  const packageManagerList = unique([...packageManagers]).sort();
+  const workspaceSignalList = unique(workspaceSignals);
+  const serviceList = unique([...services]).sort();
+  const integrations = serviceList.map((name) => ({ id: name.toLowerCase(), name, detected: true, state: 'marker-found' }));
+  const roots = deduplicated.map((item) => ({ id: `root-${item.id}`, targetId: item.id, relativePath: item.relativePath, type: item.role, name: item.name, manifestPaths: item.evidence.filter((value) => !value.includes(':')) }));
+  const sortedScripts = scripts.sort((a, b) => a.targetId.localeCompare(b.targetId) || a.name.localeCompare(b.name));
+  const sortedRuntimes = runtimes.sort((a, b) => a.id.localeCompare(b.id));
+  const sortedLockfiles = lockfiles.sort((a, b) => a.path.localeCompare(b.path));
+  const environment = publicEnvironment(environmentNames);
+  const projectAssessment = assessProject({ targets: deduplicated, workspaceSignals: workspaceSignalList, packageManagers: packageManagerList, git, warnings });
+  const readiness = buildReadiness({ assessment: projectAssessment, targets: deduplicated, dependencies, environment, warnings, complete });
+  const decisionProfile = {
+    layout, complete, packageManagers: packageManagerList, packageManagerDetails: sortedLockfiles, workspaceSignals: workspaceSignalList,
+    services: serviceList, integrations, targets: deduplicated, roots, scripts: sortedScripts, dependencies, environment, git, runtimes: sortedRuntimes,
+    warnings: warnings.map(({ code, path: warningPath }) => ({ code, path: warningPath || null })), evidence: fingerprintEntries.sort(),
+  };
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(decisionProfile)).digest('hex');
   return {
     schemaVersion: SCHEMA_VERSION,
     analyzedAt: Date.now(),
     name: path.basename(root),
     layout,
     complete,
-    packageManagers: unique([...packageManagers]),
-    workspaceSignals: unique(workspaceSignals),
-    services: unique([...services]),
+    fingerprint,
+    projectAssessment,
+    readiness,
+    packageManagers: packageManagerList,
+    packageManagerDetails: sortedLockfiles,
+    workspaceSignals: workspaceSignalList,
+    services: serviceList,
+    integrations,
     targets: deduplicated,
+    roots,
+    scripts: sortedScripts,
+    dependencies,
+    environment,
+    git,
+    runtimes: sortedRuntimes,
     recommendedTargetId: recommended.id,
     warnings,
     stats: { entriesVisited, filesRead, bytesRead, durationMs: Date.now() - startedAt },

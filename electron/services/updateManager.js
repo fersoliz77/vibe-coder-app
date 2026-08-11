@@ -131,6 +131,7 @@ class UpdateManager {
     platform = process.platform,
     getMainWindow = () => null,
     prepareWindowForUpdateInstall = () => () => {},
+    onBlockingState = () => {},
     statePath,
     persistRequirement = writeJsonAtomic,
     verifyUpdate = verifySignedUpdateInfo,
@@ -141,6 +142,7 @@ class UpdateManager {
     this.platform = platform;
     this.getMainWindow = getMainWindow;
     this.prepareWindowForUpdateInstall = prepareWindowForUpdateInstall;
+    this.onBlockingState = onBlockingState;
     this.statePath = statePath === undefined && app?.getPath
       ? path.join(app.getPath('userData'), 'update-requirement.json')
       : statePath;
@@ -197,6 +199,9 @@ class UpdateManager {
   publish(state) {
     this.revision += 1;
     this.state = { ...state, revision: this.revision };
+    if (this.state.blocking) {
+      try { this.onBlockingState(); } catch {}
+    }
     const mainWindow = this.getMainWindow?.();
     if (mainWindow && !mainWindow.isDestroyed?.()) {
       mainWindow.webContents.send(UPDATE_EVENT, this.getState());

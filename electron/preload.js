@@ -17,6 +17,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     logout: () => ipcRenderer.invoke('auth:logout'),
     openHelp: () => ipcRenderer.invoke('auth:open-help'),
     openLearning: () => ipcRenderer.invoke('auth:open-learning'),
+    closeLearning: () => ipcRenderer.invoke('auth:close-learning'),
+    onLearningStateChanged: (callback) => subscribe('learning:state-changed', callback, (state) => [state]),
     onStateChanged: (callback) => subscribe('auth:state-changed', callback, (state) => [state]),
   },
 
@@ -56,7 +58,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     list: () => ipcRenderer.invoke('projects:list'),
     chooseImport: () => ipcRenderer.invoke('projects:choose-import'),
     analyzeImport: (grantId) => ipcRenderer.invoke('projects:analyze-import', grantId),
-    confirmImport: (grantId, primaryTargetId) => ipcRenderer.invoke('projects:confirm-import', grantId, primaryTargetId),
+    planImport: (grantId, choices) => ipcRenderer.invoke('projects:plan-import', grantId, choices),
+    confirmImport: (grantId, planId) => ipcRenderer.invoke('projects:confirm-import', grantId, planId),
     cancelImport: (grantId) => ipcRenderer.invoke('projects:cancel-import', grantId),
     remove: (id) => ipcRenderer.invoke('projects:remove', id),
     updateLastOpened: (id) => ipcRenderer.invoke('projects:update-last-opened', id),

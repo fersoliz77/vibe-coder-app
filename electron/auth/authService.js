@@ -81,7 +81,6 @@ class AuthService {
     this.revalidationPromise = null;
     this.protocolRegistered = protocolRegistered;
     this.isPackaged = app.isPackaged;
-    this.openExternal = (url) => shell.openExternal(url);
   }
 
   initialize() {
@@ -557,40 +556,31 @@ class AuthService {
     return shell.openExternal(this.config.helpUrl);
   }
 
-  async openLearning() {
+  async prepareLearning() {
     if (!this.config.helpUrl) {
       throw new AuthError('AUTH_HELP_NOT_CONFIGURED', 'VIBE_AUTH_HELP_URL is not configured.');
     }
-    let target;
+    let target = buildLearningUrl(this.config.helpUrl);
     let handoff = false;
-    try {
-      target = buildLearningUrl(this.config.helpUrl);
-      const accessToken = this.record?.session?.access_token;
-      if (accessToken) {
-        try {
-          const result = await this.request('/functions/v1/learning-handoff', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${accessToken}` },
-            body: JSON.stringify({ action: 'issue' }),
-          });
-          if (LEARNING_HANDOFF_CODE.test(result?.code || '')) {
-            target = buildLearningUrl(this.config.helpUrl, result.code);
-            handoff = true;
-          }
-        } catch {}
-      }
-      await this.openExternal(target);
-      return { ok: true, handoff };
-    } catch (error) {
-      const failure = error?.code === 'AUTH_HELP_NOT_CONFIGURED'
-        ? error
-        : new AuthError('AUTH_LEARNING_OPEN_FAILED', 'The learning platform could not be opened.');
-      return { ok: false, error: publicError(failure) };
+    const accessToken = this.record?.session?.access_token;
+    if (accessToken) {
+      try {
+        const result = await this.request('/functions/v1/learning-handoff', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}` },
+          body: JSON.stringify({ action: 'issue' }),
+        });
+        if (LEARNING_HANDOFF_CODE.test(result?.code || '')) {
+          target = buildLearningUrl(this.config.helpUrl, result.code);
+          handoff = true;
+        }
+      } catch {}
     }
+    return { target, handoff };
   }
 }
 
-function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
+function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange, learningViewManager) {
   const notify = () => {
     const state = authService.getState();
     onStateChange?.(state);
@@ -623,7 +613,8 @@ function setupAuthHandlers(ipcMain, authService, getMainWindow, onStateChange) {
     return state;
   });
   ipcMain.handle('auth:open-help', () => authService.openHelp());
-  ipcMain.handle('auth:open-learning', () => authService.openLearning());
+  ipcMain.handle('auth:open-learning', () => learningViewManager.open());
+  ipcMain.handle('auth:close-learning', () => learningViewManager.close());
   return notify;
 }
 

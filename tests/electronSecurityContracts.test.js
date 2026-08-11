@@ -15,6 +15,21 @@ test('main renderer uses context isolation and Chromium sandbox', () => {
   assert.doesNotMatch(source('electron/preload.js'), /require\(['"]os['"]\)/);
 });
 
+test('embedded learning uses an isolated WebContentsView without a renderer URL bridge', () => {
+  const manager = source('electron/services/learningViewManager.js');
+  const preload = source('electron/preload.js');
+  assert.match(manager, /new this\.WebContentsView/);
+  assert.match(manager, /partition: `vibe-learning-/);
+  assert.match(manager, /contextIsolation: true/);
+  assert.match(manager, /nodeIntegration: false/);
+  assert.match(manager, /sandbox: true/);
+  assert.match(manager, /setPermissionRequestHandler/);
+  assert.match(manager, /will-download/);
+  assert.match(manager, /setWindowOpenHandler/);
+  assert.match(preload, /openLearning: \(\) => ipcRenderer\.invoke\('auth:open-learning'\)/);
+  assert.match(preload, /closeLearning: \(\) => ipcRenderer\.invoke\('auth:close-learning'\)/);
+});
+
 test('AI stream events carry run and project identity', () => {
   for (const manager of ['electron/services/claudeManager.js', 'electron/services/openaiManager.js']) {
     const content = source(manager);

@@ -80,6 +80,70 @@ test('scan limits return deterministic partial results instead of failing', asyn
     for (let index = 0; index < 20; index += 1) write(root, `apps/app-${index}/package.json`, JSON.stringify({ name: `app-${index}` }));
     const result = await analyzeWorkspace(root, { maxEntries: 5 });
     assert.equal(result.complete, false);
+    assert.ok(result.stats.entriesVisited <= 5);
     assert.ok(result.warnings.some((warning) => warning.code === 'SCAN_LIMIT'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('audits readiness without returning environment values or script bodies', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({
+      name: 'reviewed-app',
+      packageManager: 'pnpm@9.12.0',
+      engines: { node: '>=22' },
+      scripts: { dev: 'vite --host 0.0.0.0', build: 'secret-build-command', test: 'node --test' },
+      dependencies: { react: '19.0.0' },
+      devDependencies: { vite: '6.0.0', typescript: '5.0.0' },
+    }));
+    write(root, 'pnpm-lock.yaml', 'lockfileVersion: 9');
+    write(root, '.env.example', 'VITE_API_URL=https://example.invalid\nPRIVATE_TOKEN=example-secret');
+    write(root, '.env.local', 'VITE_API_URL=https://real.invalid\nPRIVATE_TOKEN=real-secret');
+    write(root, 'src/config.ts', 'export const url = import.meta.env.VITE_API_URL; const key = process.env.SERVER_KEY;');
+    fs.mkdirSync(path.join(root, '.git'));
+
+    const result = await analyzeWorkspace(root);
+    const serialized = JSON.stringify(result);
+    assert.equal(result.schemaVersion, 2);
+    assert.equal(result.projectAssessment.classification, 'project');
+    assert.match(result.fingerprint, /^[a-f0-9]{64}$/);
+    assert.equal(result.git.detected, true);
+    assert.ok(result.scripts.some((script) => script.name === 'build' && script.category === 'build'));
+    assert.ok(result.dependencies[0].groups.some((group) => group.packageNames.includes('react')));
+    assert.ok(result.environment.names.some((item) => item.name === 'SERVER_KEY'));
+    assert.equal(result.environment.names.find((item) => item.name === 'VITE_API_URL').configuredLocally, true);
+    assert.equal(result.environment.valuesStored, false);
+    assert.equal(result.environment.valuesReturned, false);
+    assert.ok(result.runtimes.some((item) => item.runtime === 'node' && item.declaredRange === '>=22'));
+    assert.doesNotMatch(serialized, /real-secret|example-secret|secret-build-command|https:\/\/real\.invalid/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('decision fingerprint changes when a preview capability appears', async () => {
+  const root = fixture();
+  try {
+    write(root, 'pubspec.yaml', 'name: mobile\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    const before = await analyzeWorkspace(root);
+    assert.equal(before.targets[0].capabilities.androidPreview, false);
+    write(root, 'android/.keep', '');
+    const after = await analyzeWorkspace(root);
+    assert.equal(after.targets[0].capabilities.androidPreview, true);
+    assert.notEqual(after.fingerprint, before.fingerprint);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('unknown folders require explicit confirmation and manifest changes invalidate the fingerprint', async () => {
+  const root = fixture();
+  try {
+    write(root, 'README.md', '# Notes');
+    const unknown = await analyzeWorkspace(root);
+    assert.equal(unknown.projectAssessment.classification, 'folder');
+    assert.equal(unknown.projectAssessment.requiresAcknowledgement, true);
+    assert.equal(unknown.readiness.status, 'not-a-project');
+
+    write(root, 'package.json', JSON.stringify({ name: 'now-a-project', dependencies: { react: '19' } }));
+    const detected = await analyzeWorkspace(root);
+    assert.notEqual(detected.fingerprint, unknown.fingerprint);
+    assert.equal(detected.projectAssessment.classification, 'project');
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });

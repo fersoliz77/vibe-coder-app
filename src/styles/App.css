@@ -53,3 +53,16 @@
 @keyframes environment-install-pulse { to { opacity: .4; transform: scale(.75); } }
 @keyframes environment-install-slide { from { transform: translateX(-110%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { .environment-install-toast__pulse, .environment-install-toast__track > .is-indeterminate { animation: none; } }
+.learning-placeholder {
+  display: grid;
+  min-height: 100%;
+  place-content: center;
+  gap: var(--vc-space-3);
+  padding: var(--vc-space-8);
+  color: var(--vc-text-2);
+  text-align: center;
+}
+
+.learning-placeholder strong {
+  color: var(--vc-text-1);
+}

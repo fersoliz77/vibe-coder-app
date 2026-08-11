@@ -16,11 +16,13 @@ const AUTH_CHANNELS = new Set([
   'auth:logout',
   'auth:open-help',
   'auth:open-learning',
+  'auth:close-learning',
 ]);
 
 const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll', 'updates:get-state']);
 
 function canAccessChannel(policy, channel) {
+  if (channel === 'auth:open-learning') return policy === 'active';
   if (AUTH_CHANNELS.has(channel) || channel.startsWith('window:') || channel === 'diagnostics:export') return true;
   if (STARTUP_READ_CHANNELS.has(channel)) return true;
   if (policy === 'active') return true;

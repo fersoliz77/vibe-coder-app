@@ -41,6 +41,7 @@ function Workspace({ setCloseCheck }) {
   const [openAIAvailable, setOpenAIAvailable] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [environmentInstallation, setEnvironmentInstallation] = useState({ status: 'idle', progress: null });
+  const [learningState, setLearningState] = useState({ status: 'closed', error: null });
   const openCodeRequest = useRef(0);
   const explorerRef = useRef(null);
 
@@ -92,6 +93,31 @@ function Workspace({ setCloseCheck }) {
       setOnboardingError(error?.message || t('app.initializationFailed'));
     }
   }, [t]);
+
+  useEffect(() => {
+    const learning = window.electronAPI?.auth;
+    if (activeView !== VIEWS.LEARNING) {
+      learning?.closeLearning?.().catch(() => {});
+      return undefined;
+    }
+    let active = true;
+    setLearningState({ status: 'loading', error: null });
+    const unsubscribe = learning?.onLearningStateChanged?.((state) => {
+      if (active) setLearningState(state);
+    });
+    learning?.openLearning?.().then((result) => {
+      if (active && !result?.ok && !result?.cancelled) {
+        setLearningState({ status: 'error', error: result?.error });
+      }
+    }).catch(() => {
+      if (active) setLearningState({ status: 'error', error: null });
+    });
+    return () => {
+      active = false;
+      unsubscribe?.();
+      learning?.closeLearning?.().catch(() => {});
+    };
+  }, [activeView]);
 
   useEffect(() => {
     loadOnboarding();
@@ -369,6 +395,13 @@ function Workspace({ setCloseCheck }) {
         return null;
       case VIEWS.PREVIEW:
         return currentProject ? <PreviewCenter project={currentProject} /> : null;
+      case VIEWS.LEARNING:
+        return (
+          <div className="learning-placeholder" role="status" aria-live="polite">
+            <strong>{learningState.status === 'error' ? t('sidebar.learning') : t('common.loading')}</strong>
+            {learningState.status === 'error' && <p>{learningState.error?.message || t('app.initializationFailed')}</p>}
+          </div>
+        );
       case VIEWS.DASHBOARD:
       default:
         return (

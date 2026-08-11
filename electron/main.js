@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, session, clipboard } = require('electron');
+const { app, BrowserWindow, WebContentsView, ipcMain, shell, session, clipboard } = require('electron');
 const path = require('path');
 const { fileURLToPath } = require('url');
 const os = require('os');
@@ -26,6 +26,7 @@ const { writeJsonAtomic } = require('./services/atomicJson');
 const { classifyError, diagnostics, recordUnhandledRejection } = require('./diagnostics/logger');
 const { setupDiagnosticsHandlers } = require('./diagnostics/reportManager');
 const { UpdateManager, setupUpdateHandlers } = require('./services/updateManager');
+const { LearningViewManager } = require('./services/learningViewManager');
 
 process.on('uncaughtExceptionMonitor', (error, origin) => {
   diagnostics.log('main', 'uncaught-error', { ...classifyError(error, 'uncaught-exception'), origin });
@@ -397,6 +398,11 @@ if (isSandboxSmokeTest) {
   let studentBroadcastAlerts;
   let projectProvisioner;
   let updateManager;
+  const learningViewManager = new LearningViewManager({
+    WebContentsView,
+    authService,
+    getMainWindow: () => mainWindow,
+  });
   const revalidateAndNotify = async () => {
     if (!authService.getState().authenticated) return;
     await authService.revalidate();
@@ -417,6 +423,7 @@ if (isSandboxSmokeTest) {
       configurationReady: state.configurationReady,
     });
     if (previousPolicy === 'active' && state.policy !== 'active') {
+      learningViewManager.close();
       terminateAllTerminals();
       terminateAllClaudeProcesses();
       terminateAllOpenAIProcesses();
@@ -440,7 +447,7 @@ if (isSandboxSmokeTest) {
     updateManager?.handleAuthState(state).catch(() => {});
   };
   installIpcAuthorization(ipcMain, () => authService.getPolicy(), () => mainWindow);
-  notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState);
+  notifyAuthState = setupAuthHandlers(ipcMain, authService, () => mainWindow, handleAuthState, learningViewManager);
   authRealtime = new AuthRealtime(authService, revalidateAndNotify);
   adminSignupAlerts = new AdminSignupAlerts(authService);
   studentBroadcastAlerts = new StudentBroadcastAlerts(authService);
@@ -449,6 +456,7 @@ if (isSandboxSmokeTest) {
     authService,
     getMainWindow: () => mainWindow,
     prepareWindowForUpdateInstall,
+    onBlockingState: () => learningViewManager.close(),
   });
   setupUpdateHandlers(ipcMain, updateManager);
   handleAuthState(authService.getState());
@@ -468,6 +476,7 @@ if (isSandboxSmokeTest) {
     adminSignupAlerts.stop().catch(() => {});
     studentBroadcastAlerts.stop().catch(() => {});
     updateManager.dispose();
+    learningViewManager.close(false);
     cancelEnvironmentInstallation();
     projectProvisioner?.terminateAllProvisions();
     terminateAllOpenCodeProcesses();

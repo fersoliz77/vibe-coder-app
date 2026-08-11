@@ -9,6 +9,7 @@ const { analyzeWorkspace } = require('./workspaceAnalyzer');
 let projectsFilePath;
 const importGrants = new Map();
 const IMPORT_GRANT_TTL_MS = 10 * 60 * 1000;
+const IMPORT_CHOICE_KEYS = new Set(['primaryTargetId', 'acknowledgeLowConfidence']);
 
 function initProjectManager() {
   const userDataPath = app.getPath('userData');
@@ -47,9 +48,37 @@ function saveProjects(projects) {
 function safeProjectMetadata(metadata = {}) {
   const allowed = [
     'name', 'slug', 'type', 'stack', 'backend', 'repositoryVisibility', 'deploymentProvider', 'provisioningStatus',
-    'origin', 'registeredAt', 'primaryTargetId', 'workspace',
+    'origin', 'registeredAt', 'primaryTargetId', 'workspace', 'onboarding',
   ];
   return Object.fromEntries(allowed.filter((key) => metadata[key] !== undefined).map((key) => [key, metadata[key]]));
+}
+
+function createImportPlan(analysis, choices, { randomUUID = crypto.randomUUID, now = Date.now } = {}) {
+  if (!choices || typeof choices !== 'object' || Array.isArray(choices) || Object.keys(choices).some((key) => !IMPORT_CHOICE_KEYS.has(key))) {
+    throw new Error('The import choices are invalid.');
+  }
+  const primary = analysis?.targets?.find((target) => target.id === choices.primaryTargetId);
+  if (!primary) throw new Error('Choose a detected application before continuing.');
+  if (analysis.projectAssessment?.requiresAcknowledgement && choices.acknowledgeLowConfidence !== true) {
+    throw new Error('Confirm that this is the folder you want to use before continuing.');
+  }
+  const operations = [
+    { id: 'register-project', type: 'register-project', risk: 'local-metadata', required: true, selected: true, effects: ['project-registry'] },
+    { id: 'save-workspace-map', type: 'save-workspace-map', risk: 'local-metadata', required: true, selected: true, effects: ['detected-targets', 'readiness-profile'] },
+    primary.capabilities.webPreview || primary.capabilities.androidPreview
+      ? { id: 'configure-preview', type: 'configure-preview', risk: 'local-metadata', required: true, selected: true, effects: ['managed-preview-profile'] }
+      : { id: 'record-preview-gap', type: 'record-preview-gap', risk: 'none', required: true, selected: true, effects: ['setup-recommendation'] },
+  ];
+  if (analysis.readiness?.recommendations?.length) operations.push({ id: 'record-next-actions', type: 'record-next-actions', risk: 'none', required: true, selected: true, effects: analysis.readiness.recommendations });
+  return {
+    schemaVersion: 1,
+    planId: randomUUID(),
+    analysisFingerprint: analysis.fingerprint,
+    createdAt: now(),
+    choices: { primaryTargetId: primary.id, acknowledgeLowConfidence: choices.acknowledgeLowConfidence === true },
+    operations,
+    guarantees: { sourceFilesChanged: false, commandsExecuted: false, networkAccess: false, secretsStored: false },
+  };
 }
 
 function registerProject(projectPath, metadata = {}) {
@@ -75,7 +104,19 @@ function registerProject(projectPath, metadata = {}) {
   return project;
 }
 
-function setupProjectHandlers(ipcMain, getMainWindow) {
+function setupProjectHandlers(ipcMain, getMainWindow, {
+  now = Date.now,
+  randomUUID = crypto.randomUUID,
+  analyzeImport = analyzeWorkspace,
+  validateImportPath = validateProjectCwd,
+  isImportedProjectRegistered = isProjectRegistered,
+  registerImportedProject = registerProject,
+  chooseImportDirectory = async () => {
+    const { dialog } = require('electron');
+    const result = await dialog.showOpenDialog(getMainWindow?.(), { properties: ['openDirectory'] });
+    return result.canceled ? null : result.filePaths?.[0] || null;
+  },
+} = {}) {
   ipcMain.handle('projects:list', () => {
     return getProjects();
   });
@@ -85,46 +126,70 @@ function setupProjectHandlers(ipcMain, getMainWindow) {
   });
 
   ipcMain.handle('projects:choose-import', async () => {
-    const { dialog } = require('electron');
-    const result = await dialog.showOpenDialog(getMainWindow?.(), { properties: ['openDirectory'] });
-    if (result.canceled || !result.filePaths?.[0]) return null;
-    const projectPath = validateProjectCwd(result.filePaths[0]);
-    const id = crypto.randomUUID();
-    importGrants.set(id, { projectPath, expiresAt: Date.now() + IMPORT_GRANT_TTL_MS, analysis: null });
+    const selectedPath = await chooseImportDirectory();
+    if (!selectedPath) return null;
+    const projectPath = validateImportPath(selectedPath);
+    const id = randomUUID();
+    importGrants.set(id, { projectPath, expiresAt: now() + IMPORT_GRANT_TTL_MS, analysis: null, plan: null });
     return { id, name: path.basename(projectPath), path: projectPath };
   });
 
   ipcMain.handle('projects:analyze-import', async (_, grantId) => {
     const grant = importGrants.get(String(grantId || ''));
-    if (!grant || grant.expiresAt <= Date.now()) {
+    if (!grant || grant.expiresAt <= now()) {
       importGrants.delete(String(grantId || ''));
       throw new Error('The import permission expired. Choose the folder again.');
     }
-    grant.analysis = await analyzeWorkspace(grant.projectPath);
+    grant.analysis = await analyzeImport(grant.projectPath);
+    grant.plan = null;
     return grant.analysis;
   });
 
-  ipcMain.handle('projects:confirm-import', (_, grantId, primaryTargetId) => {
+  ipcMain.handle('projects:plan-import', (_, grantId, choices) => {
     const id = String(grantId || '');
     const grant = importGrants.get(id);
-    importGrants.delete(id);
-    if (!grant || grant.expiresAt <= Date.now() || !grant.analysis) throw new Error('Analyze the workspace again before importing it.');
-    const primary = grant.analysis.targets.find((target) => target.id === primaryTargetId);
-    if (!primary) throw new Error('Choose a detected application before importing the workspace.');
-    validateProjectCwd(grant.projectPath);
+    if (!grant || grant.expiresAt <= now() || !grant.analysis) throw new Error('Analyze the workspace again before preparing its setup.');
+    grant.plan = createImportPlan(grant.analysis, choices, { randomUUID, now });
+    return grant.plan;
+  });
+
+  ipcMain.handle('projects:confirm-import', async (_, grantId, planId) => {
+    const id = String(grantId || '');
+    const grant = importGrants.get(id);
+    if (!grant || grant.expiresAt <= now() || !grant.analysis || !grant.plan || grant.plan.planId !== String(planId || '')) throw new Error('Review the current setup plan before importing the workspace.');
+    validateImportPath(grant.projectPath);
+    const currentAnalysis = await analyzeImport(grant.projectPath);
+    if (currentAnalysis.fingerprint !== grant.plan.analysisFingerprint) {
+      grant.analysis = currentAnalysis;
+      grant.plan = null;
+      const error = new Error('The workspace changed after it was reviewed. Analyze it again before importing.');
+      error.code = 'IMPORT_PLAN_STALE';
+      throw error;
+    }
+    const primary = currentAnalysis.targets.find((target) => target.id === grant.plan.choices.primaryTargetId);
+    if (!primary) throw new Error('The selected application is no longer available.');
     const type = primary.kind === 'flutter' ? 'mobile-suite' : primary.framework === 'Next.js' ? 'next-ts' : primary.capabilities.webPreview ? 'vite-react-ts' : 'external';
-    const alreadyRegistered = isProjectRegistered(grant.projectPath);
-    const project = registerProject(grant.projectPath, {
-      name: grant.analysis.name,
+    const alreadyRegistered = isImportedProjectRegistered(grant.projectPath);
+    const project = registerImportedProject(grant.projectPath, {
+      name: currentAnalysis.name,
       type,
-      stack: { primary: primary.framework || primary.kind, targets: grant.analysis.targets.length },
-      backend: grant.analysis.services.includes('Supabase') ? 'supabase' : grant.analysis.services.includes('Firebase') ? 'firebase' : undefined,
+      stack: { primary: primary.framework || primary.kind, targets: currentAnalysis.targets.length },
+      backend: currentAnalysis.services.includes('Supabase') ? 'supabase' : currentAnalysis.services.includes('Firebase') ? 'firebase' : undefined,
       origin: 'imported',
-      registeredAt: Date.now(),
+      registeredAt: now(),
       primaryTargetId: primary.id,
-      workspace: grant.analysis,
+      workspace: currentAnalysis,
+      onboarding: {
+        schemaVersion: 1,
+        status: currentAnalysis.readiness.status,
+        appliedAt: now(),
+        plan: grant.plan.operations.map((operation) => ({ id: operation.id, type: operation.type, status: 'applied' })),
+        recommendations: currentAnalysis.readiness.recommendations,
+        guarantees: grant.plan.guarantees,
+      },
     });
-    return { project, alreadyRegistered };
+    importGrants.delete(id);
+    return { project, alreadyRegistered, operations: grant.plan.operations.map((operation) => ({ id: operation.id, status: 'applied' })) };
   });
 
   ipcMain.handle('projects:cancel-import', (_, grantId) => {
@@ -157,4 +222,5 @@ module.exports = {
   isProjectRegistered,
   registerProject,
   safeProjectMetadata,
+  createImportPlan,
 };

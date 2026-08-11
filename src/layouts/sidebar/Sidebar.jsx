@@ -130,7 +130,7 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, claude
 
       {/* Bottom section */}
       <div className="sidebar__footer">
-        <button className="sidebar__item sidebar__item--learning" onClick={() => window.electronAPI?.auth?.openLearning?.().catch(() => {})} title={t('sidebar.learning')} aria-label={t('sidebar.learning')} type="button">
+        <button className={`sidebar__item sidebar__item--learning ${activeView === 'learning' ? 'sidebar__item--active' : ''}`} onClick={() => onNavigate('learning')} title={t('sidebar.learning')} aria-label={t('sidebar.learning')} aria-current={activeView === 'learning' ? 'page' : undefined} type="button">
           <span className="sidebar__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m3 5 9-3 9 3-9 3-9-3Z"/><path d="M7 7v6c3 2 7 2 10 0V7"/><path d="M21 5v7"/></svg></span>
           <span className="sidebar__label">{t('sidebar.learning')}</span>
         </button>
