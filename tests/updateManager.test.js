@@ -346,7 +346,7 @@ test('update IPC is main-frame guarded and accepts no renderer feed or token arg
   let policy = 'denied';
   const calls = [];
   const manager = {
-    installedVersion: '1.1.16',
+    installedVersion: '1.1.17',
     getState: () => ({ status: 'disabled' }),
     check: (...args) => { calls.push(['check', ...args]); },
     download: (...args) => { calls.push(['download', ...args]); },
@@ -358,8 +358,8 @@ test('update IPC is main-frame guarded and accepts no renderer feed or token arg
 
   assert.deepEqual(await handlers.get('updates:get-state')(trusted), { status: 'disabled' });
   const history = await handlers.get('updates:get-history')(trusted);
-  assert.equal(history.currentVersion, '1.1.16');
-  assert.equal(history.releases[0].version, '1.1.16');
+  assert.equal(history.currentVersion, '1.1.17');
+  assert.equal(history.releases[0].version, '1.1.17');
   assert.throws(() => handlers.get('updates:check')(trusted, 'https://evil', 'token'), (error) => error.code === 'AUTH_POLICY_DENIED');
   policy = 'active';
   await handlers.get('updates:check')(trusted, 'https://evil', 'token');

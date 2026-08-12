@@ -4,6 +4,10 @@
 
 ### Added
 
+- Project search and persistent favorites keyed only by project ID.
+- Safe Preview repair resolved in the main process from a project ID, with serialized managed-process restart.
+- Versioned editor-tab restoration using validated project-relative paths without drafts or file contents.
+- In-place Courses retry and local version history in Settings.
 - Post-onboarding Requirements Center with per-action review, explicit consent, progress reporting, and safe cancellation.
 - Read-only workspace requirement detection for npm workspaces, pnpm workspaces, nested applications, and hoisted dependencies.
 - Recoverable project-registry backups with a dismissible application-level recovery notice.
@@ -27,6 +31,8 @@
 
 ### Changed
 
+- The project list is loaded lazily to keep the initial bundle within its budget.
+- Legacy editor persistence containing absolute paths is removed during configuration migration.
 - Renderer project data now uses minimal public contracts instead of persisted main-process records.
 - Managed dependency installation is limited to validated lockfiles and `npm ci --ignore-scripts --no-audit --no-fund` with an isolated npm configuration.
 - Project creation and import now persist the same target-based workspace model for details, preview, and linked Vercel status.

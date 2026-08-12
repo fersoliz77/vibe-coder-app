@@ -4,6 +4,29 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-12
+
+### Scope
+
+- Added project search, favorites, safe Preview repair, and secure editor-tab restoration.
+- Added recoverable Courses loading and a local release history.
+- Prepared desktop release `1.1.17`.
+
+### Key Changes
+
+- Persisted favorites as bounded project IDs and kept project filtering local and accessible.
+- Added a main-process Preview repair operation that resolves only registered project IDs, serializes transitions, and waits for managed process termination before restart.
+- Replaced absolute editor-state persistence with a versioned manifest of validated relative paths and re-read every restored file from disk.
+- Removed legacy absolute-path editor records and lazy-loaded the project list to reduce the initial bundle.
+
+### Validation
+
+- `npm run check` with 384 passing tests.
+- Token, font, literal, accessibility, contrast, design-system, build, and bundle-budget checks passed.
+- `git diff --check` passed.
+
+---
+
 ## 2026-08-11
 
 ### Scope
