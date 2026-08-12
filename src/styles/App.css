@@ -66,3 +66,7 @@
 .learning-placeholder strong {
   color: var(--vc-text-1);
 }
+
+.learning-placeholder p { max-width: 480px; margin: 0; line-height: 1.6; }
+.learning-placeholder .btn { justify-self: center; }
+.learning-placeholder--error { align-self: center; min-height: auto; margin: var(--vc-space-8); border: 1px solid var(--vc-line); border-radius: var(--vc-radius-lg); background: var(--vc-surface-2); }

@@ -1,0 +1,13 @@
+const RELEASE_HISTORY = Object.freeze([
+  { version: '1.1.16', date: '2026-08-11', highlights: [{ en: 'Fixed embedded access to Courses and Progress.', es: 'Se corrigió el acceso integrado a Cursos y progreso.' }, { en: 'Packaging now blocks an incorrect learning domain.', es: 'El empaquetado ahora bloquea un dominio de aprendizaje incorrecto.' }] },
+  { version: '1.1.15', date: '2026-08-11', highlights: [{ en: 'Added the Requirements Center with individual, reviewed actions.', es: 'Se agregó el Centro de Requerimientos con acciones individuales y revisadas.' }, { en: 'Added safe project-list repair and recovery.', es: 'Se agregó reparación y recuperación segura de la lista de proyectos.' }, { en: 'Added consent, disk checks, progress, and safe dependency installation.', es: 'Se agregó consentimiento, control de espacio, progreso e instalación segura de dependencias.' }] },
+  { version: '1.1.14', date: '2026-08-11', highlights: [{ en: 'Added Courses and Progress inside the desktop application.', es: 'Se agregó Cursos y progreso dentro de la aplicación de escritorio.' }, { en: 'Improved guided import for external and nested applications.', es: 'Se mejoró la importación guiada de aplicaciones externas y anidadas.' }] },
+  { version: '1.1.13', date: '2026-08-10', highlights: [{ en: 'Added optimized updates that reuse installed files.', es: 'Se agregaron actualizaciones optimizadas que reutilizan archivos instalados.' }, { en: 'Added private, signed updates for active accounts.', es: 'Se agregaron actualizaciones privadas y firmadas para cuentas activas.' }] },
+  { version: '1.1.12', date: '2026-08-10', highlights: [{ en: 'Added universal workspace import.', es: 'Se agregó la importación universal de espacios de trabajo.' }, { en: 'Added application selection and review for monorepos.', es: 'Se agregó selección y revisión de aplicaciones en monorepos.' }] },
+]);
+
+function getReleaseHistory() {
+  return RELEASE_HISTORY.map((release) => ({ ...release, highlights: release.highlights.map((highlight) => ({ ...highlight })) }));
+}
+
+module.exports = { getReleaseHistory };

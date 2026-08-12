@@ -38,6 +38,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   updates: {
     getState: () => ipcRenderer.invoke('updates:get-state'),
+    getHistory: () => ipcRenderer.invoke('updates:get-history'),
     check: () => ipcRenderer.invoke('updates:check'),
     download: () => ipcRenderer.invoke('updates:download'),
     install: () => ipcRenderer.invoke('updates:install'),

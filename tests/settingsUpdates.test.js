@@ -11,7 +11,19 @@ test('settings checks updates through the fixed preload bridge without renderer 
   assert.doesNotMatch(source, /updates\.check\([^)]/);
   assert.match(source, /updates\.getState\(\)/);
   assert.match(source, /updates\.onStateChanged\(accept\)/);
+  assert.match(source, /updates\.getHistory\?\.\(\)/);
   assert.match(source, /unsubscribe\?\.\(\)/);
+});
+
+test('settings exposes an accessible local version history disclosure', () => {
+  assert.match(source, /aria-expanded=\{updateHistory\.open\}/);
+  assert.match(source, /aria-controls="settings-update-history-list"/);
+  assert.match(source, /<time dateTime=\{release\.date\}>/);
+  assert.match(source, /release\.highlights\.map/);
+  assert.match(source, /highlight\[language\] \|\| highlight\.en/);
+  for (const key of ['updateHistory', 'updateInstalled']) {
+    assert.equal((locales.match(new RegExp(`${key}:`, 'g')) || []).length, 2, key);
+  }
 });
 
 test('support places application updates before diagnostics with active-policy guarding', () => {

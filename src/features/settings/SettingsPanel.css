@@ -63,10 +63,24 @@
 .settings-update-overview > div { display: grid; gap: var(--vc-space-1); }
 .settings-update-overview strong { color: var(--vc-text-1); font-size: var(--vc-text-sm); }
 .settings-update-overview span { color: var(--vc-text-3); font-size: var(--vc-text-xs); }
+.settings-update-history { margin-top: var(--vc-space-4); border-top: 1px solid var(--vc-line); }
+.settings-update-history__toggle { display: flex; align-items: center; justify-content: space-between; gap: var(--vc-space-4); width: 100%; padding: var(--vc-space-4) 0 0; color: var(--vc-text-1); text-align: left; border: 0; background: transparent; cursor: pointer; }
+.settings-update-history__toggle > span:first-child { display: grid; gap: var(--vc-space-1); }
+.settings-update-history__toggle strong { font-size: var(--vc-text-sm); }
+.settings-update-history__toggle small { color: var(--vc-text-3); font-size: var(--vc-text-xs); font-weight: 400; }
+.settings-update-history__toggle > span:last-child { color: var(--vc-accent); font-family: var(--vc-font-mono); font-size: var(--vc-text-lg); }
+.settings-update-history__list { display: grid; gap: var(--vc-space-2); padding-top: var(--vc-space-4); }
+.settings-update-history__list > p { margin: 0; color: var(--vc-text-3); font-size: var(--vc-text-xs); }
+.settings-update-history__release { display: grid; grid-template-columns: minmax(130px, .35fr) 1fr; gap: var(--vc-space-4); padding: var(--vc-space-4); border: 1px solid var(--vc-line); border-radius: var(--vc-radius-md); background: var(--vc-surface-0); }
+.settings-update-history__release > div { display: grid; align-content: start; justify-items: start; gap: var(--vc-space-1); }
+.settings-update-history__release strong { font-family: var(--vc-font-mono); font-size: var(--vc-text-sm); }
+.settings-update-history__release span { padding: 2px var(--vc-space-2); color: var(--vc-accent); font-size: var(--vc-text-2xs); font-weight: 800; border: 1px solid color-mix(in srgb, var(--vc-accent) 45%, var(--vc-line)); border-radius: var(--vc-radius-full); text-transform: uppercase; }
+.settings-update-history__release time { color: var(--vc-text-3); font-size: var(--vc-text-xs); }
+.settings-update-history__release ul { display: grid; align-content: start; gap: var(--vc-space-1); margin: 0; padding-left: var(--vc-space-4); color: var(--vc-text-2); font-size: var(--vc-text-xs); line-height: 1.55; }
 .settings-update-toast { right: var(--vc-space-6); bottom: var(--vc-space-6); max-width: calc(100vw - var(--vc-space-12)); color: var(--vc-text-1); }
 .settings-update-toast--success { border-color: color-mix(in srgb, var(--vc-success) 55%, var(--vc-line)); }
 .settings-update-toast--error { border-color: color-mix(in srgb, var(--vc-danger) 55%, var(--vc-line)); }
 .settings-update-toast--progress { border-color: color-mix(in srgb, var(--vc-accent) 55%, var(--vc-line)); }
 @keyframes settings-panel-enter { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 1200px) { .settings-providers, .settings-delivery { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-@media (max-width: 860px) { .settings-panel { display: block; overflow-y: auto; padding: var(--vc-space-6); } .settings-header { align-items: flex-start; flex-direction: column; gap: var(--vc-space-2); } .settings-shell { grid-template-columns: 1fr; gap: var(--vc-space-4); } .settings-tabs { display: flex; overflow-x: auto; padding: 0 0 var(--vc-space-3); border-right: 0; border-bottom: 1px solid var(--vc-line); } .settings-tabs button { flex: 0 0 170px; } .settings-content { overflow: visible; padding-right: 0; } .settings-preferences, .settings-providers, .settings-delivery { grid-template-columns: 1fr; } .settings-details { grid-template-columns: repeat(2, 1fr); } .settings-update-overview { align-items: stretch; flex-direction: column; } .settings-update-overview .btn { width: 100%; } }
+@media (max-width: 860px) { .settings-panel { display: block; overflow-y: auto; padding: var(--vc-space-6); } .settings-header { align-items: flex-start; flex-direction: column; gap: var(--vc-space-2); } .settings-shell { grid-template-columns: 1fr; gap: var(--vc-space-4); } .settings-tabs { display: flex; overflow-x: auto; padding: 0 0 var(--vc-space-3); border-right: 0; border-bottom: 1px solid var(--vc-line); } .settings-tabs button { flex: 0 0 170px; } .settings-content { overflow: visible; padding-right: 0; } .settings-preferences, .settings-providers, .settings-delivery { grid-template-columns: 1fr; } .settings-details { grid-template-columns: repeat(2, 1fr); } .settings-update-overview { align-items: stretch; flex-direction: column; } .settings-update-overview .btn { width: 100%; } .settings-update-history__release { grid-template-columns: 1fr; } }

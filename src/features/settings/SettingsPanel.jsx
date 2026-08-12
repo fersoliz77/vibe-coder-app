@@ -94,6 +94,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
   const [delivery, setDelivery] = useState({ loading: true, services: [], commands: {}, error: '' });
   const [activeTab, setActiveTab] = useState('ai');
   const [updateState, setUpdateState] = useState({ status: 'disabled', progress: null, error: null, revision: -1 });
+  const [updateHistory, setUpdateHistory] = useState({ loading: true, open: false, currentVersion: null, releases: [] });
   const [updateChecking, setUpdateChecking] = useState(false);
   const [updateToast, setUpdateToast] = useState(null);
   const tabsRef = useRef(null);
@@ -169,6 +170,11 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
       setUpdateState(next);
     };
     Promise.resolve(updates.getState()).then(accept).catch(() => {});
+    Promise.resolve(updates.getHistory?.()).then((history) => {
+      if (active) setUpdateHistory((current) => ({ ...current, loading: false, currentVersion: history?.currentVersion || null, releases: Array.isArray(history?.releases) ? history.releases : [] }));
+    }).catch(() => {
+      if (active) setUpdateHistory((current) => ({ ...current, loading: false, releases: [] }));
+    });
     const unsubscribe = updates.onStateChanged(accept);
     return () => {
       active = false;
@@ -357,6 +363,22 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
                   <button className="btn btn--primary" type="button" aria-busy={updateBusy} disabled={updateBusy || state.policy !== 'active' || !window.electronAPI?.updates} onClick={checkForUpdates}>
                     {updateBusy ? t('settings.updateCheckingButton') : t('settings.checkForUpdates')}
                   </button>
+                </div>
+                <div className="settings-update-history">
+                  <button className="settings-update-history__toggle" type="button" aria-expanded={updateHistory.open} aria-controls="settings-update-history-list" onClick={() => setUpdateHistory((current) => ({ ...current, open: !current.open }))}>
+                    <span><strong>{t('settings.updateHistory')}</strong><small>{t('settings.updateHistoryCopy')}</small></span>
+                    <span aria-hidden="true">{updateHistory.open ? '−' : '+'}</span>
+                  </button>
+                  {updateHistory.open && (
+                    <div id="settings-update-history-list" className="settings-update-history__list">
+                      {updateHistory.loading ? <p>{t('settings.updateHistoryLoading')}</p> : updateHistory.releases.length ? updateHistory.releases.map((release) => (
+                        <article key={release.version} className="settings-update-history__release">
+                          <div><strong>v{release.version}</strong>{release.version === updateHistory.currentVersion && <span>{t('settings.updateInstalled')}</span>}<time dateTime={release.date}>{formatDate(new Date(`${release.date}T00:00:00`), { dateStyle: 'medium' })}</time></div>
+                          <ul>{release.highlights.map((highlight) => <li key={highlight.en}>{highlight[language] || highlight.en}</li>)}</ul>
+                        </article>
+                      )) : <p>{t('settings.updateHistoryUnavailable')}</p>}
+                    </div>
+                  )}
                 </div>
               </section>
               <section className="settings-card">

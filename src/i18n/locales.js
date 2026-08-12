@@ -214,6 +214,7 @@ Object.assign(dictionaries.en.settings, {
   updateBackgroundCopy: 'Checks run in the background. If a required version is found, its persistent progress screen takes over.',
   checkForUpdates: 'Check for updates', updateCheckingButton: 'Checking...', updateChecking: 'Checking for updates...',
   updateCurrentToast: 'Vibe IDE Code is up to date.', updateCheckFailed: 'Updates could not be checked. Try again.', updateDownloading: 'Downloading update: {percentage}%',
+  updateHistory: 'Version history', updateHistoryCopy: 'See the main improvements included in recent desktop releases.', updateHistoryLoading: 'Loading version history...', updateHistoryUnavailable: 'Version history is not available.', updateInstalled: 'Installed',
 });
 Object.assign(dictionaries.es.settings, {
   tabs: { ...dictionaries.es.settings.tabs, ai: 'IA', aiCopy: 'Modelos y asistentes', tools: 'Herramientas', toolsCopy: 'Entorno de desarrollo local', connections: 'Conexiones', connectionsCopy: 'Servicios conectados', support: 'Soporte', supportCopy: 'Actualizaciones y diagnóstico' },
@@ -227,6 +228,7 @@ Object.assign(dictionaries.es.settings, {
   updateBackgroundCopy: 'La consulta se ejecuta en segundo plano. Si aparece una versión obligatoria, su pantalla persistente toma el control.',
   checkForUpdates: 'Buscar actualizaciones', updateCheckingButton: 'Buscando...', updateChecking: 'Buscando actualizaciones...',
   updateCurrentToast: 'Vibe IDE Code está actualizado.', updateCheckFailed: 'No se pudieron buscar actualizaciones. Intentá nuevamente.', updateDownloading: 'Descargando actualización: {percentage}%',
+  updateHistory: 'Historial de versiones', updateHistoryCopy: 'Consultá las mejoras principales incluidas en las versiones recientes.', updateHistoryLoading: 'Cargando historial de versiones...', updateHistoryUnavailable: 'El historial de versiones no está disponible.', updateInstalled: 'Instalada',
 });
 
 Object.assign(dictionaries.en.setup, {

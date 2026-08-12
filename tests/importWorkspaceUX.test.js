@@ -8,6 +8,7 @@ const dialog = fs.readFileSync(path.join(root, 'src', 'features', 'projects', 'I
 const preload = fs.readFileSync(path.join(root, 'electron', 'preload.js'), 'utf8');
 const sidebar = fs.readFileSync(path.join(root, 'src', 'layouts', 'sidebar', 'Sidebar.jsx'), 'utf8');
 const app = fs.readFileSync(path.join(root, 'src', 'App.jsx'), 'utf8');
+const learningStatus = fs.readFileSync(path.join(root, 'src', 'features', 'learning', 'LearningStatus.jsx'), 'utf8');
 
 test('external workspace import requires analysis, planning, and target confirmation', () => {
   assert.match(preload, /projects:choose-import/);
@@ -38,7 +39,8 @@ test('import setup never accepts a path, command, or file body from the renderer
 test('learning opens through the constrained main-process bridge', () => {
   assert.match(preload, /auth:open-learning/);
   assert.match(sidebar, /onNavigate\('learning'\)/);
-  assert.match(app, /auth:close-learning|closeLearning/);
-  assert.match(app, /openLearning/);
+  assert.match(app, /features\/learning\/LearningStatus/);
+  assert.match(learningStatus, /closeLearning/);
+  assert.match(learningStatus, /openLearning/);
   assert.match(sidebar, /sidebar\.learning/);
 });

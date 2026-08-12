@@ -3,6 +3,7 @@ const path = require('path');
 const { writeJsonAtomic } = require('./atomicJson');
 const { verifySignedUpdateInfo } = require('./updateSignature');
 const { diagnostics } = require('../diagnostics/logger');
+const { getReleaseHistory } = require('./releaseHistory');
 
 const UPDATE_EVENT = 'updates:state-changed';
 const CHECK_RETRY_MS = 15 * 60 * 1000;
@@ -541,6 +542,7 @@ class UpdateManager {
 
 function setupUpdateHandlers(ipcMain, manager) {
   ipcMain.handle('updates:get-state', () => manager.getState());
+  ipcMain.handle('updates:get-history', () => ({ currentVersion: manager.installedVersion, releases: getReleaseHistory() }));
   ipcMain.handle('updates:check', () => manager.check());
   ipcMain.handle('updates:download', () => manager.download());
   ipcMain.handle('updates:install', () => manager.install());

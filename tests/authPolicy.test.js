@@ -354,6 +354,7 @@ test('restricted IPC permits state reads but denies productive actions', () => {
   assert.equal(canAccessChannel('denied', 'auth:cancel-oauth'), true);
   assert.equal(canAccessChannel('denied', 'auth:unknown'), false);
   assert.equal(canAccessChannel('denied', 'updates:get-state'), true);
+  assert.equal(canAccessChannel('denied', 'updates:get-history'), true);
   assert.equal(canAccessChannel('denied', 'updates:check'), false);
   assert.equal(canAccessChannel('restricted', 'updates:download'), false);
   assert.equal(canAccessChannel('restricted', 'requirements:list'), false);

@@ -19,7 +19,7 @@ const AUTH_CHANNELS = new Set([
   'auth:close-learning',
 ]);
 
-const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll', 'updates:get-state']);
+const STARTUP_READ_CHANNELS = new Set(['store:get', 'store:getAll', 'updates:get-state', 'updates:get-history']);
 
 function canAccessChannel(policy, channel) {
   if (channel === 'auth:open-learning') return policy === 'active';

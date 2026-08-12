@@ -34,14 +34,16 @@ test('sandboxed preload loads using only Electron and exposes a working bridge',
   assert.deepEqual(calls[2], ['invoke', 'auth:google']);
   assert.equal(await exposed.electronAPI.updates.check(), 'ok');
   assert.deepEqual(calls[3], ['invoke', 'updates:check']);
+  assert.equal(await exposed.electronAPI.updates.getHistory(), 'ok');
+  assert.deepEqual(calls[4], ['invoke', 'updates:get-history']);
   assert.equal(await exposed.electronAPI.updates.download(), 'ok');
-  assert.deepEqual(calls[4], ['invoke', 'updates:download']);
+  assert.deepEqual(calls[5], ['invoke', 'updates:download']);
   assert.equal(await exposed.electronAPI.updates.install(), 'ok');
-  assert.deepEqual(calls[5], ['invoke', 'updates:install']);
+  assert.deepEqual(calls[6], ['invoke', 'updates:install']);
   assert.equal(await exposed.electronAPI.requirements.preview('project-id', 'requirement-id'), 'ok');
-  assert.deepEqual(calls[6], ['invoke', 'requirements:preview', 'project-id', 'requirement-id']);
+  assert.deepEqual(calls[7], ['invoke', 'requirements:preview', 'project-id', 'requirement-id']);
   assert.equal(await exposed.electronAPI.requirements.apply('grant-id', 'nonce'), 'ok');
-  assert.deepEqual(calls[7], ['invoke', 'requirements:apply', 'grant-id', 'nonce']);
+  assert.deepEqual(calls[8], ['invoke', 'requirements:apply', 'grant-id', 'nonce']);
 
   let requirementProgress;
   const unsubscribeRequirementProgress = exposed.electronAPI.requirements.onProgress((progress) => { requirementProgress = progress; });
