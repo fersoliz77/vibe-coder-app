@@ -1,7 +1,6 @@
 import { lazy, Suspense, useState, useCallback, useEffect, useRef } from 'react';
 import Sidebar from './layouts/sidebar/Sidebar';
 import Dashboard from './features/dashboard/Dashboard';
-import ProjectList from './features/projects/ProjectList';
 import FileExplorer from './features/explorer/FileExplorer';
 import TerminalPanel from './features/terminal/TerminalPanel';
 import { useServices } from './hooks/useServices';
@@ -22,6 +21,7 @@ import MandatoryUpdateGate from './features/updates/MandatoryUpdateGate';
 import { getEnvironmentInstallPercent, getEnvironmentInstallStatus } from './features/setup/environmentProgress';
 
 const ClaudePanel = lazy(() => import('./features/claude/ClaudePanel'));
+const ProjectList = lazy(() => import('./features/projects/ProjectList'));
 const OpenAIPanel = lazy(() => import('./features/openai/OpenAIPanel'));
 const SettingsPanel = lazy(() => import('./features/settings/SettingsPanel'));
 const OnboardingWizard = lazy(() => import('./features/setup/OnboardingWizard'));

@@ -81,6 +81,25 @@ function resolveProjectEntryPath(projectPath, targetPath, isProjectRegistered) {
   return { projectRoot, resolvedTargetPath };
 }
 
+function normalizeProjectRelativePath(relativePath) {
+  if (typeof relativePath !== 'string' || !relativePath || relativePath.length > 1024 || /[\\:\0-\x1f]/.test(relativePath)) {
+    throw new Error('A valid project-relative path is required.');
+  }
+  const segments = relativePath.split('/');
+  if (relativePath.startsWith('/') || segments.some((segment) => !segment || segment === '.' || segment === '..')) {
+    throw new Error('The project-relative path is invalid.');
+  }
+  return segments.join('/');
+}
+
+function resolveProjectRelativePath(projectPath, relativePath, isProjectRegistered) {
+  const canonical = normalizeProjectRelativePath(relativePath);
+  const projectRoot = resolveProjectRoot(projectPath, isProjectRegistered);
+  const resolvedTargetPath = path.join(projectRoot, ...canonical.split('/'));
+  const resolved = resolveProjectEntryPath(projectRoot, resolvedTargetPath, isProjectRegistered);
+  return { ...resolved, relativePath: canonical };
+}
+
 function resolveProjectChildPath(projectPath, parentDir, entryName, isProjectRegistered) {
   assertSafeEntryName(entryName);
   const { resolvedTargetPath: resolvedParentDir } = resolveProjectEntryPath(projectPath, parentDir, isProjectRegistered);
@@ -136,5 +155,7 @@ module.exports = {
   resolveProjectChildPath,
   resolveProjectEntryPath,
   resolveProjectRoot,
+  normalizeProjectRelativePath,
+  resolveProjectRelativePath,
   validateProjectCwd,
 };

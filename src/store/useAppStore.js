@@ -13,6 +13,7 @@ export const useAppStore = create((set, get) => ({
   initializationError: '',
   currentProject: null,
   recentProjects: [],
+  favoriteProjectIds: [],
   theme: 'dark',
   language: getSystemLocale(),
   // Ultima vista abierta. Se guarda para volver donde el usuario dejo el
@@ -33,6 +34,7 @@ export const useAppStore = create((set, get) => ({
             initializationError: '',
             currentProject: normalizeCurrentProject(config.currentProject),
             recentProjects: Array.isArray(config.recentProjects) ? config.recentProjects.map(normalizeCurrentProject).filter(Boolean) : [],
+            favoriteProjectIds: Array.isArray(config.favoriteProjectIds) ? config.favoriteProjectIds : [],
             theme: normalizeTheme(config.theme),
             language: SUPPORTED_LOCALES.includes(config.language) ? config.language : getSystemLocale(),
             lastView: typeof config.lastView === 'string' ? config.lastView : null,
@@ -101,6 +103,15 @@ export const useAppStore = create((set, get) => ({
     if (window.electronAPI?.store) {
       await window.electronAPI.store.set('recentProjects', newRecent);
     }
+  },
+
+  toggleFavoriteProject: async (projectId) => {
+    const id = typeof projectId === 'string' ? projectId.trim() : '';
+    if (!id) return;
+    const current = get().favoriteProjectIds;
+    const next = current.includes(id) ? current.filter((entry) => entry !== id) : [...current, id];
+    set({ favoriteProjectIds: next });
+    if (window.electronAPI?.store) await window.electronAPI.store.set('favoriteProjectIds', next);
   },
   
   setTheme: async (theme) => {

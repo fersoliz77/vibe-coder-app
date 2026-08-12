@@ -114,6 +114,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   fs: {
     readDir: (projectPath, dirPath) => ipcRenderer.invoke('fs:read-dir', projectPath, dirPath),
     readFile: (projectPath, filePath) => ipcRenderer.invoke('fs:read-file', projectPath, filePath),
+    readProjectFile: (projectPath, relativePath) => ipcRenderer.invoke('fs:read-project-file', projectPath, relativePath),
     writeFile: (projectPath, filePath, content) => ipcRenderer.invoke('fs:write-file', projectPath, filePath, content),
     openFile: (projectPath, filePath) => ipcRenderer.invoke('fs:open-file', projectPath, filePath),
     openFolder: (projectPath, folderPath) => ipcRenderer.invoke('fs:open-folder', projectPath, folderPath),
@@ -202,6 +203,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       status: (cwd) => ipcRenderer.invoke('preview:web-status', cwd),
       start: (cwd) => ipcRenderer.invoke('preview:web-start', cwd),
       stop: (cwd) => ipcRenderer.invoke('preview:web-stop', cwd),
+      repair: (projectId) => ipcRenderer.invoke('preview:web-repair', projectId),
       openExternal: (cwd) => ipcRenderer.invoke('preview:web-open-external', cwd),
       audit: (cwd) => ipcRenderer.invoke('preview:web-audit', cwd),
       clearIssues: (cwd) => ipcRenderer.invoke('preview:web-clear-issues', cwd),

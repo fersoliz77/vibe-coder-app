@@ -44,6 +44,10 @@ test('sandboxed preload loads using only Electron and exposes a working bridge',
   assert.deepEqual(calls[7], ['invoke', 'requirements:preview', 'project-id', 'requirement-id']);
   assert.equal(await exposed.electronAPI.requirements.apply('grant-id', 'nonce'), 'ok');
   assert.deepEqual(calls[8], ['invoke', 'requirements:apply', 'grant-id', 'nonce']);
+  assert.equal(await exposed.electronAPI.fs.readProjectFile('C:\\repo', 'src/App.jsx'), 'ok');
+  assert.deepEqual(calls.at(-1), ['invoke', 'fs:read-project-file', 'C:\\repo', 'src/App.jsx']);
+  assert.equal(await exposed.electronAPI.preview.web.repair('proj_1'), 'ok');
+  assert.deepEqual(calls.at(-1), ['invoke', 'preview:web-repair', 'proj_1']);
 
   let requirementProgress;
   const unsubscribeRequirementProgress = exposed.electronAPI.requirements.onProgress((progress) => { requirementProgress = progress; });

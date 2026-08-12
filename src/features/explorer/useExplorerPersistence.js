@@ -1,19 +1,16 @@
 import { useEffect, useRef } from 'react';
-import { getStorageKey, makeTab } from './explorerUtils';
+import { getStorageKey, makeTab, makeTabManifest } from './explorerUtils';
 
 export function useExplorerPersistence({
+  projectId,
   projectPath,
-  expandedPaths,
-  selectedPaths,
   tabs,
   paneTabs,
   splitView,
   resetWorkspace,
-  setExpandedPaths,
-  setSelectedPaths,
   setTabs,
   setPaneTabs,
-  loadFile,
+  loadPersistedFile,
 }) {
   const hydratedProjectRef = useRef(null);
   const hydratedPathRef = useRef(null);
@@ -25,7 +22,7 @@ export function useExplorerPersistence({
     let cancelled = false;
 
     const hydrate = async () => {
-      const persisted = await window.electronAPI.store.get(getStorageKey(projectPath), null);
+      const persisted = await window.electronAPI.store.get(getStorageKey(projectId), null);
       if (!cancelled) {
         hydratedProjectRef.current = persisted;
         resetWorkspaceRef.current(persisted);
@@ -37,39 +34,30 @@ export function useExplorerPersistence({
     return () => {
       cancelled = true;
     };
-  }, [projectPath]);
+  }, [projectId, projectPath]);
 
   useEffect(() => {
     if (!projectPath || hydratedPathRef.current !== projectPath) return;
-    window.electronAPI.store.set(getStorageKey(projectPath), {
-      expandedPaths: Array.from(expandedPaths),
-      selectedPaths,
-      openTabPaths: tabs.map((tab) => tab.path),
-      paneTabs,
-      splitView,
-    });
-  }, [expandedPaths, paneTabs, projectPath, selectedPaths, splitView, tabs]);
+    window.electronAPI.store.set(getStorageKey(projectId), makeTabManifest(tabs, paneTabs, splitView));
+  }, [paneTabs, projectId, projectPath, splitView, tabs]);
 
   useEffect(() => {
     const pending = hydratedProjectRef.current;
     if (!projectPath || !pending) return;
     hydratedProjectRef.current = null;
 
-    const paths = pending.openTabPaths || [];
-    if (pending.selectedPaths?.length) {
-      setSelectedPaths(pending.selectedPaths);
-    }
+    const paths = pending.version === 1 && Array.isArray(pending.tabs) ? pending.tabs : [];
 
     if (paths.length === 0) return;
 
-    Promise.all(paths.map((filePath) => loadFile(filePath))).then((results) => {
+    Promise.all(paths.map((relativePath) => loadPersistedFile(relativePath))).then((results) => {
       const validTabs = results.filter((result) => result.success).map(makeTab);
+      const idForRelativePath = (relativePath) => validTabs.find((tab) => tab.relativePath === relativePath)?.id || null;
       setTabs(validTabs);
       setPaneTabs({
-        primary: validTabs.some((tab) => tab.id === pending.paneTabs?.primary) ? pending.paneTabs.primary : validTabs[0]?.id || null,
-        secondary: validTabs.some((tab) => tab.id === pending.paneTabs?.secondary) ? pending.paneTabs.secondary : null,
+        primary: idForRelativePath(pending.panes?.primary) || validTabs[0]?.id || null,
+        secondary: pending.splitView ? idForRelativePath(pending.panes?.secondary) : null,
       });
-      setExpandedPaths(new Set(pending.expandedPaths?.length ? pending.expandedPaths : [projectPath]));
     }).catch(() => {});
-  }, [loadFile, projectPath, setExpandedPaths, setPaneTabs, setSelectedPaths, setTabs]);
+  }, [loadPersistedFile, projectPath, setPaneTabs, setTabs]);
 }

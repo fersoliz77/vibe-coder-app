@@ -9,6 +9,7 @@ const {
   isSubPath,
   resolveProjectChildPath,
   resolveProjectEntryPath,
+  resolveProjectRelativePath,
   resolveProjectRoot,
 } = require('./fsGuards');
 const { isProjectRegistered } = require('../services/projectManager');
@@ -39,6 +40,25 @@ function withProjectEntry(projectPath, targetPath) {
 
 function withProjectChild(projectPath, parentDir, entryName) {
   return resolveProjectChildPath(projectPath, parentDir, entryName, isProjectRegistered);
+}
+
+async function readPreviewFile(resolvedTargetPath, relativePath = null) {
+  const stats = await fs.promises.stat(resolvedTargetPath);
+  if (!stats.isFile()) return { success: false, error: 'Target is not a file.' };
+  const extension = path.extname(resolvedTargetPath).toLowerCase();
+  const size = stats.size;
+  const identity = { name: path.basename(resolvedTargetPath), path: resolvedTargetPath, ...(relativePath ? { relativePath } : {}), extension, size };
+
+  if (IMAGE_EXTENSIONS.has(extension)) {
+    if (size > MAX_IMAGE_BYTES) return { success: false, error: 'Image exceeds the 10 MB preview limit.', size };
+    const buffer = await fs.promises.readFile(resolvedTargetPath);
+    const mime = extension === '.svg' ? 'image/svg+xml' : extension === '.jpg' ? 'image/jpeg' : `image/${extension.slice(1)}`;
+    return { success: true, type: 'image', ...identity, content: `data:${mime};base64,${buffer.toString('base64')}` };
+  }
+  if (!isTextPreviewable(extension, size)) return { success: false, error: 'File exceeds the 2 MB text limit or is not safe to preview as text.', ...identity };
+  const buffer = await fs.promises.readFile(resolvedTargetPath);
+  if (!isProbablyText(buffer)) return { success: false, error: 'File appears to be binary and cannot be opened as text.', size };
+  return { success: true, type: 'text', ...identity, content: buffer.toString('utf8') };
 }
 
 function getCopyPath(targetDir, baseName) {
@@ -262,60 +282,17 @@ function setupFileSystemHandlers() {
   ipcMain.handle('fs:read-file', async (_, projectPath, filePath) => {
     try {
       const { resolvedTargetPath } = withProjectEntry(projectPath, filePath);
-      const stats = await fs.promises.stat(resolvedTargetPath);
+      const relativePath = getProjectRelativePath(projectPath, resolvedTargetPath).split(path.sep).join('/');
+      return await readPreviewFile(resolvedTargetPath, relativePath);
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
 
-      if (!stats.isFile()) {
-        return { success: false, error: 'Target is not a file.' };
-      }
-
-      const extension = path.extname(resolvedTargetPath).toLowerCase();
-      const size = stats.size;
-
-      if (IMAGE_EXTENSIONS.has(extension)) {
-        if (size > MAX_IMAGE_BYTES) {
-          return { success: false, error: 'Image exceeds the 10 MB preview limit.', size };
-        }
-        const buffer = await fs.promises.readFile(resolvedTargetPath);
-        const mime = extension === '.svg'
-          ? 'image/svg+xml'
-          : extension === '.jpg'
-            ? 'image/jpeg'
-            : `image/${extension.slice(1)}`;
-
-        return {
-          success: true,
-          type: 'image',
-          name: path.basename(resolvedTargetPath),
-          path: resolvedTargetPath,
-          extension,
-          size,
-          content: `data:${mime};base64,${buffer.toString('base64')}`,
-        };
-      }
-
-      if (!isTextPreviewable(extension, size)) {
-        return {
-          success: false,
-           error: 'File exceeds the 2 MB text limit or is not safe to preview as text.',
-          name: path.basename(resolvedTargetPath),
-          path: resolvedTargetPath,
-          extension,
-          size,
-        };
-      }
-
-      const buffer = await fs.promises.readFile(resolvedTargetPath);
-      if (!isProbablyText(buffer)) return { success: false, error: 'File appears to be binary and cannot be opened as text.', size };
-      const content = buffer.toString('utf8');
-      return {
-        success: true,
-        type: 'text',
-        name: path.basename(resolvedTargetPath),
-        path: resolvedTargetPath,
-        extension,
-        size,
-        content,
-      };
+  ipcMain.handle('fs:read-project-file', async (_, projectPath, relativePath) => {
+    try {
+      const resolved = resolveProjectRelativePath(projectPath, relativePath, isProjectRegistered);
+      return await readPreviewFile(resolved.resolvedTargetPath, resolved.relativePath);
     } catch (error) {
       return { success: false, error: error.message };
     }

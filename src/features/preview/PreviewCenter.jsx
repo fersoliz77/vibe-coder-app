@@ -50,6 +50,7 @@ export default function PreviewCenter({ project }) {
   const [issuesOpen, setIssuesOpen] = useState(false);
   const [frameKey, setFrameKey] = useState(0);
   const [actionError, setActionError] = useState('');
+  const [repairing, setRepairing] = useState(false);
   const logsEnd = useRef(null);
   const frameRef = useRef(null);
 
@@ -89,6 +90,11 @@ export default function PreviewCenter({ project }) {
     const rect = frameRef.current?.getBoundingClientRect();
     if (!rect) throw new Error(t('preview.frameUnavailable'));
     return api.web.snapshot(project.path, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
+  };
+  const repair = async () => {
+    setRepairing(true);
+    await act(async () => setWeb(await api.web.repair(project.id)));
+    setRepairing(false);
   };
 
   // Los estados se veian pero no se anunciaban: arrancabas el servidor y nada
@@ -146,7 +152,9 @@ export default function PreviewCenter({ project }) {
                   <button type="button" disabled={web.state !== 'ready'} onClick={() => act(snapshot)}>{t('preview.snapshot')}</button>
                 </div>
               </details>
-              {['starting', 'ready', 'stopping'].includes(web.state)
+              {web.state === 'error'
+                ? <button className="preview-button is-primary" disabled={repairing} onClick={repair}><Icon name="reload" />{t(repairing ? 'preview.repairingWeb' : 'preview.repairWeb')}</button>
+                : ['starting', 'ready', 'stopping'].includes(web.state)
                 ? <button className="preview-button is-danger" disabled={web.state === 'stopping'} onClick={() => act(() => api.web.stop(project.path))}><Icon name="stop" />{t('preview.stop')}</button>
                 : <button className="preview-button is-primary" disabled={webBusy || web.state === 'loading' || !web.available} onClick={() => act(() => api.web.start(project.path))}><Icon name="play" />{t('preview.startWeb')}</button>}
             </div>

@@ -23,6 +23,7 @@ const {
   safeRelativeProjectPath,
   sanitizeIssue,
   sanitizeLog,
+  resolveRepairProject,
 } = require('../electron/services/previewManager');
 
 test('preview URL guard accepts only the fixed loopback origin', () => {
@@ -35,6 +36,17 @@ test('preview URL guard accepts only the fixed loopback origin', () => {
     'https://127.0.0.1:4173',
     'javascript:alert(1)',
   ]) assert.equal(isTrustedPreviewUrl(url), false, url);
+});
+
+test('preview repair resolves only a bounded project ID in main', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-repair-'));
+  try {
+    const project = resolveRepairProject('proj_1', (id) => id === 'proj_1' ? { id, path: root } : null, (value) => value);
+    assert.equal(project.path, root);
+    assert.throws(() => resolveRepairProject(root, () => null, (value) => value), /no longer registered/);
+    assert.throws(() => resolveRepairProject('', () => null), /valid project ID/);
+    assert.throws(() => resolveRepairProject('x'.repeat(161), () => null), /valid project ID/);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('web commands use fixed Vite and Next argument conventions', () => {

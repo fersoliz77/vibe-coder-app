@@ -11,12 +11,22 @@ const {
   isSubPath,
   resolveProjectChildPath,
   resolveProjectEntryPath,
+  normalizeProjectRelativePath,
+  resolveProjectRelativePath,
   validateProjectCwd,
 } = require('../electron/ipc/fsGuards');
 
 test('isSubPath accepts direct children and nested files', () => {
   assert.equal(isSubPath('C:/repo', 'C:/repo/src'), true);
   assert.equal(isSubPath('C:/repo', 'C:/repo/src/index.js'), true);
+});
+
+test('project-relative paths are canonical and confined', () => {
+  assert.equal(normalizeProjectRelativePath('src/index.js'), 'src/index.js');
+  for (const invalid of ['', '../secret', '/secret', 'a//b', 'a/./b', 'C:/secret', 'src\\index.js', 'file.txt:stream']) {
+    assert.throws(() => normalizeProjectRelativePath(invalid), /relative path/);
+  }
+  assert.throws(() => resolveProjectRelativePath('C:/repo', '../secret', () => true), /relative path/);
 });
 
 test('isSubPath rejects siblings and parent traversal', () => {

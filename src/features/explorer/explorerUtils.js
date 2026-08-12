@@ -1,4 +1,4 @@
-export const STORAGE_PREFIX = 'fileExplorerState:';
+export const STORAGE_PREFIX = 'fileExplorerTabs:';
 
 export const FILE_META = {
   js: { label: 'JS', color: '#f7df1e' },
@@ -30,8 +30,8 @@ export const FILE_META = {
   default: { label: 'FILE', color: '#9aa5ce' },
 };
 
-export function getStorageKey(projectPath) {
-  return `${STORAGE_PREFIX}${projectPath}`;
+export function getStorageKey(projectId) {
+  return `${STORAGE_PREFIX}${projectId}`;
 }
 
 export function getExtension(name) {
@@ -69,12 +69,24 @@ export function makeTab(file) {
     id: file.path,
     name: file.name,
     path: file.path,
+    relativePath: file.relativePath,
     type: file.type,
     extension: file.extension,
     size: file.size,
     savedContent: file.type === 'text' ? file.content : null,
     draftContent: file.type === 'text' ? file.content : null,
     content: file.content,
+  };
+}
+
+export function makeTabManifest(tabs, paneTabs, splitView) {
+  const paths = tabs.map((tab) => tab.relativePath).filter(Boolean);
+  const relativeForId = (id) => tabs.find((tab) => tab.id === id)?.relativePath || null;
+  return {
+    version: 1,
+    tabs: paths,
+    panes: { primary: relativeForId(paneTabs.primary), secondary: splitView ? relativeForId(paneTabs.secondary) : null },
+    splitView: Boolean(splitView),
   };
 }
 

@@ -136,13 +136,19 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
   }, []);
 
   const remapTabPaths = useCallback((oldPath, nextPath) => {
+    const toRelativePath = (filePath) => {
+      const root = String(projectPath).replace(/[\\/]+$/, '');
+      const normalized = String(filePath);
+      if (!normalized.toLowerCase().startsWith(`${root.toLowerCase()}\\`) && !normalized.toLowerCase().startsWith(`${root.toLowerCase()}/`)) return null;
+      return normalized.slice(root.length + 1).replace(/\\/g, '/');
+    };
     setTabs((prev) => prev.map((tab) => {
       if (tab.path === oldPath) {
-        return { ...tab, id: nextPath, path: nextPath, name: getName(nextPath) };
+        return { ...tab, id: nextPath, path: nextPath, relativePath: toRelativePath(nextPath), name: getName(nextPath) };
       }
       if (tab.path.startsWith(`${oldPath}\\`) || tab.path.startsWith(`${oldPath}/`)) {
         const remappedPath = `${nextPath}${tab.path.slice(oldPath.length)}`;
-        return { ...tab, id: remappedPath, path: remappedPath, name: getName(remappedPath) };
+        return { ...tab, id: remappedPath, path: remappedPath, relativePath: toRelativePath(remappedPath), name: getName(remappedPath) };
       }
       return tab;
     }));
@@ -150,7 +156,7 @@ export function useExplorerTabs({ projectPath, loadFile, loadGitStatus, setStatu
       primary: prev.primary === oldPath || prev.primary?.startsWith(`${oldPath}\\`) || prev.primary?.startsWith(`${oldPath}/`) ? `${nextPath}${prev.primary.slice(oldPath.length)}` : prev.primary,
       secondary: prev.secondary === oldPath || prev.secondary?.startsWith(`${oldPath}\\`) || prev.secondary?.startsWith(`${oldPath}/`) ? `${nextPath}${prev.secondary.slice(oldPath.length)}` : prev.secondary,
     }));
-  }, []);
+  }, [projectPath]);
 
   return {
     tabs,

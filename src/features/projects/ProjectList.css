@@ -39,6 +39,13 @@
 .project-error--block { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--vc-space-3); margin: var(--vc-space-4) 0; padding: var(--vc-space-4); }
 .project-error--block p { margin: var(--vc-space-1) 0 0; color: var(--vc-text-2); }
 
+.project-search { position: relative; max-width: 520px; }
+.project-search label { display: block; margin-bottom: var(--vc-space-2); color: var(--vc-text-2); font-size: var(--vc-text-sm); font-weight: 600; }
+.project-search input { width: 100%; min-height: var(--vc-space-12); padding: 0 var(--vc-space-12) 0 var(--vc-space-3); border: 1px solid var(--vc-line); border-radius: var(--vc-radius-md); color: var(--vc-text-1); background: var(--vc-surface-1); }
+.project-search input:focus { border-color: var(--vc-accent); outline: none; }
+.project-search button { position: absolute; right: var(--vc-space-2); bottom: 7px; width: 30px; height: 30px; border: 0; border-radius: var(--vc-radius-sm); color: var(--vc-text-2); background: transparent; cursor: pointer; font-size: var(--vc-text-lg); }
+.project-search button:hover { color: var(--vc-text-1); background: var(--vc-surface-2); }
+
 @media (max-width: 900px) {
   .project-list-sidebar { display: none; }
   .project-list-main { padding: var(--vc-space-6); }
@@ -136,6 +143,13 @@
   transition: var(--vc-transition-fast);
   opacity: 0;
 }
+
+.project-card__controls { display: flex; align-items: center; gap: var(--vc-space-1); }
+.project-card__favorite { padding: var(--vc-space-1); border: 0; border-radius: var(--vc-radius-xs); color: var(--vc-text-3); background: transparent; cursor: pointer; }
+.project-card__favorite:hover { color: var(--vc-warning); background: var(--vc-surface-3); }
+.project-card__favorite.is-active { color: var(--vc-warning); }
+.project-card__favorite svg { width: 18px; height: 18px; fill: transparent; }
+.project-card__favorite.is-active svg { fill: currentColor; }
 
 .project-card:hover .project-card__remove,
 .project-card:focus-within .project-card__remove {

@@ -5,6 +5,7 @@ import './ProjectList.css';
 import { useI18n } from '../../i18n/I18nContext';
 import ConfirmDialog from '../../components/ConfirmDialog';
 import { ASYNC_STATES, loading, runAsync } from '../../utils/asyncState';
+import { useAppStore } from '../../store/useAppStore';
 
 const ImportWorkspaceDialog = lazy(() => import('./ImportWorkspaceDialog'));
 
@@ -22,6 +23,9 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
   const [choosingImport, setChoosingImport] = useState(false);
   // Proyecto pendiente de confirmacion antes de quitarlo de la lista.
   const [pendingRemoval, setPendingRemoval] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const favoriteProjectIds = useAppStore((state) => state.favoriteProjectIds);
+  const toggleFavoriteProject = useAppStore((state) => state.toggleFavoriteProject);
 
   useEffect(() => {
     loadProjects();
@@ -74,6 +78,17 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
     setPendingRemoval(project);
   };
 
+  const handleFavorite = (event, project) => {
+    event.stopPropagation();
+    toggleFavoriteProject(project.id);
+  };
+
+  const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
+  const visibleProjects = (listing.data || [])
+    .filter((project) => !normalizedQuery || `${project.name}\n${project.path}`.toLocaleLowerCase().includes(normalizedQuery))
+    .map((project, index) => ({ project, index, favorite: favoriteProjectIds.includes(project.id) }))
+    .sort((left, right) => Number(right.favorite) - Number(left.favorite) || left.index - right.index);
+
   const confirmRemove = async () => {
     const project = pendingRemoval;
     setPendingRemoval(null);
@@ -99,6 +114,14 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
         {environmentMissing && <div className="project-setup-banner"><div><strong>{t('projects.environmentNeeded')}</strong><span>{t('projects.environmentCopy')}</span></div><button type="button" onClick={onOpenSetup}>{t('projects.reviewEnvironment')}</button></div>}
         {projectError && <div className="project-error" role="alert">{projectError}</div>}
 
+        {listing.state === ASYNC_STATES.SUCCESS && (
+          <div className="project-search">
+            <label htmlFor="project-search-input">{t('projects.search')}</label>
+            <input id="project-search-input" type="search" value={searchQuery} placeholder={t('projects.searchPlaceholder')} onChange={(event) => setSearchQuery(event.target.value)} />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label={t('projects.clearSearch')}>&times;</button>}
+          </div>
+        )}
+
       {/* Los cuatro estados que esta pantalla puede tener, cada uno con su cara. */}
       {listing.state === ASYNC_STATES.LOADING && (
         <div className="project-empty" role="status">
@@ -123,8 +146,8 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
       )}
 
       {listing.state === ASYNC_STATES.SUCCESS && (
-        <div className="project-grid">
-          {listing.data.map(proj => (
+        visibleProjects.length ? <div className="project-grid">
+          {visibleProjects.map(({ project: proj, favorite }) => (
             <div key={proj.id} className="glass-card project-card" role="button" tabIndex="0" onClick={() => handleSelect(proj)} onKeyDown={(event) => { if (event.target === event.currentTarget && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); handleSelect(proj); } }}>
               <div className="project-card__header">
                 <div className="project-card__icon-wrapper project-card__icon-wrapper--folder">
@@ -132,17 +155,14 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
                     <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
                   </svg>
                 </div>
-                <button
-                  className="project-card__remove"
-                  onClick={(e) => handleRemove(e, proj)}
-                  title={t('projects.remove')}
-                  aria-label={t('projects.removeAria', { name: proj.name })}
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <line x1="18" y1="6" x2="6" y2="18"></line>
-                    <line x1="6" y1="6" x2="18" y2="18"></line>
-                  </svg>
-                </button>
+                <div className="project-card__controls">
+                  <button type="button" className={`project-card__favorite ${favorite ? 'is-active' : ''}`} onClick={(event) => handleFavorite(event, proj)} aria-pressed={favorite} title={t(favorite ? 'projects.removeFavorite' : 'projects.addFavorite')} aria-label={t(favorite ? 'projects.removeFavoriteAria' : 'projects.addFavoriteAria', { name: proj.name })}>
+                    <svg viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" strokeLinejoin="round"><path d="m12 2.8 2.8 5.7 6.3.9-4.6 4.4 1.1 6.3-5.6-3-5.6 3 1.1-6.3-4.6-4.4 6.3-.9L12 2.8Z" /></svg>
+                  </button>
+                  <button type="button" className="project-card__remove" onClick={(e) => handleRemove(e, proj)} title={t('projects.remove')} aria-label={t('projects.removeAria', { name: proj.name })}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                  </button>
+                </div>
               </div>
               <div className="project-card__content">
                 <h3>{proj.name}</h3>
@@ -157,7 +177,7 @@ export default function ProjectList({ onProjectSelect, onOpenSetup, services = [
               </div>
             </div>
           ))}
-        </div>
+        </div> : <div className="project-empty"><p className="text-tertiary">{t('projects.noSearchResults')}</p></div>
       )}
 
         {/* Text Links: Create / Import */}

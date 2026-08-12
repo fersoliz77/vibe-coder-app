@@ -4,7 +4,7 @@ const http = require('http');
 const path = require('path');
 const util = require('util');
 const { assertNoLinkedPath, validateProjectCwd } = require('../ipc/fsGuards');
-const { getProjects, isProjectRegistered } = require('./projectManager');
+const { getProjectById, getProjects, isProjectRegistered } = require('./projectManager');
 const { killProcessTree } = require('./processUtils');
 const {
   ANDROID_AVD_NAME,
@@ -48,6 +48,7 @@ let webGeneration = 0;
 let androidGeneration = 0;
 let browserListenersInstalled = false;
 let diagnosticsLogger = null;
+let webTransition = Promise.resolve();
 
 function recordPreviewError(target, operation, error, category = classifyPreviewError(error)) {
   diagnosticsLogger?.log('preview', 'error', { target, operation, category, errorName: error?.name || 'Error' });
@@ -55,6 +56,19 @@ function recordPreviewError(target, operation, error, category = classifyPreview
 
 function validateCwd(cwd) {
   return validateProjectCwd(cwd, isProjectRegistered);
+}
+
+function resolveRepairProject(projectId, findProject = getProjectById, validateProject = validateCwd) {
+  if (typeof projectId !== 'string' || !projectId.trim() || projectId.length > 160) throw new Error('A valid project ID is required.');
+  const project = findProject(projectId.trim());
+  if (!project) throw new Error('The project is no longer registered.');
+  return { ...project, path: validateProject(project.path) };
+}
+
+function serializeWebTransition(operation) {
+  const next = webTransition.then(operation, operation);
+  webTransition = next.catch(() => {});
+  return next;
 }
 
 function isTrustedPreviewUrl(url) {
@@ -370,6 +384,38 @@ function stopWeb(cwd) {
   else webRun.state = 'stopped';
   publishWeb();
   return publicWebStatus(projectCwd, detectProjectTargets(projectCwd));
+}
+
+function waitForManagedProcessExit(processHandle, timeoutMs = 8_000) {
+  if (!processHandle || processHandle.exitCode !== null) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      processHandle.removeListener('close', onClose);
+      reject(new Error('The managed preview process did not stop in time.'));
+    }, timeoutMs);
+    timer.unref?.();
+    const onClose = () => { clearTimeout(timer); resolve(); };
+    processHandle.once('close', onClose);
+  });
+}
+
+async function repairWeb(projectId) {
+  const project = resolveRepairProject(projectId);
+  const run = webRun;
+  if (run && run.projectCwd !== project.path) throw new Error('A web preview is active for another project.');
+  if (run) {
+    webGeneration += 1;
+    run.state = 'stopping';
+    closeSourceWatcher(run);
+    publishWeb();
+    if (run.process) {
+      const exit = waitForManagedProcessExit(run.process);
+      await killProcessTree(run.process);
+      await exit;
+    }
+    if (webRun === run) webRun = null;
+  }
+  return startWeb(project.path);
 }
 
 function getAndroidTools() {
@@ -785,8 +831,9 @@ function setupPreviewHandlers(ipcMain, mainWindowProvider, diagnostics) {
     }
   });
   handle('preview:web-status', 'web', 'status', (_event, cwd) => getWebStatus(cwd));
-  handle('preview:web-start', 'web', 'start', (_event, cwd) => startWeb(cwd));
-  handle('preview:web-stop', 'web', 'stop', (_event, cwd) => stopWeb(cwd));
+  handle('preview:web-start', 'web', 'start', (_event, cwd) => serializeWebTransition(() => startWeb(cwd)));
+  handle('preview:web-stop', 'web', 'stop', (_event, cwd) => serializeWebTransition(() => stopWeb(cwd)));
+  handle('preview:web-repair', 'web', 'repair', (_event, projectId) => serializeWebTransition(() => repairWeb(projectId)));
   handle('preview:web-open-external', 'web', 'open-external', async (_event, cwd) => {
     const status = await getWebStatus(cwd);
     if (status.state !== 'ready' || !isTrustedPreviewUrl(status.url)) throw new Error('The trusted preview is not ready.');
@@ -814,5 +861,6 @@ module.exports = {
   buildAdbRotationArgs, buildAdbScreenshotArgs, buildWebDevArgs, classifyWebScript, detectManagedEmulatorSerial, detectProjectTargets,
   isAndroidBootComplete, isConfiguredAvdNameOutput, isIgnoredWatchPath, isTrustedPreviewResourceUrl, isTrustedPreviewUrl, isValidManagedSerial,
   parseAdbEmulatorSerials, safeArtifactPath, safeRelativeProjectPath, sanitizeIssue, sanitizeLog, validateCaptureBounds,
+  resolveRepairProject,
   setupPreviewHandlers, terminateAllPreviews,
 };

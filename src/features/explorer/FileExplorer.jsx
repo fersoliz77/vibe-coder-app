@@ -39,6 +39,10 @@ const FileExplorer = forwardRef(function FileExplorer({ project, isDark }, ref) 
     return window.electronAPI.fs.readFile(project.path, filePath);
   }, [project.path]);
 
+  const loadPersistedFile = useCallback((relativePath) => {
+    return window.electronAPI.fs.readProjectFile(project.path, relativePath);
+  }, [project.path]);
+
   const loadDirectory = useCallback(async (dirPath) => {
     const items = await window.electronAPI.fs.readDir(project.path, dirPath);
     treeState.setDirectoryCache((prev) => ({ ...prev, [dirPath]: items }));
@@ -142,18 +146,15 @@ const FileExplorer = forwardRef(function FileExplorer({ project, isDark }, ref) 
   }, [actions, tabsState, treeState]);
 
   useExplorerPersistence({
+    projectId: project?.id,
     projectPath: project?.path,
-    expandedPaths: treeState.expandedPaths,
-    selectedPaths: treeState.selectedPaths,
     tabs: tabsState.tabs,
     paneTabs: tabsState.paneTabs,
     splitView: tabsState.splitView,
     resetWorkspace,
-    setExpandedPaths: treeState.setExpandedPaths,
-    setSelectedPaths: treeState.setSelectedPaths,
     setTabs: tabsState.setTabs,
     setPaneTabs: tabsState.setPaneTabs,
-    loadFile,
+    loadPersistedFile,
   });
 
   useEffect(() => { prefetchCodeEditor(); }, []);
