@@ -10,6 +10,7 @@ This log records implementation history in chronological order. Each entry shoul
 
 - Extended analysis progress and cancellation to the five call paths that had inherited the longer scan without feedback.
 - Reduced external folder import from a four-step wizard to one confirmed action.
+- Prepared desktop release `1.1.19`.
 
 ### Key Changes
 
