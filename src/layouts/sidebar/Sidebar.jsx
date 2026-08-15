@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import './Sidebar.css';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
@@ -79,6 +80,52 @@ const NAV_ITEMS = [
 
 export default function Sidebar({ activeView, onNavigate, connectedCount, requirementCount = 0, claudeAvailable, openCodeAvailable, openAIAvailable, isDarkMode, onToggleTheme, onLogout, loggingOut, currentProject, onBackToProjects, authState }) {
   const { t } = useI18n();
+  /*
+   * Estuvo clavada en la primera version mientras la app ya iba por la 1.1.19:
+   * un numero escrito a mano no se entera de los releases, y era lo unico que
+   * se ve de la version mientras se usa la app. La real es la que el proceso
+   * principal reporta desde app.getVersion(), la misma que muestra el historial
+   * en Configuracion.
+   */
+  const [version, setVersion] = useState('');
+  useEffect(() => {
+    let active = true;
+    Promise.resolve(window.electronAPI?.updates?.getHistory?.())
+      .then((history) => { if (active && history?.currentVersion) setVersion(history.currentVersion); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []);
+
+  /*
+   * El numero de version es tambien donde uno va a preguntar si esta al dia,
+   * asi que buscar actualizaciones se hace desde ahi y no solo enterrado en
+   * Configuracion. Si hay una version superior no hay nada que mostrar aca:
+   * el gate obligatorio ya se apodera de la pantalla al cambiar el estado.
+   */
+  const [checkState, setCheckState] = useState('idle');
+  const checkTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(checkTimerRef.current), []);
+  const settleCheck = (next, holdMs) => {
+    setCheckState(next);
+    clearTimeout(checkTimerRef.current);
+    checkTimerRef.current = setTimeout(() => setCheckState('idle'), holdMs);
+  };
+  const checkForUpdates = async () => {
+    if (checkState === 'checking') return;
+    if (authState?.policy !== 'active' || !window.electronAPI?.updates?.check) { settleCheck('unavailable', 4000); return; }
+    setCheckState('checking');
+    clearTimeout(checkTimerRef.current);
+    try {
+      const result = await window.electronAPI.updates.check();
+      if (result?.status === 'current') settleCheck('current', 4000);
+      else if (result?.status === 'error') settleCheck('error', 6000);
+      else setCheckState('idle');
+    } catch {
+      settleCheck('error', 6000);
+    }
+  };
+  const checkLabel = checkState === 'checking' ? t('sidebar.checkingUpdates') : t('sidebar.checkUpdates');
+
   return (
     <aside className="sidebar">
       {/* Navigation */}
@@ -198,9 +245,23 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, requir
           </span>
           <span className="sidebar__label">{t('auth.logout')}</span>
         </button>
-        <div className="sidebar__version">
-          <span className="text-tertiary" style={{ fontSize: '10px', letterSpacing: '0.5px' }}>v1.0.0</span>
-        </div>
+        {version && <button
+          className={`sidebar__version sidebar__version--${checkState}`}
+          type="button"
+          onClick={checkForUpdates}
+          disabled={checkState === 'checking'}
+          aria-busy={checkState === 'checking'}
+          aria-label={checkLabel}
+          title={checkLabel}
+        >
+          <span className="sidebar__version-content" role="status">
+            {checkState === 'checking' && <span className="sidebar__version-spinner" aria-hidden="true" />}
+            {checkState === 'current' && <span className="sidebar__version-note">{t('sidebar.upToDate')}</span>}
+            {checkState === 'error' && <span className="sidebar__version-note">{t('sidebar.checkFailed')}</span>}
+            {checkState === 'unavailable' && <span className="sidebar__version-note">{t('sidebar.checkUnavailable')}</span>}
+            {checkState === 'idle' && <span className="text-tertiary">{t('sidebar.version', { version })}</span>}
+          </span>
+        </button>}
       </div>
     </aside>
   );

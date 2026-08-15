@@ -142,6 +142,67 @@
   padding: var(--vc-space-2);
 }
 
+/*
+ * El numero de version es tambien el boton para preguntar si hay una
+ * actualizacion. Estaba resuelto con estilos inline, que se saltean la escala
+ * tipografica y no los ve ningun gate.
+ */
 .sidebar__version {
-  opacity: 0.5;
+  display: grid;
+  place-items: center;
+  min-height: var(--vc-space-8);
+  padding: var(--vc-space-1) var(--vc-space-2);
+  border: 1px solid transparent;
+  border-radius: var(--vc-radius-full);
+  background: transparent;
+  font: inherit;
+  opacity: .5;
+  cursor: pointer;
+  transition: var(--vc-transition-fast);
 }
+
+.sidebar__version:hover:not(:disabled) {
+  border-color: var(--vc-line);
+  background: var(--vc-surface-2);
+  opacity: 1;
+}
+
+.sidebar__version:focus-visible {
+  outline: 2px solid var(--vc-accent);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
+.sidebar__version--checking,
+.sidebar__version--current,
+.sidebar__version--error,
+.sidebar__version--unavailable {
+  opacity: 1;
+}
+
+.sidebar__version-content {
+  display: grid;
+  place-items: center;
+  font-size: var(--vc-text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .05em;
+}
+
+.sidebar__version-note {
+  color: var(--vc-text-2);
+  text-align: center;
+}
+
+.sidebar__version--current .sidebar__version-note { color: var(--vc-success); }
+.sidebar__version--error .sidebar__version-note { color: var(--vc-danger); }
+
+.sidebar__version-spinner {
+  width: var(--vc-space-4);
+  height: var(--vc-space-4);
+  border: 2px solid var(--vc-line);
+  border-top-color: var(--vc-accent);
+  border-radius: var(--vc-radius-full);
+  animation: sidebar-version-spin var(--vc-duration-normal) linear infinite;
+}
+
+@keyframes sidebar-version-spin { to { transform: rotate(360deg); } }

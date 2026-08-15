@@ -452,6 +452,8 @@ Object.assign(dictionaries.es.requirements.progress, { analyzing: 'Leyendo el pr
 Object.assign(dictionaries.es.requirements.errors, { disk: 'Liberá espacio y reintentá.', verify: 'Sin verificar. Reintentá sin reinstalar.', incomplete: 'Dependencias incompletas. Volvé a analizar.' });
 
 Object.assign(dictionaries.en.sidebar, { learning: 'Courses and progress' });
+Object.assign(dictionaries.en.sidebar, { version: 'v{{version}}', checkUpdates: 'Check for updates', checkingUpdates: 'Checking for updates', upToDate: 'Up to date', checkFailed: 'Check failed', checkUnavailable: 'Sign in required' });
+Object.assign(dictionaries.es.sidebar, { version: 'v{{version}}', checkUpdates: 'Buscar actualizaciones', checkingUpdates: 'Buscando actualizaciones', upToDate: 'Al día', checkFailed: 'Falló', checkUnavailable: 'Requiere sesión' });
 Object.assign(dictionaries.es.sidebar, { learning: 'Cursos y progreso' });
 Object.assign(dictionaries.en.dashboard, { projectTargets: 'Workspace applications', targetCount: '{{count}} detected targets' });
 Object.assign(dictionaries.es.dashboard, { projectTargets: 'Aplicaciones del workspace', targetCount: '{{count}} targets detectados' });

@@ -4,6 +4,28 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-15 (later)
+
+### Scope
+
+- Fixed the sidebar version, which had stayed at the first release while the application had shipped eighteen more.
+- Turned that version into the check-for-updates control.
+- Prepared desktop release `1.1.20`.
+
+### Key Changes
+
+- Read the installed version from `app.getVersion()` through the existing update-history channel, the same source the Settings release list already used, instead of a literal in the component.
+- Moved the version styling out of inline styles, which bypassed the typographic scale and were invisible to the literal gate.
+- Made the version a button that checks for updates, with its own spinner, a stable outcome for up-to-date and failed checks, and no check at all without active access, so the spinner can never hang.
+- Left the available-update path to the existing mandatory gate, which already takes over the screen on a state change.
+
+### Validation
+
+- `npm run check` with 416 passing tests.
+- Added tests that fail if the version is hand-written again or if the control loses its busy state, accessible label, or access guard.
+
+---
+
 ## 2026-08-15
 
 ### Scope

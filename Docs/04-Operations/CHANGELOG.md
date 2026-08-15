@@ -4,6 +4,7 @@
 
 ### Added
 
+- The sidebar version is now a control: it shows the installed version and checks for updates on click, with its own spinner and outcome.
 - Progress and cancellation for every workspace analysis, including project reanalysis and the analysis that runs before an approved requirement action.
 - Plain-language product summary when importing an external folder, grouping manifests into products with the platforms detected inside each one.
 - Live analysis progress during external import, with cancellation that stops the scan instead of leaving it running.
@@ -55,6 +56,7 @@
 
 ### Fixed
 
+- The sidebar no longer shows a hand-written version that stayed at the first release while the application had already shipped many others.
 - Embedded Courses and Progress now uses the canonical learning origin, and packaging rejects mismatched learning domains.
 - Dependency actions now check free disk space before execution and retry only post-install verification when verification is inconclusive.
 - Corrupt or oversized project registries are repaired or recovered without exposing internal paths or errors to the renderer.
