@@ -152,7 +152,7 @@ function createProjectProvisioner({
         job, request, state, accounts, invoke,
       }));
       await stage(state, 'register', 96, 'Registering the project in Vibe IDE Coder.', async () => {
-        const workspace = await workspaceAnalyzer(projectPath);
+        const workspace = await workspaceAnalyzer(projectPath, { shouldAbort: () => job.controller.signal.aborted });
         state.project = await registerProject(projectPath, {
           name: request.name,
           slug: request.slug,
@@ -184,6 +184,7 @@ function createProjectProvisioner({
       state.deployment = state.remotes.vercel;
       if (fsImpl.existsSync(projectPath) && !state.project) {
         try {
+          /* Recuperacion despues de un fallo o una cancelacion: la carpeta ya existe y hay que registrarla igual, asi que este analisis no se corta. */
           const workspace = await workspaceAnalyzer(projectPath);
           state.project = await registerProject(projectPath, {
             name: request.name,

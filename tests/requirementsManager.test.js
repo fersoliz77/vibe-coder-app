@@ -57,8 +57,9 @@ test('managed npm install uses one-use consent and isolated fixed execution', as
     assert.equal(calls[0][2].env.NPM_CONFIG_USERCONFIG, process.platform === 'win32' ? 'NUL' : '/dev/null');
     assert.equal(calls[0][2].env.NPM_CONFIG_GLOBALCONFIG, process.platform === 'win32' ? 'NUL' : '/dev/null');
     assert.equal(preview.action.effects.temporaryCacheMayChange, true);
-    assert.deepEqual(progress.map((event) => event.stage), ['validating', 'preparing', 'installing', 'verifying', 'complete']);
-    assert.deepEqual(progress.map((event) => event.percent), [8, 25, 45, 85, 100]);
+    /* El analisis previo a la accion ahora tiene su propia etapa: antes corria sin que la pantalla mostrara nada. */
+    assert.deepEqual(progress.map((event) => event.stage), ['validating', 'analyzing', 'preparing', 'installing', 'verifying', 'complete']);
+    assert.deepEqual(progress.map((event) => event.percent), [8, 10, 25, 45, 85, 100]);
     assert.deepEqual(progress.find((event) => event.stage === 'installing').estimate, { minSeconds: 60, maxSeconds: 300 });
     await assert.rejects(() => manager.apply(preview.grantId, preview.confirmationNonce), (error) => error.code === 'ACTION_GRANT_INVALID');
   } finally {

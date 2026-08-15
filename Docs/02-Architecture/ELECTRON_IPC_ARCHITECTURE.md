@@ -65,6 +65,7 @@
 - file: `electron/services/projectManager.js`
 - project initialization and project-specific workflows
 - project registration checks used by guarded filesystem IPC
+- workspace analysis has no latency ceiling, so it streams bounded progress to the renderer while it runs and stops when the grant is cancelled; `projects:import-progress` and `requirements:progress` carry relative paths and counters only, through the same public contracts as the analysis result
 
 ## Security Notes
 

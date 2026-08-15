@@ -240,6 +240,28 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
     return project;
   };
 
+  /*
+   * El analisis dejo de tener tope de tiempo. Sin esto, ese cambio convertia
+   * cada espera acotada de este archivo en un spinner indefinido: hay que
+   * contar en que va y hay que poder cortarlo. `report` recibe el detalle del
+   * escaneo y lo cuelga de la etapa que ya estaba emitiendo quien llama.
+   */
+  const scanOptions = (report, isCancelled) => ({
+    onProgress: (scan) => {
+      try {
+        report({
+          phase: scan.phase,
+          directory: scan.directory,
+          entriesVisited: scan.entriesVisited,
+          filesRead: scan.filesRead,
+          foundCount: scan.foundCount,
+          elapsedMs: scan.elapsedMs,
+        });
+      } catch {}
+    },
+    shouldAbort: isCancelled,
+  });
+
   const list = (projectId) => {
     let project = requireProject(projectId);
     const requirements = project.requirements || deriveRequirements(project);
@@ -247,14 +269,26 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
     return toRequirementsState(project, requirements);
   };
 
-  const refresh = (projectId) => {
+  const refresh = (projectId, onProgress = () => {}) => {
     const project = requireProject(projectId);
     if (active.has(project.id)) throw publicError('ACTION_BUSY', 'A requirement action is already running for this project.');
     if (refreshes.has(project.id)) return refreshes.get(project.id);
     const epoch = epochs.get(project.id) || 0;
+    const startedAt = now();
+    /* Cancelar ya subia el epoch para descartar el resultado; ahora ademas corta el escaneo en vez de dejarlo corriendo. */
+    const cancelled = () => (epochs.get(project.id) || 0) !== epoch;
     const operation = (async () => {
-      const workspace = await analyze(project.path);
-      if ((epochs.get(project.id) || 0) !== epoch) throw publicError('ACTION_CANCELLED', 'The requirements analysis was cancelled.');
+      let workspace;
+      try {
+        workspace = await analyze(project.path, scanOptions(
+          (scan) => onProgress({ projectId: project.id, requirementId: null, stage: 'analyzing', percent: 0, startedAt, elapsedMs: Math.max(0, now() - startedAt), estimate: null, scan }),
+          cancelled,
+        ));
+      } catch (error) {
+        if (error?.code === 'ANALYSIS_CANCELLED') throw publicError('ACTION_CANCELLED', 'The requirements analysis was cancelled.');
+        throw error;
+      }
+      if (cancelled()) throw publicError('ACTION_CANCELLED', 'The requirements analysis was cancelled.');
       const current = requireProject(project.id);
       const requirements = deriveRequirements({ ...current, workspace }, current.requirements, now());
       const updated = updateProject(project.id, (latest) => ({ ...latest, workspace, requirements, onboarding: { ...latest.onboarding, status: workspace.readiness.status, recommendations: workspace.readiness.recommendations } }));
@@ -299,9 +333,9 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
     const { requirements, item } = resolveRequirement(project, grant.requirementId, { requirePending: true });
     const startedAt = now();
     let progressPercent = 0;
-    const progress = (stage, percent, estimate = null) => {
+    const progress = (stage, percent, estimate = null, scan = null) => {
       progressPercent = percent;
-      try { onProgress({ projectId: project.id, requirementId: item.id, stage, percent, startedAt, elapsedMs: Math.max(0, now() - startedAt), estimate }); } catch {}
+      try { onProgress({ projectId: project.id, requirementId: item.id, stage, percent, startedAt, elapsedMs: Math.max(0, now() - startedAt), estimate, scan }); } catch {}
     };
     progress('validating', 8);
     if (requirements.revision !== grant.revision || project.workspace?.fingerprint !== grant.fingerprint) throw publicError('ACTION_STALE', 'The project changed after this action was reviewed. Refresh requirements.');
@@ -327,7 +361,12 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
     active.set(project.id, controller);
     let installCompleted = false;
     try {
-      const before = await analyze(project.path);
+      /* Este analisis corria antes de la primera etapa: la pantalla no mostraba nada mientras pasaba. */
+      progress('analyzing', 10);
+      const before = await analyze(project.path, scanOptions(
+        (scan) => progress('analyzing', 10, null, scan),
+        () => controller.signal.aborted,
+      ));
       progress('preparing', 25);
       if (before.fingerprint !== grant.fingerprint) throw publicError('ACTION_STALE', 'The project changed after this action was reviewed. Refresh requirements.');
       const current = requireProject(project.id);
@@ -342,7 +381,10 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
       if (!result?.success) throw publicError('ACTION_FAILED', 'Dependencies could not be installed with lifecycle scripts disabled.');
       installCompleted = true;
       progress('verifying', 85);
-      const workspace = await analyze(project.path);
+      const workspace = await analyze(project.path, scanOptions(
+        (scan) => progress('verifying', 85, null, scan),
+        () => controller.signal.aborted,
+      ));
       const nextRequirements = markCompleted(project, item, workspace);
       if (nextRequirements.items.find((candidate) => candidate.id === item.id)?.status !== 'completed') throw publicError('ACTION_VERIFY_INCOMPLETE', 'Installed dependencies are still incomplete.');
       const updated = updateProject(project.id, (current) => ({ ...current, workspace, requirements: nextRequirements, onboarding: { ...current.onboarding, status: workspace.readiness.status, recommendations: workspace.readiness.recommendations } }));
@@ -372,12 +414,12 @@ function createRequirementsManager({ getProjectById, updateProject, analyze = an
     const project = requireProject(retryGrant.projectId);
     const { item } = resolveRequirement(project, retryGrant.requirementId, { requirePending: true });
     const startedAt = now();
-    const emit = (stage, percent) => {
-      try { onProgress({ projectId: project.id, requirementId: item.id, stage, percent, startedAt, elapsedMs: Math.max(0, now() - startedAt), estimate: null }); } catch {}
+    const emit = (stage, percent, scan = null) => {
+      try { onProgress({ projectId: project.id, requirementId: item.id, stage, percent, startedAt, elapsedMs: Math.max(0, now() - startedAt), estimate: null, scan }); } catch {}
     };
     try {
       emit('verifying', 70);
-      const workspace = await analyze(project.path);
+      const workspace = await analyze(project.path, scanOptions((scan) => emit('verifying', 70, scan), () => false));
       const current = requireProject(project.id);
       const nextRequirements = markCompleted(current, item, workspace);
       if (nextRequirements.items.find((candidate) => candidate.id === item.id)?.status !== 'completed') throw publicError('ACTION_VERIFY_INCOMPLETE', 'Installed dependencies are still incomplete.');
@@ -439,11 +481,13 @@ function setupRequirementsHandlers(ipcMain, manager) {
     catch (error) { return { ok: false, error: requirementIpcError(error) }; }
   });
   handle('requirements:list', (_event, projectId) => manager.list(projectId));
-  handle('requirements:refresh', (_event, projectId) => manager.refresh(projectId));
+  handle('requirements:refresh', (event, projectId) => manager.refresh(projectId, (progress) => event.sender.send('requirements:progress', progress)));
   handle('requirements:preview', (_event, projectId, requirementId) => manager.preview(projectId, requirementId));
   handle('requirements:apply', (event, grantId, confirmationNonce) => manager.apply(grantId, confirmationNonce, (progress) => event.sender.send('requirements:progress', progress)));
   handle('requirements:retry', (event, retryId) => manager.retry(retryId, (progress) => event.sender.send('requirements:progress', progress)));
   handle('requirements:cancel', (_event, grantId) => manager.cancel(grantId));
+  /* Reanalizar puede tardar: sin esto la unica salida era esperar a que terminara. */
+  handle('requirements:cancel-analysis', (_event, projectId) => manager.cancelProject(projectId));
   handle('requirements:copy-guidance', (_event, projectId, requirementId) => manager.copyGuidance(projectId, requirementId));
 }
 

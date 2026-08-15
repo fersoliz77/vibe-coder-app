@@ -18,17 +18,21 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
   const tabsRef = useRef(null);
   const delayedCancelRef = useRef(null);
   const analysisStarted = useRef(false);
+  const planRequestRef = useRef(0);
   const [phase, setPhase] = useState('analyzing');
   const [section, setSection] = useState('audit');
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [analysis, setAnalysis] = useState(null);
   const [plan, setPlan] = useState(null);
+  const [planning, setPlanning] = useState(false);
+  const [planError, setPlanError] = useState('');
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState('');
   const [progress, setProgress] = useState(null);
   const [retryable, setRetryable] = useState(false);
   const [canReturnToReview, setCanReturnToReview] = useState(false);
-  const busy = ['analyzing', 'planning', 'importing'].includes(phase);
+  const busy = ['analyzing', 'importing'].includes(phase);
   const locked = phase === 'importing';
 
   useFocusTrap({ active: Boolean(selection), containerRef: dialogRef, onEscape: locked ? undefined : onCancel, initialFocusRef: titleRef });
@@ -46,9 +50,11 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
   const acceptAnalysis = (result) => {
     setAnalysis(result);
     setPlan(null);
+    setPlanError('');
     setSelectedTargetId(result.recommendedTargetId || '');
     setAcknowledged(!result.projectAssessment?.requiresAcknowledgement);
     setSection('audit');
+    setDetailsOpen(false);
     setPhase('review');
   };
 
@@ -82,29 +88,30 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
     onCancel();
   };
 
-  const preparePlan = async () => {
-    if (!selectedTargetId || phase !== 'review') return;
-    setPhase('planning');
-    setRetryable(false);
-    setCanReturnToReview(false);
-    setError('');
-    try {
-      const result = await window.electronAPI.projects.planImport(selection.id, {
-        primaryTargetId: selectedTargetId,
-        acknowledgeLowConfidence: acknowledged,
-      });
-      setPlan(result);
-      setPhase('plan');
-    } catch (reason) {
-      setRetryable(true);
-      setCanReturnToReview(true);
-      setError(reason?.message || t('importWorkspace.planFailed'));
-      setPhase('error');
-    }
-  };
+  /*
+   * El plan dejo de ser un paso del asistente. No pedia ninguna decision nueva:
+   * se deriva del analisis y de la aplicacion elegida, y ocupaba una pantalla
+   * entera solo para mostrar lo que iba a pasar. Ahora se prepara solo y se
+   * muestra junto al resultado, asi abrir el proyecto es un click en vez de
+   * tres. El contrato con el proceso principal no cambia: sigue siendo
+   * analizar, planificar y recien despues confirmar ese plan exacto.
+   */
+  useEffect(() => {
+    if (phase !== 'review' || !selectedTargetId) return;
+    if (analysis?.projectAssessment?.requiresAcknowledgement && !acknowledged) { setPlan(null); return; }
+    const request = planRequestRef.current + 1;
+    planRequestRef.current = request;
+    setPlanning(true);
+    setPlanError('');
+    setPlan(null);
+    window.electronAPI.projects.planImport(selection.id, { primaryTargetId: selectedTargetId, acknowledgeLowConfidence: acknowledged })
+      .then((result) => { if (planRequestRef.current === request) setPlan(result); })
+      .catch((reason) => { if (planRequestRef.current === request) setPlanError(reason?.message || t('importWorkspace.planFailed')); })
+      .finally(() => { if (planRequestRef.current === request) setPlanning(false); });
+  }, [phase, selectedTargetId, acknowledged, selection.id]);
 
   const confirm = async () => {
-    if (!plan?.planId || phase !== 'plan') return;
+    if (!plan?.planId || phase !== 'review') return;
     setPhase('importing');
     setCanReturnToReview(false);
     setError('');
@@ -113,6 +120,7 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
       onImported(result.project);
     } catch (reason) {
       setRetryable(true);
+      setCanReturnToReview(true);
       setError(reason?.message || t('importWorkspace.importFailed'));
       setPhase('error');
     }
@@ -137,7 +145,14 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
     <span className="import-target__marker" />
     <span className="import-target__body"><span className="import-target__heading"><strong>{target.name}</strong><em>{t(`importWorkspace.${CONFIDENCE_KEYS[target.confidence] || 'lowConfidence'}`)}</em></span><code>{target.relativePath}</code><span>{target.framework || target.kind} · {target.language || t('importWorkspace.languageUnknown')}</span><small>{target.capabilities.webPreview ? t('importWorkspace.webPreviewReady') : target.capabilities.androidPreview ? t('importWorkspace.androidPreviewReady') : t('importWorkspace.editingOnly')}</small></span>
   </label>;
-  const canPlan = phase === 'review' && selectedTargetId && (!assessment?.requiresAcknowledgement || acknowledged);
+  /*
+   * Elegir solo tiene sentido cuando hay mas de una aplicacion. Con una sola,
+   * pedir que la marquen es fabricar una decision que ya esta tomada.
+   */
+  const choosable = (analysis?.targets?.length || 0) > 1;
+  const chosenProduct = products.find((product) => product.targetIds.includes(selectedTargetId));
+  const openLabel = chosenProduct ? t('importWorkspace.openNamed', { name: chosenProduct.name }) : t('importWorkspace.openFolder');
+  const canImport = phase === 'review' && Boolean(plan?.planId) && !planning;
   const handleSectionKeyDown = (event) => {
     const current = SECTIONS.indexOf(section);
     let next = null;
@@ -176,29 +191,59 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
             {progress.foundCount > 0 && <p className="import-workspace__progress-found">{t('importWorkspace.progressFound', { count: progress.foundCount })}<small>{progress.found.join(' · ')}</small></p>}
           </div>}
         </div>}
-        {phase === 'planning' && <div className="import-workspace__loading" role="status" aria-live="polite"><span className="import-workspace__spinner" /><h3>{t('importWorkspace.preparingPlan')}</h3><p>{t('importWorkspace.preparingPlanCopy')}</p></div>}
-
-        {phase === 'review' && analysis && <div className="import-workspace__review">
+        {(phase === 'review' || phase === 'importing') && analysis && <div className="import-workspace__review">
           <section className={`import-workspace__products ${applications.length ? '' : 'is-empty'}`} aria-labelledby="import-workspace-products-title">
             <span>{t('importWorkspace.whatWeFound')}</span>
             <h3 id="import-workspace-products-title">{applications.length === 0 ? t('importWorkspace.productsNone') : applications.length === 1 ? t('importWorkspace.productsOne') : t('importWorkspace.productsMany', { count: applications.length })}</h3>
-            <p>{applications.length === 0 ? t('importWorkspace.productsNoneCopy') : t('importWorkspace.productsCopy')}</p>
+            <p>{applications.length === 0 ? t('importWorkspace.productsNoneCopy') : choosable ? t('importWorkspace.productsChooseCopy') : t('importWorkspace.productsCopy')}</p>
             {products.length > 0 && <ul className="import-workspace__product-list">
-              {products.map((product) => <li key={product.id} className="import-product">
-                <div className="import-product__heading">
-                  <strong>{product.name}</strong>
-                  {product.role === 'library' && <em>{t('importWorkspace.libraryProduct')}</em>}
-                  <code title={product.relativePath}>{product.relativePath}</code>
-                </div>
-                <p>{t('importWorkspace.productHas', { platforms: listPlatforms(product) })}</p>
-                <div className="import-product__platforms">
-                  {product.platforms.map((platform) => <span key={platform} className={`import-platform import-platform--${platform}`}>{t(`importWorkspace.platforms.${platform}`)}</span>)}
-                </div>
-                {product.technologies.length > 0 && <small>{product.technologies.join(' · ')}</small>}
-              </li>)}
+              {products.map((product) => {
+                const chosen = product.targetIds.includes(selectedTargetId);
+                const body = <>
+                  <div className="import-product__heading">
+                    {choosable && <span className="import-product__marker" aria-hidden="true" />}
+                    <strong>{product.name}</strong>
+                    {product.role === 'library' && <em>{t('importWorkspace.libraryProduct')}</em>}
+                    <code title={product.relativePath}>{product.relativePath}</code>
+                  </div>
+                  <p>{t('importWorkspace.productHas', { platforms: listPlatforms(product) })}</p>
+                  <div className="import-product__platforms">
+                    {product.platforms.map((platform) => <span key={platform} className={`import-platform import-platform--${platform}`}>{t(`importWorkspace.platforms.${platform}`)}</span>)}
+                  </div>
+                  {product.technologies.length > 0 && <small>{product.technologies.join(' · ')}</small>}
+                </>;
+                /* Con un solo producto no hay nada que elegir: obligar a marcarlo seria fabricar una decision. */
+                return <li key={product.id} className={`import-product ${chosen && choosable ? 'is-chosen' : ''}`}>
+                  {choosable
+                    ? <label className="import-product__choice">
+                      <input type="radio" name="import-product" value={product.primaryTargetId} checked={chosen} disabled={locked} onChange={() => setSelectedTargetId(product.primaryTargetId)} />
+                      {body}
+                    </label>
+                    : body}
+                </li>;
+              })}
             </ul>}
           </section>
 
+          <section className="import-workspace__outcome" aria-labelledby="import-workspace-outcome-title">
+            <h3 id="import-workspace-outcome-title">{t('importWorkspace.outcomeTitle')}</h3>
+            <div className="import-workspace__operations" aria-busy={planning}>
+              {planning && <p className="import-workspace__outcome-pending" role="status">{t('importWorkspace.preparingPlan')}</p>}
+              {!planning && plan?.operations?.map((operation) => <article key={operation.id}><StatusMark status="ready" /><div><strong>{t(`importWorkspace.operations.${operation.type}.title`)}</strong><p>{t(`importWorkspace.operations.${operation.type}.copy`)}</p></div><span>{t('importWorkspace.localOnly')}</span></article>)}
+            </div>
+            <div className="import-workspace__guarantees"><strong>{t('importWorkspace.guaranteesTitle')}</strong><span>{t('importWorkspace.noSourceChanges')}</span><span>{t('importWorkspace.noCommands')}</span><span>{t('importWorkspace.noSecrets')}</span></div>
+            {planError && <p className="import-workspace__inline-error" role="alert">{planError}</p>}
+          </section>
+
+          {assessment.requiresAcknowledgement && <label className="import-workspace__acknowledgement"><input type="checkbox" checked={acknowledged} disabled={locked} onChange={(event) => setAcknowledged(event.target.checked)} /><span><strong>{t('importWorkspace.confirmFolder')}</strong><small>{t('importWorkspace.confirmFolderCopy')}</small></span></label>}
+
+          {/* El analisis completo sigue disponible, pero deja de ser lo primero que hay que leer para abrir una carpeta. */}
+          <button className="import-workspace__disclosure" type="button" aria-expanded={detailsOpen} aria-controls="import-workspace-details" onClick={() => setDetailsOpen((open) => !open)}>
+            <span>{detailsOpen ? t('importWorkspace.hideDetails') : t('importWorkspace.showDetails')}</span>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+
+          <div id="import-workspace-details" className="import-workspace__details" hidden={!detailsOpen}>
           <div className="import-workspace__assessment">
             <div className={`import-workspace__score import-workspace__score--${assessment.classification}`}><strong>{assessment.score}</strong><span>/ 100</span></div>
             <div><span>{t('importWorkspace.assessment')}</span><h3>{t(`importWorkspace.classifications.${assessment.classification}`)}</h3><p>{t(`importWorkspace.readiness.${readiness.status}`)}</p></div>
@@ -218,7 +263,6 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
             <div className="import-workspace__checks">
               {readiness.checks.map((check) => <div key={check.id}><StatusMark status={check.status} /><span><strong>{t(`importWorkspace.checks.${check.id}`)}</strong><small>{t(`importWorkspace.checkStatuses.${check.status}`, { count: check.count || 0 })}</small></span></div>)}
             </div>
-            {assessment.requiresAcknowledgement && <label className="import-workspace__acknowledgement"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span><strong>{t('importWorkspace.confirmFolder')}</strong><small>{t('importWorkspace.confirmFolderCopy')}</small></span></label>}
             {analysis.warnings.length > 0 && <div className="import-workspace__warnings"><strong>{t('importWorkspace.partialAnalysis')}</strong><p>{t('importWorkspace.partialAnalysisCopy')}</p></div>}
           </div>}
 
@@ -249,26 +293,19 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
             </div>
             {readiness.recommendations.length > 0 && <div className="import-workspace__recommendations"><strong>{t('importWorkspace.nextActions')}</strong><ul>{readiness.recommendations.map((item) => <li key={item}>{t(`importWorkspace.recommendations.${item}`)}</li>)}</ul></div>}
           </div>}
-        </div>}
-
-        {(phase === 'plan' || phase === 'importing') && plan && <div className="import-workspace__review import-workspace__plan">
-          <div className="import-workspace__plan-heading"><span>{t('importWorkspace.planEyebrow')}</span><h3>{t('importWorkspace.planTitle')}</h3><p>{t('importWorkspace.planCopy')}</p></div>
-          <div className="import-workspace__operations">{plan.operations.map((operation) => <article key={operation.id}><StatusMark status="ready" /><div><strong>{t(`importWorkspace.operations.${operation.type}.title`)}</strong><p>{t(`importWorkspace.operations.${operation.type}.copy`)}</p></div><span>{t('importWorkspace.localOnly')}</span></article>)}</div>
-          <div className="import-workspace__guarantees"><strong>{t('importWorkspace.guaranteesTitle')}</strong><span>{t('importWorkspace.noSourceChanges')}</span><span>{t('importWorkspace.noCommands')}</span><span>{t('importWorkspace.noSecrets')}</span></div>
+          </div>
         </div>}
 
         {phase === 'error' && <div className="vc-state vc-state--error import-workspace__error" role="alert"><strong className="vc-state__title">{t('importWorkspace.problem')}</strong><p>{error}</p></div>}
 
         <footer className="import-workspace__footer">
-          <p aria-live="polite">{phase === 'importing' ? t('importWorkspace.importingStatus') : phase === 'plan' ? t('importWorkspace.planFooter') : t('importWorkspace.footerCopy')}</p>
+          <p aria-live="polite">{phase === 'importing' ? t('importWorkspace.importingStatus') : t('importWorkspace.footerCopy')}</p>
           <div>
             {(phase === 'review' || phase === 'error') && <button className="vc-btn vc-btn--ghost" type="button" onClick={onChooseAnother}>{t('importWorkspace.chooseAnother')}</button>}
-            {phase === 'plan' && <button className="vc-btn vc-btn--ghost" type="button" onClick={() => setPhase('review')}>{t('common.back')}</button>}
             {phase === 'error' && canReturnToReview && <button className="vc-btn vc-btn--ghost" type="button" onClick={() => setPhase('review')}>{t('common.back')}</button>}
             {phase === 'error' && retryable && <button className="vc-btn vc-btn--ghost" type="button" onClick={analyze}>{t('projects.retry')}</button>}
             <button className="vc-btn vc-btn--ghost" type="button" onClick={close} disabled={locked}>{t('common.cancel')}</button>
-            {phase === 'review' && <button className="vc-btn vc-btn--primary" type="button" onClick={preparePlan} disabled={!canPlan}>{t('importWorkspace.reviewPlan')}</button>}
-            {(phase === 'plan' || phase === 'importing') && <button className="vc-btn vc-btn--primary" type="button" onClick={confirm} disabled={phase !== 'plan'} aria-busy={phase === 'importing'}>{phase === 'importing' ? t('importWorkspace.importing') : t('importWorkspace.applyPlan')}</button>}
+            {(phase === 'review' || phase === 'importing') && <button className="vc-btn vc-btn--primary" type="button" onClick={confirm} disabled={!canImport} aria-busy={locked}>{locked ? t('importWorkspace.importing') : openLabel}</button>}
           </div>
         </footer>
       </section>

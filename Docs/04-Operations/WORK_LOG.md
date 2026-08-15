@@ -4,6 +4,31 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-15
+
+### Scope
+
+- Extended analysis progress and cancellation to the five call paths that had inherited the longer scan without feedback.
+- Reduced external folder import from a four-step wizard to one confirmed action.
+
+### Key Changes
+
+- Added a shared scan-reporting helper in the requirements manager so reanalysis, the pre-action analysis, and verification all report the folder being read and can be stopped; reanalysis previously discarded its result on cancel while the scan kept running.
+- Gave the pre-action analysis its own `analyzing` stage, which previously ran before the first reported stage and left the screen blank.
+- Exposed `requirements:cancel-analysis` so reanalysis has an exit, and routed its progress away from the action consent dialog.
+- Kept project provisioning's analysis cancellable, except on the recovery path where the folder already exists and must still be registered.
+- Removed the separate plan step from import: the plan asks for no new decision, so it is prepared automatically when the application is chosen and shown next to the result. The main-process contract is unchanged, and changing the selected application re-plans before anything can be confirmed.
+- Moved the score, readiness checks, structure, and setup map behind a labelled disclosure, keeping the tablist and its keyboard navigation intact.
+- Made product cards the selection when more than one application exists, and removed the choice entirely when there is only one.
+
+### Validation
+
+- `npm run check` with 413 passing tests.
+- Token, font, literal, breakpoint, accessibility, contrast, design-system, build, and bundle-budget checks passed.
+- Eight dead locale keys from the removed plan step were pruned.
+
+---
+
 ## 2026-08-14
 
 ### Scope

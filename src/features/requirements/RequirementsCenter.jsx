@@ -28,12 +28,16 @@ export default function RequirementsCenter({ project, onProjectPatch, onOpenPrev
   const [actionError, setActionError] = useState('');
   const [copied, setCopied] = useState(false);
   const [actionProgress, setActionProgress] = useState(null);
+  const [scanProgress, setScanProgress] = useState(null);
   const [actionRetry, setActionRetry] = useState(null);
 
   useEffect(() => {
     if (!window.electronAPI?.requirements?.onProgress) return undefined;
     return window.electronAPI.requirements.onProgress((progress) => {
-      if (progress?.projectId === project.id) setActionProgress(progress);
+      if (progress?.projectId !== project.id) return;
+      /* Reanalizar emite por el mismo canal pero no pertenece a ninguna accion: no puede alimentar el dialogo de consentimiento. */
+      if (progress.stage === 'analyzing' && !progress.requirementId) setScanProgress(progress.scan || null);
+      else setActionProgress(progress);
     });
   }, [project.id]);
 
@@ -51,6 +55,7 @@ export default function RequirementsCenter({ project, onProjectPatch, onOpenPrev
   const refresh = async () => {
     if (refreshing) return;
     setRefreshing(true);
+    setScanProgress(null);
     setError('');
     try {
       const result = await window.electronAPI.requirements.refresh(project.id);
@@ -58,10 +63,17 @@ export default function RequirementsCenter({ project, onProjectPatch, onOpenPrev
       setRequirements(result.projectPatch.requirements);
       await onProjectPatch(result.projectId, result.projectPatch);
     } catch (reason) {
-      setError(readableError(t, reason, 'requirements.refreshFailed'));
+      /* Cancelar es una decision del usuario, no una falla que haya que reportarle como error. */
+      if (reason?.code !== 'ACTION_CANCELLED') setError(readableError(t, reason, 'requirements.refreshFailed'));
     } finally {
       setRefreshing(false);
+      setScanProgress(null);
     }
+  };
+
+  const cancelRefresh = async () => {
+    if (!refreshing || !window.electronAPI?.requirements?.cancelAnalysis) return;
+    await window.electronAPI.requirements.cancelAnalysis(project.id).catch(() => {});
   };
 
   const review = async (item) => {
@@ -151,7 +163,12 @@ export default function RequirementsCenter({ project, onProjectPatch, onOpenPrev
     <div className="requirements-center">
       <header className="requirements-header">
         <div><span>{t('requirements.eyebrow')}</span><h1>{t('requirements.title')}</h1><p>{t('requirements.description')}</p></div>
-        <button className="vc-btn vc-btn--secondary" type="button" onClick={refresh} disabled={refreshing}>{refreshing ? t('requirements.refreshing') : t('requirements.refresh')}</button>
+        <div className="requirements-header__analysis">
+          {refreshing
+            ? <button className="vc-btn vc-btn--secondary" type="button" onClick={cancelRefresh}>{t('requirements.cancelAnalysis')}</button>
+            : <button className="vc-btn vc-btn--secondary" type="button" onClick={refresh}>{t('requirements.refresh')}</button>}
+          {refreshing && <p className="requirements-header__scan" role="status"><span className="requirements-header__scan-dot" aria-hidden="true" />{t('requirements.refreshing')}<small aria-live="off">{scanProgress ? t('requirements.scanDetail', { count: scanProgress.entriesVisited, found: scanProgress.foundCount }) : ''}</small></p>}
+        </div>
       </header>
       <section className="requirements-assurance"><span aria-hidden="true">R</span><div><strong>{t('requirements.readOnlyTitle')}</strong><p>{t('requirements.readOnlyCopy')}</p></div></section>
       <div className="requirements-summary">

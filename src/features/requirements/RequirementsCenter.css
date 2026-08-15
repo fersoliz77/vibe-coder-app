@@ -2,6 +2,11 @@
 .requirements-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--vc-space-6); max-width: 1100px; margin: 0 auto; }
 .requirements-header > div > span { color: var(--vc-accent); font-size: var(--vc-text-xs); font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .requirements-header h1 { margin-top: var(--vc-space-2); font-size: var(--vc-text-lg); }
+.requirements-header__analysis { display: grid; gap: var(--vc-space-2); justify-items: end; }
+.requirements-header p.requirements-header__scan { display: flex; align-items: center; gap: var(--vc-space-2); max-width: none; margin-top: 0; color: var(--vc-text-2); font-size: var(--vc-text-xs); }
+.requirements-header__scan small { color: var(--vc-text-3); font-variant-numeric: tabular-nums; }
+.requirements-header__scan-dot { width: var(--vc-space-2); height: var(--vc-space-2); flex: 0 0 auto; border-radius: var(--vc-radius-full); background: var(--vc-accent); animation: requirements-scan-pulse var(--vc-duration-dialog) ease-in-out infinite alternate; }
+@keyframes requirements-scan-pulse { to { opacity: .25; } }
 .requirements-header p { max-width: 720px; margin-top: var(--vc-space-2); color: var(--vc-text-2); line-height: 1.6; }
 .requirements-assurance { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--vc-space-4); max-width: 1100px; margin: var(--vc-space-6) auto 0; padding: var(--vc-space-4); border: 1px solid color-mix(in srgb, var(--vc-success) 45%, var(--vc-line)); border-radius: var(--vc-radius-lg); background: var(--vc-success-soft); }
 .requirements-assurance > span { display: grid; width: 36px; height: 36px; place-items: center; border-radius: var(--vc-radius-full); color: var(--vc-on-accent); background: var(--vc-success); font-weight: 850; }

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Progress and cancellation for every workspace analysis, including project reanalysis and the analysis that runs before an approved requirement action.
 - Plain-language product summary when importing an external folder, grouping manifests into products with the platforms detected inside each one.
 - Live analysis progress during external import, with cancellation that stops the scan instead of leaving it running.
 - Course signals reported from the desktop application so a lesson can confirm its own steps.
@@ -34,6 +35,7 @@
 
 ### Changed
 
+- Importing a folder is one confirmed action instead of a four-step wizard: the setup plan is prepared automatically and shown with the result, and the full analysis moved behind a disclosure.
 - External workspace analysis runs to completion instead of stopping at a fixed time budget; the remaining limits guard against pathological folders rather than latency.
 - Electron and React Native applications are reported by the platform they actually run on instead of being reported as web.
 - The project list is loaded lazily to keep the initial bundle within its budget.

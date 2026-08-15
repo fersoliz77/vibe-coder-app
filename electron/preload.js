@@ -98,6 +98,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     apply: (grantId, confirmationNonce) => invokeRequirement('requirements:apply', grantId, confirmationNonce),
     retry: (retryId) => invokeRequirement('requirements:retry', retryId),
     cancel: (grantId) => invokeRequirement('requirements:cancel', grantId),
+    cancelAnalysis: (projectId) => invokeRequirement('requirements:cancel-analysis', projectId),
     copyGuidance: (projectId, requirementId) => invokeRequirement('requirements:copy-guidance', projectId, requirementId),
     onProgress: (callback) => subscribe('requirements:progress', callback, (progress) => [progress]),
   },
