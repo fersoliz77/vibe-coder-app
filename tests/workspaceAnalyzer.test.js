@@ -150,6 +150,97 @@ test('a normal folder is analyzed completely instead of being cut short by a lat
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+/*
+ * `private: true` significa "no publicar en npm", que es lo que declara una
+ * aplicacion. La regla estaba al reves y clasificaba como libreria a cualquier
+ * app que arrancara con `npm start`, dejando la carpeta sin ninguna aplicacion.
+ */
+test('a private package that starts with npm start is an application, not a library', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'facturador', private: true, scripts: { start: 'node server.mjs' }, engines: { node: '>=18' } }));
+    write(root, 'server.mjs', 'import { createServer } from "node:http";\nimport { spawn } from "node:child_process";\ncreateServer(() => {}).listen(4174);\n');
+    write(root, 'index.html', '<!doctype html><script type="module" src="app.js"></script>');
+    write(root, 'app.js', 'export const start = () => {};');
+    const result = await analyzeWorkspace(root);
+    const [product] = result.products;
+    assert.equal(product.role, 'application');
+    /* Sin una sola dependencia declarada: el stack sale de los archivos. */
+    assert.deepEqual(product.platforms, ['web', 'backend']);
+    assert.ok(product.technologies.includes('HTTP server'));
+    assert.ok(product.technologies.includes('Native processes'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a publishable package with no run script is still a library', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'utils', main: 'index.js', types: 'index.d.ts' }));
+    write(root, 'index.js', 'module.exports = {};');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products[0].role, 'library');
+    assert.deepEqual(result.products[0].platforms, ['library']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a project without any manifest is still read from its files', async () => {
+  const root = fixture();
+  try {
+    write(root, 'index.html', '<!doctype html><link rel="stylesheet" href="styles.css">');
+    write(root, 'styles.css', 'body { margin: 0; }');
+    write(root, 'app.js', 'document.title = "hola";');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products.length, 1);
+    assert.equal(result.products[0].role, 'application');
+    assert.deepEqual(result.products[0].platforms, ['web']);
+    assert.ok(result.targets[0].technologies.includes('HTML'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a language with no manifest and no html is reported by its sources', async () => {
+  const root = fixture();
+  try {
+    write(root, 'main.py', 'print("hola")');
+    write(root, 'lib/helpers.py', 'def x(): return 1');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products.length, 1);
+    assert.equal(result.targets[0].language, 'Python');
+    assert.deepEqual(result.products[0].platforms, ['backend']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+/*
+ * Un repositorio de documentacion con scripts de mantenimiento no es una
+ * aplicacion. Sin esta distincion, cualquier carpeta con un `.js` suelto lo era.
+ */
+test('code that only lives in helper folders does not make a docs repository an application', async () => {
+  const root = fixture();
+  try {
+    for (let index = 0; index < 12; index += 1) write(root, `docs/nota-${index}.md`, '# Nota');
+    write(root, 'README.md', '# Documentacion');
+    write(root, 'scripts/check-parity.mjs', 'export const check = () => true;');
+    write(root, 'scripts/deploy.ps1', 'Write-Output "deploy"');
+    const result = await analyzeWorkspace(root);
+    assert.deepEqual(result.products, []);
+    assert.equal(result.projectAssessment.classification, 'folder');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('database evidence is reported from files, not only from dependencies', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'api', scripts: { start: 'node server.js' } }));
+    write(root, 'server.js', 'const http = require("node:http"); http.createServer(() => {}).listen(3000);');
+    write(root, 'database/schema.sql', 'create table ventas (id integer primary key);');
+    write(root, 'datos.sqlite', '');
+    const result = await analyzeWorkspace(root);
+    const technologies = result.products[0].technologies;
+    assert.ok(technologies.includes('SQL'));
+    assert.ok(technologies.includes('SQLite'));
+    assert.ok(result.products[0].platforms.includes('backend'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('recognizes backend, deployment, and container markers without reading secrets', async () => {
   const root = fixture();
   try {

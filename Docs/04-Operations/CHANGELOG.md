@@ -4,6 +4,8 @@
 
 ### Added
 
+- File-level stack detection, so a project is read even with no declared dependencies: language from its sources, web from an `index.html`, backend from an entry point that starts a server, and databases from schema, migration, and SQLite files.
+- Projects with no manifest at all are now recognised from their sources instead of being reported as an unknown folder, while code confined to helper folders does not turn a documentation repository into an application.
 - The sidebar version is now a control: it shows the installed version and checks for updates on click, with its own spinner and outcome.
 - Progress and cancellation for every workspace analysis, including project reanalysis and the analysis that runs before an approved requirement action.
 - Plain-language product summary when importing an external folder, grouping manifests into products with the platforms detected inside each one.
@@ -56,6 +58,7 @@
 
 ### Fixed
 
+- A private package that starts with `npm start` is no longer classified as a shared library. `private: true` means the opposite of a library — it is what applications declare — and only `dev` counted as a run script, so an application starting with `start` was reported as a library and its folder as having no application at all.
 - The sidebar no longer shows a hand-written version that stayed at the first release while the application had already shipped many others.
 - Embedded Courses and Progress now uses the canonical learning origin, and packaging rejects mismatched learning domains.
 - Dependency actions now check free disk space before execution and retry only post-install verification when verification is inconclusive.

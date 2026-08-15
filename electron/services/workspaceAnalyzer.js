@@ -78,6 +78,61 @@ const PLATFORM_BY_KIND = new Map([
   ['desktop', 'desktop'], ['service', 'backend'], ['python', 'backend'], ['go', 'backend'], ['jvm', 'backend'],
   ['php', 'backend'], ['ruby', 'backend'], ['elixir', 'backend'], ['dotnet', 'backend'], ['rust', 'backend'], ['native', 'backend'],
 ]);
+/*
+ * Hasta aca todo el stack se deducia de las dependencias declaradas. Un
+ * proyecto sin dependencias -- un servidor con `node:http`, una pagina con
+ * index.html, un script de Python -- no tenia nada que buscar en esos mapas y
+ * salia como "JavaScript" a secas, o directamente como carpeta sin aplicacion.
+ *
+ * Esta capa lee lo que hay en el disco: extensiones, archivos marcadores y los
+ * entry points. Sigue siendo analisis estatico, sin ejecutar nada del proyecto.
+ */
+const LANGUAGE_BY_EXTENSION = new Map([
+  ['.js', 'JavaScript'], ['.mjs', 'JavaScript'], ['.cjs', 'JavaScript'], ['.jsx', 'JavaScript'],
+  ['.ts', 'TypeScript'], ['.tsx', 'TypeScript'], ['.vue', 'Vue'], ['.svelte', 'Svelte'],
+  ['.py', 'Python'], ['.go', 'Go'], ['.rs', 'Rust'], ['.rb', 'Ruby'], ['.php', 'PHP'],
+  ['.java', 'Java'], ['.kt', 'Kotlin'], ['.kts', 'Kotlin'], ['.cs', 'C#'], ['.swift', 'Swift'],
+  ['.dart', 'Dart'], ['.ex', 'Elixir'], ['.exs', 'Elixir'], ['.lua', 'Lua'],
+  ['.c', 'C'], ['.h', 'C'], ['.cpp', 'C++'], ['.cc', 'C++'], ['.hpp', 'C++'],
+  ['.sh', 'Shell'], ['.ps1', 'PowerShell'], ['.sql', 'SQL'], ['.html', 'HTML'], ['.css', 'CSS'],
+  ['.scss', 'CSS'], ['.sass', 'CSS'], ['.less', 'CSS'],
+]);
+/* Lenguajes de presentacion y datos: acompañan a un stack pero no lo definen solos. */
+const SUPPORTING_LANGUAGES = new Set(['HTML', 'CSS', 'SQL', 'Shell', 'PowerShell']);
+const DATABASE_BY_MARKER = new Map([
+  ['schema.prisma', 'Prisma'], ['prisma', 'Prisma'], ['supabase', 'Supabase'], ['migrations', 'SQL migrations'],
+  ['knexfile.js', 'Knex'], ['sequelize', 'Sequelize'], ['alembic.ini', 'Alembic'],
+]);
+const DATABASE_BY_EXTENSION = new Map([
+  ['.sqlite', 'SQLite'], ['.sqlite3', 'SQLite'], ['.db', 'SQLite'], ['.sql', 'SQL'],
+]);
+/* Nombres de entry point que vale la pena abrir para confirmar si algo levanta un servidor. */
+const ENTRY_FILE_NAMES = ['server.mjs', 'server.js', 'server.ts', 'index.mjs', 'index.js', 'index.ts', 'app.js', 'app.mjs', 'main.js', 'main.py', 'app.py', 'server.py', 'main.go'];
+const SERVER_SIGNALS = [
+  [/\bfrom\s+["']node:http2?["']|require\(["']node:?https?["']\)/, 'HTTP server'],
+  [/\bcreateServer\s*\(/, 'HTTP server'],
+  [/\.listen\s*\(/, 'HTTP server'],
+  [/\bfrom\s+["']express["']|require\(["']express["']\)/, 'Express'],
+  [/\bfrom\s+["']fastify["']|require\(["']fastify["']\)/, 'Fastify'],
+  [/\bfastapi\b|\bFastAPI\(/, 'FastAPI'],
+  [/\bflask\b|\bFlask\(/, 'Flask'],
+  [/\bhttp\.ListenAndServe\b/, 'HTTP server'],
+];
+const NATIVE_PROCESS_SIGNAL = /\bfrom\s+["']node:child_process["']|require\(["']child_process["']\)|\bsubprocess\.(?:run|Popen)\b/;
+const MAX_ENTRY_FILES = 8;
+const MAX_ENTRY_SCAN_BYTES = 96 * 1024;
+/*
+ * Codigo dentro de estas carpetas es herramienta, no producto. Un repositorio
+ * de documentacion con cinco scripts de mantenimiento no es una aplicacion, y
+ * sin esta distincion cualquier carpeta con un `.js` suelto pasaba a serlo.
+ */
+const HELPER_DIRECTORIES = new Set(['scripts', 'tools', 'bin', 'docs', 'doc', 'examples', 'example', 'samples', 'test', 'tests', '__tests__', 'spec', 'specs', 'fixtures', 'e2e', 'benchmark', 'benchmarks']);
+
+function isHelperDirectory(relativeDirectory) {
+  if (relativeDirectory === '.') return false;
+  return relativeDirectory.split('/').some((segment) => HELPER_DIRECTORIES.has(segment.toLowerCase()));
+}
+
 const PLATFORM_BY_TECHNOLOGY = new Map([
   ['Electron', 'desktop'], ['Tauri', 'desktop'], ['React Native', 'mobile'], ['Expo', 'mobile'], ['Capacitor', 'mobile'],
 ]);
@@ -260,7 +315,7 @@ function buildReadiness({ assessment, targets, dependencies, environment, warnin
   };
 }
 
-function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null }) {
+function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null, fileSignals = {} }) {
   const relativePath = toRelative(root, directory);
   return {
     id: targetId(kind, relativePath),
@@ -275,6 +330,7 @@ function target({ root, directory, kind, role = 'application', name, framework, 
     technologies: unique(technologies).slice(0, 16),
     capabilities: { explorer: true, terminal: true, webPreview: false, androidPreview: false, ...capabilities },
     previewProfile,
+    fileSignals: { web: false, backend: false, ...fileSignals },
   };
 }
 
@@ -283,7 +339,23 @@ function packageTarget(root, directory, parsed, relativeManifest) {
   const technologies = [];
   let framework = null;
   let kind = 'javascript';
-  let role = parsed.private === true && !parsed.scripts?.dev ? 'package' : 'application';
+  /*
+   * Esta regla estaba al reves. `private: true` significa "no publicar en npm",
+   * que es justamente lo que declara una aplicacion; una libreria es lo que si
+   * se publica. Y solo miraba `dev`, ignorando `start`, el script mas comun de
+   * Node: un POS que arranca con `npm start` quedaba clasificado como libreria
+   * y por lo tanto la carpeta figuraba sin ninguna aplicacion.
+   *
+   * Lo que de verdad describe a un paquete publicable es tener punto de entrada
+   * declarado (`main`, `module`, `exports`, `types`) y ningun script que lo
+   * levante.
+   */
+  const runnableScript = ['dev', 'start', 'serve'].some((name) => typeof parsed.scripts?.[name] === 'string');
+  const publishableEntry = ['main', 'module', 'exports', 'types', 'bin'].some((field) => parsed[field] !== undefined);
+  /* Declarar `workspaces` describe la raiz que agrupa a otros, no un producto. */
+  let role = parsed.workspaces ? 'workspace-root' : (!runnableScript && publishableEntry ? 'package' : 'application');
+  /* Un script que corre un archivo con node levanta un proceso: es backend aunque no haya ninguna dependencia declarada. */
+  const nodeEntryScript = ['start', 'dev', 'serve'].some((name) => /^node\s+\S+/.test(String(parsed.scripts?.[name] || '').trim()));
   for (const [dependency, [label, detectedKind]] of FRAMEWORKS) {
     if (!Object.hasOwn(dependencies, dependency)) continue;
     technologies.push(label);
@@ -303,6 +375,7 @@ function packageTarget(root, directory, parsed, relativeManifest) {
     root, directory, kind, role, name: parsed.name, framework, language: technologies.includes('TypeScript') ? 'TypeScript' : 'JavaScript',
     confidence: framework ? (previewProfile ? 'high' : 'strong') : 'medium', evidence, technologies,
     capabilities: { webPreview: Boolean(previewProfile) }, previewProfile,
+    fileSignals: { web: false, backend: nodeEntryScript },
   });
 }
 
@@ -335,6 +408,39 @@ function textTarget(root, directory, fileName, content) {
   return null;
 }
 
+/*
+ * La evidencia se guarda por directorio y despues se suma hacia arriba, asi un
+ * target en `apps/web` ve lo suyo y la raiz ve todo, sin recorrer dos veces.
+ */
+function recordEvidence(evidence, relativeDirectory) {
+  const current = evidence.get(relativeDirectory) || { languages: new Map(), databases: new Set(), markers: new Set(), entries: [] };
+  evidence.set(relativeDirectory, current);
+  return current;
+}
+
+function aggregateEvidence(evidence, relativePath) {
+  const languages = new Map();
+  const databases = new Set();
+  const markers = new Set();
+  const entries = [];
+  for (const [directory, found] of evidence) {
+    if (relativePath !== '.' && directory !== relativePath && !directory.startsWith(`${relativePath}/`)) continue;
+    for (const [language, count] of found.languages) languages.set(language, (languages.get(language) || 0) + count);
+    for (const database of found.databases) databases.add(database);
+    for (const marker of found.markers) markers.add(marker);
+    for (const entry of found.entries) entries.push(entry);
+  }
+  const ranked = [...languages.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+  return {
+    languages: ranked.map(([language]) => language),
+    /* El lenguaje principal es el mas frecuente que no sea de acompañamiento: HTML y CSS no definen un stack por si solos. */
+    primaryLanguage: ranked.find(([language]) => !SUPPORTING_LANGUAGES.has(language))?.[0] || ranked[0]?.[0] || null,
+    databases: [...databases],
+    markers,
+    entries,
+  };
+}
+
 function productRootOf(relativePath) {
   if (relativePath === '.') return '.';
   const segments = relativePath.split('/');
@@ -349,12 +455,88 @@ function productRootOf(relativePath) {
  * navegador, asi que declara solo movil.
  */
 function platformsOf(item) {
-  if (item.role === 'package') return ['library'];
+  if (item.role === 'package' || item.role === 'workspace-root') return ['library'];
   const base = PLATFORM_BY_KIND.get(item.kind) || 'code';
   const shells = unique(item.technologies.map((technology) => PLATFORM_BY_TECHNOLOGY.get(technology)));
   if (shells.includes('mobile')) return ['mobile'];
-  if (shells.includes('desktop')) return unique(['desktop', base]);
-  return [base];
+  const platforms = [];
+  if (shells.includes('desktop')) platforms.push('desktop');
+  if (item.fileSignals?.web) platforms.push('web');
+  if (item.fileSignals?.backend) platforms.push('backend');
+  /* `code` es lo que queda cuando no se sabe nada mejor: no vale la pena decirlo si los archivos ya dijeron algo. */
+  if (!platforms.length || base !== 'code') platforms.push(base);
+  return unique(platforms);
+}
+
+const KIND_BY_LANGUAGE = new Map([
+  ['Python', 'python'], ['Go', 'go'], ['Rust', 'rust'], ['Ruby', 'ruby'], ['PHP', 'php'],
+  ['Java', 'jvm'], ['Kotlin', 'jvm'], ['C#', 'dotnet'], ['Swift', 'swift'], ['Dart', 'dart'],
+  ['Elixir', 'elixir'], ['C', 'native'], ['C++', 'native'],
+]);
+
+/*
+ * Un proyecto puede no tener manifiesto y ser perfectamente real: una pagina con
+ * index.html, un script de Python, un binario de Go. Antes esas carpetas salian
+ * como "generic" y por lo tanto sin ninguna aplicacion.
+ */
+function synthesizeTarget(root, found) {
+  if (!found.primaryLanguage && !found.markers.has('index.html')) return null;
+  const web = found.markers.has('index.html');
+  const kind = web ? 'web' : KIND_BY_LANGUAGE.get(found.primaryLanguage) || 'javascript';
+  return target({
+    root,
+    directory: root,
+    kind,
+    name: path.basename(root),
+    framework: null,
+    language: found.primaryLanguage,
+    confidence: 'low',
+    evidence: [],
+    technologies: found.languages,
+    fileSignals: { web, backend: false },
+  });
+}
+
+function enrichTarget(item, found, serverFindings) {
+  const signals = serverFindings.get(item.relativePath) || { technologies: [], backend: false };
+  item.language = item.language || found.primaryLanguage;
+  item.fileSignals = {
+    web: item.fileSignals.web || found.markers.has('index.html'),
+    backend: item.fileSignals.backend || signals.backend,
+  };
+  item.technologies = unique([...item.technologies, ...signals.technologies, ...found.databases, ...found.languages]).slice(0, 16);
+  return item;
+}
+
+/*
+ * Abrir el entry point es lo unico que distingue "un archivo .js" de "un
+ * servidor HTTP". Se lee un puñado, acotado por cantidad y por bytes, y solo se
+ * buscan patrones: nunca se ejecuta nada.
+ */
+async function scanEntryFiles(targets, evidence, limits) {
+  const findings = new Map();
+  let read = 0;
+  for (const item of targets) {
+    const found = aggregateEvidence(evidence, item.relativePath);
+    const technologies = [];
+    let backend = false;
+    for (const entry of found.entries) {
+      if (read >= MAX_ENTRY_FILES) break;
+      if (entry.size > limits.maxFileBytes) continue;
+      let content;
+      try { content = await fs.promises.readFile(entry.path, 'utf8'); } catch { continue; }
+      read += 1;
+      const scanned = content.slice(0, MAX_ENTRY_SCAN_BYTES);
+      for (const [pattern, label] of SERVER_SIGNALS) {
+        if (!pattern.test(scanned)) continue;
+        technologies.push(label);
+        backend = true;
+      }
+      if (NATIVE_PROCESS_SIGNAL.test(scanned)) technologies.push('Native processes');
+    }
+    if (technologies.length || backend) findings.set(item.relativePath, { technologies: unique(technologies), backend });
+  }
+  return findings;
 }
 
 function runnableFirst(a, b) {
@@ -381,7 +563,7 @@ function buildProducts(root, targets) {
       id: targetId('product', relativePath),
       name: String(anchor?.name || (relativePath === '.' ? path.basename(root) : path.posix.basename(relativePath))).slice(0, 100),
       relativePath,
-      role: members.some((item) => item.role !== 'package') ? 'application' : 'library',
+      role: members.some((item) => item.role === 'application') ? 'application' : 'library',
       platforms,
       technologies: unique(members.flatMap((item) => [item.framework, ...item.technologies])).slice(0, 12),
       targetIds: ordered.map((item) => item.id),
@@ -408,6 +590,7 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   const runtimes = [];
   const lockfiles = [];
   const environmentNames = new Map();
+  const evidence = new Map();
   const gitRoots = [];
   const fingerprintEntries = [];
   let environmentFilesRead = 0;
@@ -501,6 +684,8 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
         fingerprintEntries.push(`${toRelative(root, absolute)}:${stats.isDirectory() ? 'directory' : stats.size}:${Math.trunc(stats.mtimeMs)}`);
       }
       if (stats.isDirectory()) {
+        const directoryDatabase = DATABASE_BY_MARKER.get(entry.name);
+        if (directoryDatabase) recordEvidence(evidence, toRelative(root, directory)).databases.add(directoryDatabase);
         if (/\.xcodeproj$/i.test(entry.name)) {
           const detected = target({ root, directory, kind: 'apple', framework: 'Xcode', language: 'Swift / Objective-C', confidence: 'strong', evidence: [toRelative(root, absolute)], technologies: ['Xcode', 'Apple platforms'] });
           targets.push(detected);
@@ -510,6 +695,18 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
         continue;
       }
       const relativeFile = toRelative(root, absolute);
+      /* Evidencia de archivo: se toma de las entradas que el recorrido ya visita, sin abrir nada todavia. */
+      const extension = path.extname(entry.name).toLowerCase();
+      const language = LANGUAGE_BY_EXTENSION.get(extension);
+      const database = DATABASE_BY_EXTENSION.get(extension) || DATABASE_BY_MARKER.get(entry.name);
+      const evidenceDirectory = toRelative(root, directory);
+      if (!isHelperDirectory(evidenceDirectory) && (language || database || ENTRY_FILE_NAMES.includes(entry.name) || entry.name === 'index.html')) {
+        const found = recordEvidence(evidence, evidenceDirectory);
+        if (language) found.languages.set(language, (found.languages.get(language) || 0) + 1);
+        if (database) found.databases.add(database);
+        if (entry.name === 'index.html') found.markers.add('index.html');
+        if (ENTRY_FILE_NAMES.includes(entry.name)) found.entries.push({ path: absolute, relativePath: relativeFile, size: stats.size });
+      }
       const candidate = EXACT_MANIFESTS.has(entry.name) || /\.(?:csproj|sln)$/i.test(entry.name);
       const environmentKind = ENV_FILE.test(entry.name)
         ? (/\.(?:example|sample|template)$/i.test(entry.name) ? 'example' : 'local-env')
@@ -605,8 +802,15 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   }
 
   emitProgress('summarizing', null, true);
+  /* Sin ningun manifiesto todavia puede haber un proyecto real: lo dicen los archivos. */
+  if (!targets.length) {
+    const synthesized = synthesizeTarget(root, aggregateEvidence(evidence, '.'));
+    if (synthesized) targets.push(synthesized);
+  }
   const deduplicated = [...new Map(targets.map((item) => [`${item.kind}:${item.relativePath}`, item])).values()]
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.kind.localeCompare(b.kind));
+  const serverFindings = await scanEntryFiles(deduplicated, evidence, limits);
+  for (const item of deduplicated) enrichTarget(item, aggregateEvidence(evidence, item.relativePath), serverFindings);
   for (const item of deduplicated) {
     for (const technology of item.technologies) if (['Supabase', 'Firebase', 'Prisma'].includes(technology)) services.add(technology);
   }

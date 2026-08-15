@@ -4,6 +4,30 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-15 (stack detection)
+
+### Scope
+
+- Made workspace analysis read a project even when it declares no dependencies.
+- Fixed an inverted rule that reported applications as shared libraries.
+- Prepared desktop release `1.1.21`.
+
+### Key Changes
+
+- Corrected the library rule: `private: true` is what an application declares, not a library, and only `dev` counted as a run script. A local POS that starts with `npm start` was classified as a library, which left its folder reported as having no application. A package is now a library only when it declares a publishable entry point and no run script, and a manifest declaring `workspaces` is workspace scaffolding rather than a product.
+- Added a file-evidence layer collected during the existing directory walk, with no second pass: language counts by extension, `index.html` as a web signal, and schema, migration, and SQLite files as database signals.
+- Read a bounded number of entry points to tell a loose script from a server, matching only static patterns and never executing project code.
+- Synthesised a target from file evidence when a folder has no manifest at all, so a plain HTML page or a Python script is a project instead of an unknown folder.
+- Excluded code confined to helper folders from that synthesis, after a documentation repository with five maintenance scripts was reported as an application.
+
+### Validation
+
+- `npm run check` with 422 passing tests.
+- Six new analyzer tests covering the private-package rule, publishable libraries, manifest-less projects, language-only projects, file-based database evidence, and the documentation-repository case.
+- Verified against three real folders: a dependency-free POS, a two-product workspace, and a documentation repository.
+
+---
+
 ## 2026-08-15 (later)
 
 ### Scope
