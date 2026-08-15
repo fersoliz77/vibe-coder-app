@@ -5,7 +5,20 @@ const { validateProjectCwd, isSubPath } = require('../ipc/fsGuards');
 const { classifyWebScript } = require('./previewCommands');
 
 const SCHEMA_VERSION = 3;
-const DEFAULT_LIMITS = Object.freeze({ maxDepth: 6, maxEntries: 5000, maxFiles: 256, maxBytes: 4 * 1024 * 1024, maxFileBytes: 256 * 1024, timeoutMs: 2500 });
+/*
+ * Estos limites eran un presupuesto de latencia: 2500 ms y 5000 entradas para
+ * que el dialogo contestara rapido. El efecto real era el contrario al buscado.
+ * La carpeta de este mismo repo tarda ~900 ms en caliente y pasaba los 2500 ms
+ * en frio, asi que volvia con "analisis parcial" sin haber terminado de mirarla
+ * y quien importaba decidia sobre datos incompletos, que es peor que esperar.
+ *
+ * El analisis ahora tarda lo que tenga que tardar y avisa mientras corre. Lo
+ * que queda son topes contra carpetas patologicas -- una raiz de disco entera,
+ * un arbol ciclico -- no un presupuesto de latencia. Cuando uno de estos salta
+ * es una anomalia real y el aviso de resultado parcial significa algo.
+ */
+const DEFAULT_LIMITS = Object.freeze({ maxDepth: 10, maxEntries: 200000, maxFiles: 4000, maxBytes: 64 * 1024 * 1024, maxFileBytes: 256 * 1024, timeoutMs: 120000 });
+const PROGRESS_INTERVAL_MS = 120;
 const IGNORED_DIRECTORIES = new Set([
   '.git', '.hg', '.svn', 'node_modules', 'bower_components', '.next', '.nuxt', '.output', '.svelte-kit', '.angular',
   '.cache', '.parcel-cache', '.turbo', '.nx', 'dist', 'out', 'build', 'coverage', 'target', 'bin', 'obj', '.gradle',
@@ -24,6 +37,14 @@ const FRAMEWORKS = new Map([
   ['react', ['React', 'web']], ['svelte', ['Svelte', 'web']], ['@nestjs/core', ['NestJS', 'service']],
   ['express', ['Express', 'service']], ['fastify', ['Fastify', 'service']], ['hono', ['Hono', 'service']],
   ['electron', ['Electron', 'desktop']], ['@tauri-apps/api', ['Tauri', 'desktop']],
+  /*
+   * Van al final a proposito: `react` ya paso antes y fijo el kind en `web`.
+   * Estas entradas no lo cambian (mover el kind cambiaria el id del target y
+   * los proyectos ya importados guardan ese id), pero si dejan el shell
+   * declarado en `technologies`, que es de donde el agrupado por producto saca
+   * la plataforma real.
+   */
+  ['react-native', ['React Native', 'mobile']], ['expo', ['Expo', 'mobile']], ['@capacitor/core', ['Capacitor', 'mobile']],
 ]);
 const BACKEND_PACKAGES = new Map([
   ['@supabase/supabase-js', 'Supabase'], ['firebase', 'Firebase'], ['prisma', 'Prisma'], ['@prisma/client', 'Prisma'],
@@ -37,6 +58,31 @@ const SCRIPT_NAME = /^[A-Za-z0-9:_-]{1,80}$/;
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
 const PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
 const STRUCTURAL_MARKERS = new Set(['.git', 'node_modules', 'pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json', 'firebase.json', 'vercel.json', '.vercel', 'Dockerfile', 'compose.yaml', 'docker-compose.yml', 'supabase', 'prisma']);
+
+/*
+ * Un manifiesto no es un producto.
+ *
+ * El analisis encuentra targets: un package.json es un target, un pubspec.yaml
+ * es otro. Pero una carpeta con `mi-app/web` y `mi-app/movil` no tiene dos
+ * productos, tiene uno que corre en dos plataformas, y quien importa la
+ * carpeta necesita leer eso y no una lista plana de manifiestos.
+ *
+ * El agrupado es por carpeta de producto: el primer segmento de la ruta, salvo
+ * que sea un contenedor de monorepo (`apps/`, `packages/`), donde cada hijo es
+ * su propio producto. Es la convencion real de estos repos y se puede
+ * comprobar leyendo rutas, sin ejecutar nada del proyecto.
+ */
+const PRODUCT_CONTAINERS = new Set(['apps', 'packages', 'services', 'sites', 'examples', 'projects', 'clients', 'servers', 'functions', 'workspaces']);
+const PLATFORM_BY_KIND = new Map([
+  ['web', 'web'], ['flutter', 'mobile'], ['android', 'mobile'], ['apple', 'mobile'], ['swift', 'mobile'], ['dart', 'mobile'],
+  ['desktop', 'desktop'], ['service', 'backend'], ['python', 'backend'], ['go', 'backend'], ['jvm', 'backend'],
+  ['php', 'backend'], ['ruby', 'backend'], ['elixir', 'backend'], ['dotnet', 'backend'], ['rust', 'backend'], ['native', 'backend'],
+]);
+const PLATFORM_BY_TECHNOLOGY = new Map([
+  ['Electron', 'desktop'], ['Tauri', 'desktop'], ['React Native', 'mobile'], ['Expo', 'mobile'], ['Capacitor', 'mobile'],
+]);
+const PLATFORM_ORDER = ['web', 'mobile', 'desktop', 'backend', 'code', 'library'];
+const CONFIDENCE_RANK = { high: 0, strong: 1, medium: 2, low: 3 };
 
 const toRelative = (root, target) => path.relative(root, target).split(path.sep).join('/') || '.';
 const targetId = (kind, relativePath) => `${kind}-${crypto.createHash('sha1').update(`${kind}:${relativePath}`).digest('hex').slice(0, 10)}`;
@@ -289,7 +335,63 @@ function textTarget(root, directory, fileName, content) {
   return null;
 }
 
-async function analyzeWorkspace(projectPath, customLimits = {}) {
+function productRootOf(relativePath) {
+  if (relativePath === '.') return '.';
+  const segments = relativePath.split('/');
+  if (segments.length > 1 && PRODUCT_CONTAINERS.has(segments[0].toLowerCase())) return segments.slice(0, 2).join('/');
+  return segments[0];
+}
+
+/*
+ * Un target puede correr en mas de una plataforma y el kind solo guarda una.
+ * Electron es interfaz web dentro de una carcasa de escritorio, asi que declara
+ * las dos; React Native comparte las dependencias de React pero no abre en un
+ * navegador, asi que declara solo movil.
+ */
+function platformsOf(item) {
+  if (item.role === 'package') return ['library'];
+  const base = PLATFORM_BY_KIND.get(item.kind) || 'code';
+  const shells = unique(item.technologies.map((technology) => PLATFORM_BY_TECHNOLOGY.get(technology)));
+  if (shells.includes('mobile')) return ['mobile'];
+  if (shells.includes('desktop')) return unique(['desktop', base]);
+  return [base];
+}
+
+function runnableFirst(a, b) {
+  const runnable = (item) => Number(item.capabilities.webPreview || item.capabilities.androidPreview);
+  return runnable(b) - runnable(a)
+    || (CONFIDENCE_RANK[a.confidence] ?? 9) - (CONFIDENCE_RANK[b.confidence] ?? 9)
+    || a.relativePath.localeCompare(b.relativePath);
+}
+
+function buildProducts(root, targets) {
+  const groups = new Map();
+  for (const item of targets) {
+    if (item.kind === 'generic') continue;
+    const relativePath = productRootOf(item.relativePath);
+    const members = groups.get(relativePath) || [];
+    members.push(item);
+    groups.set(relativePath, members);
+  }
+  return [...groups.entries()].map(([relativePath, members]) => {
+    const ordered = [...members].sort(runnableFirst);
+    const anchor = ordered.find((item) => item.relativePath === relativePath);
+    const platforms = PLATFORM_ORDER.filter((platform) => members.some((item) => platformsOf(item).includes(platform)));
+    return {
+      id: targetId('product', relativePath),
+      name: String(anchor?.name || (relativePath === '.' ? path.basename(root) : path.posix.basename(relativePath))).slice(0, 100),
+      relativePath,
+      role: members.some((item) => item.role !== 'package') ? 'application' : 'library',
+      platforms,
+      technologies: unique(members.flatMap((item) => [item.framework, ...item.technologies])).slice(0, 12),
+      targetIds: ordered.map((item) => item.id),
+      primaryTargetId: ordered[0].id,
+      previewable: members.some((item) => item.capabilities.webPreview || item.capabilities.androidPreview),
+    };
+  }).sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+}
+
+async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = null, ...customLimits } = {}) {
   const root = validateProjectCwd(projectPath);
   const limits = { ...DEFAULT_LIMITS, ...customLimits };
   const startedAt = Date.now();
@@ -319,9 +421,45 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   };
   const limitReached = () => Date.now() - startedAt > limits.timeoutMs || entriesVisited >= limits.maxEntries || filesRead >= limits.maxFiles || bytesRead >= limits.maxBytes;
 
+  /*
+   * Esperar sin saber que pasa se siente mas largo que esperar viendo avanzar.
+   * El progreso sale cada 120 ms y ademas cada vez que aparece una aplicacion,
+   * que es el unico evento que le importa a quien mira.
+   */
+  const foundNames = [];
+  let lastProgressAt = 0;
+  const emitProgress = (phase, directory, force = false) => {
+    if (typeof onProgress !== 'function') return;
+    const at = Date.now();
+    if (!force && at - lastProgressAt < PROGRESS_INTERVAL_MS) return;
+    lastProgressAt = at;
+    onProgress({
+      phase,
+      directory: directory === null ? null : toRelative(root, directory),
+      entriesVisited,
+      filesRead,
+      found: foundNames.slice(-12),
+      foundCount: foundNames.length,
+      elapsedMs: at - startedAt,
+    });
+  };
+  const recordFound = (detected, directory) => {
+    foundNames.push(detected.name);
+    emitProgress('scanning', directory, true);
+  };
+  const abortIfCancelled = () => {
+    if (typeof shouldAbort !== 'function' || !shouldAbort()) return;
+    const error = new Error('The workspace analysis was cancelled.');
+    error.code = 'ANALYSIS_CANCELLED';
+    throw error;
+  };
+
+  emitProgress('scanning', root, true);
   while (queue.length) {
+    abortIfCancelled();
     if (limitReached()) { markScanLimit(); break; }
     const { directory, depth } = queue.shift();
+    emitProgress('scanning', directory);
     const entries = [];
     let truncatedDirectory = false;
     try {
@@ -353,6 +491,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
     for (const entry of entries) {
       if (limitReached()) { markScanLimit(); queue.length = 0; break; }
       entriesVisited += 1;
+      if (entriesVisited % 512 === 0) abortIfCancelled();
       const absolute = path.join(directory, entry.name);
       if (!isSubPath(root, absolute)) continue;
       let stats;
@@ -362,7 +501,11 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
         fingerprintEntries.push(`${toRelative(root, absolute)}:${stats.isDirectory() ? 'directory' : stats.size}:${Math.trunc(stats.mtimeMs)}`);
       }
       if (stats.isDirectory()) {
-        if (/\.xcodeproj$/i.test(entry.name)) targets.push(target({ root, directory, kind: 'apple', framework: 'Xcode', language: 'Swift / Objective-C', confidence: 'strong', evidence: [toRelative(root, absolute)], technologies: ['Xcode', 'Apple platforms'] }));
+        if (/\.xcodeproj$/i.test(entry.name)) {
+          const detected = target({ root, directory, kind: 'apple', framework: 'Xcode', language: 'Swift / Objective-C', confidence: 'strong', evidence: [toRelative(root, absolute)], technologies: ['Xcode', 'Apple platforms'] });
+          targets.push(detected);
+          recordFound(detected, directory);
+        }
         if (depth < limits.maxDepth && !IGNORED_DIRECTORIES.has(entry.name)) queue.push({ directory: absolute, depth: depth + 1 });
         continue;
       }
@@ -415,6 +558,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
           if (typeof parsed.engines?.node === 'string') runtimes.push({ id: `node:${detectedTarget.id}`, targetId: detectedTarget.id, runtime: 'node', declaredRange: parsed.engines.node.slice(0, 80), source: relativeFile, requiredFor: ['dependencies', 'preview', 'build'] });
           if (parsed.workspaces) workspaceSignals.push('JavaScript workspace');
           targets.push(detectedTarget);
+          recordFound(detectedTarget, directory);
           const previewProfile = classifyWebScript(parsed);
           for (const name of Object.keys(parsed.scripts || {}).filter((name) => SCRIPT_NAME.test(name)).sort().slice(0, 80)) {
             scripts.push({ targetId: detectedTarget.id, ecosystem: 'npm', name: name.slice(0, 80), category: scriptCategory(name), executableByIde: name === 'dev' && Boolean(previewProfile), managedPreviewProfile: name === 'dev' ? previewProfile : null });
@@ -450,6 +594,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
         const detected = textTarget(root, directory, entry.name, content);
         if (detected) {
           targets.push(detected);
+          recordFound(detected, directory);
           if (entry.name === 'pubspec.yaml') {
             const declaredRange = content.match(/^\s*sdk\s*:\s*['"]?([^'"\r\n#]+)/m)?.[1]?.trim().slice(0, 80) || null;
             runtimes.push({ id: `dart:${detected.id}`, targetId: detected.id, runtime: detected.kind === 'flutter' ? 'flutter' : 'dart', declaredRange, source: relativeFile, requiredFor: ['dependencies', 'preview', 'build'] });
@@ -459,6 +604,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
     }
   }
 
+  emitProgress('summarizing', null, true);
   const deduplicated = [...new Map(targets.map((item) => [`${item.kind}:${item.relativePath}`, item])).values()]
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.kind.localeCompare(b.kind));
   for (const item of deduplicated) {
@@ -468,6 +614,8 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
   const supported = deduplicated.filter((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
   const recommended = supported.find((item) => item.relativePath === 'web') || supported.find((item) => item.relativePath === '.') || supported[0] || deduplicated[0];
   const layout = deduplicated.length > 1 || workspaceSignals.length ? 'workspace' : deduplicated[0].kind === 'generic' ? 'unknown' : 'single';
+  /* Los productos son una lectura de `deduplicated`, no una entrada nueva: quedan fuera del fingerprint para no invalidar los workspaces ya guardados. */
+  const products = buildProducts(root, deduplicated);
   const git = {
     detected: gitRoots.length > 0,
     repositoryKind: gitRoots.length ? 'normal' : 'none',
@@ -506,7 +654,9 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
     const manager = declaredManager || (lockManagers.length === 1 ? lockManagers[0] : null);
     if (declaredManager && lockManagers.length && !lockManagers.includes(declaredManager)) warnings.push({ code: 'PACKAGE_MANAGER_CONFLICT', path: scopePath, message: 'Package manager declarations and lockfiles conflict.' });
     const lockfile = manager ? scopeLockfiles.find((item) => item.manager === manager)?.path || null : null;
-    const resolvedNodeModules = unique(record.requiredPackageNames.map((packageName) => resolvedDependencyRoot(root, record.directory, packageName)));
+    /* Una sola resolucion por paquete: antes se recorria el arbol de node_modules dos veces por manifiesto, y con el tope de archivos ya subido eso se nota. */
+    const resolutions = record.requiredPackageNames.map((packageName) => resolvedDependencyRoot(root, record.directory, packageName));
+    const resolvedNodeModules = unique(resolutions);
     dependencies.push({
       targetId: record.targetId,
       ecosystem: record.ecosystem,
@@ -521,7 +671,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
         lockfile,
       },
       resolvedNodeModules,
-      installState: !record.requiredPackageNames.length ? 'not-required' : record.requiredPackageNames.every((packageName) => resolvedDependencyRoot(root, record.directory, packageName)) ? 'appears-installed' : 'install-needed',
+      installState: !record.requiredPackageNames.length ? 'not-required' : resolutions.every(Boolean) ? 'appears-installed' : 'install-needed',
     });
   }
   const environment = publicEnvironment(environmentNames);
@@ -548,6 +698,7 @@ async function analyzeWorkspace(projectPath, customLimits = {}) {
     services: serviceList,
     integrations,
     targets: deduplicated,
+    products,
     roots,
     scripts: sortedScripts,
     dependencies,

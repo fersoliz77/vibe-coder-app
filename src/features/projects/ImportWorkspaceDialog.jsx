@@ -12,7 +12,7 @@ function StatusMark({ status }) {
 }
 
 export default function ImportWorkspaceDialog({ selection, onCancel, onImported, onChooseAnother }) {
-  const { t } = useI18n();
+  const { t, language } = useI18n();
   const dialogRef = useRef(null);
   const titleRef = useRef(null);
   const tabsRef = useRef(null);
@@ -25,6 +25,7 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
   const [selectedTargetId, setSelectedTargetId] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [error, setError] = useState('');
+  const [progress, setProgress] = useState(null);
   const [retryable, setRetryable] = useState(false);
   const [canReturnToReview, setCanReturnToReview] = useState(false);
   const busy = ['analyzing', 'planning', 'importing'].includes(phase);
@@ -51,8 +52,17 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
     setPhase('review');
   };
 
+  /* El escaneo ya no se corta por tiempo, asi que el dialogo tiene que contar en que va en vez de mostrar un spinner mudo. */
+  useEffect(() => {
+    if (!window.electronAPI?.projects?.onImportProgress) return undefined;
+    return window.electronAPI.projects.onImportProgress((event) => {
+      if (event?.grantId === selection.id) setProgress(event);
+    });
+  }, [selection.id]);
+
   const analyze = () => {
     setError('');
+    setProgress(null);
     setCanReturnToReview(false);
     setPhase('analyzing');
     window.electronAPI.projects.analyzeImport(selection.id)
@@ -111,6 +121,22 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
   const readiness = analysis?.readiness;
   const assessment = analysis?.projectAssessment;
   const selectedTarget = analysis?.targets.find((target) => target.id === selectedTargetId);
+  /*
+   * Lo primero que responde el dialogo es "que hay en esta carpeta". Antes
+   * abria con un puntaje sobre 100 y una lista plana de manifiestos, que no es
+   * lo que se pregunta quien acaba de elegir una carpeta.
+   */
+  const products = analysis?.products || [];
+  const applications = products.filter((product) => product.role === 'application');
+  const groupedTargetIds = new Set(products.flatMap((product) => product.targetIds));
+  const ungroupedTargets = (analysis?.targets || []).filter((target) => !groupedTargetIds.has(target.id));
+  const listPlatforms = (product) => new Intl.ListFormat(language, { style: 'long', type: 'conjunction' })
+    .format(product.platforms.map((platform) => t(`importWorkspace.platforms.${platform}`)));
+  const renderTarget = (target) => <label key={target.id} className={`import-target ${selectedTargetId === target.id ? 'is-selected' : ''}`}>
+    <input type="radio" name="primary-target" value={target.id} checked={selectedTargetId === target.id} onChange={() => setSelectedTargetId(target.id)} />
+    <span className="import-target__marker" />
+    <span className="import-target__body"><span className="import-target__heading"><strong>{target.name}</strong><em>{t(`importWorkspace.${CONFIDENCE_KEYS[target.confidence] || 'lowConfidence'}`)}</em></span><code>{target.relativePath}</code><span>{target.framework || target.kind} · {target.language || t('importWorkspace.languageUnknown')}</span><small>{target.capabilities.webPreview ? t('importWorkspace.webPreviewReady') : target.capabilities.androidPreview ? t('importWorkspace.androidPreviewReady') : t('importWorkspace.editingOnly')}</small></span>
+  </label>;
   const canPlan = phase === 'review' && selectedTargetId && (!assessment?.requiresAcknowledgement || acknowledged);
   const handleSectionKeyDown = (event) => {
     const current = SECTIONS.indexOf(section);
@@ -135,10 +161,44 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
 
         <div className="import-workspace__source"><span>{selection.name}</span><code title={selection.path}>{selection.path}</code><small>{t('importWorkspace.readOnly')}</small></div>
 
-        {phase === 'analyzing' && <div className="import-workspace__loading" role="status" aria-live="polite"><span className="import-workspace__spinner" /><h3>{t('importWorkspace.analyzing')}</h3><p>{t('importWorkspace.analyzingCopy')}</p></div>}
+        {phase === 'analyzing' && <div className="import-workspace__loading" role="status" aria-live="polite">
+          <span className="import-workspace__spinner" />
+          <h3>{progress?.phase === 'summarizing' ? t('importWorkspace.progressSummarizing') : t('importWorkspace.analyzing')}</h3>
+          <p>{t('importWorkspace.analyzingCopy')}</p>
+          {/* Los contadores cambian varias veces por segundo: quedan fuera de la region viva para no dictarle cada numero a un lector de pantalla. */}
+          {progress && <div className="import-workspace__progress" aria-live="off">
+            {progress.directory && progress.phase === 'scanning' && <code>{progress.directory}</code>}
+            <div className="import-workspace__progress-counters">
+              <span>{t('importWorkspace.progressFolders', { count: progress.entriesVisited })}</span>
+              <span>{t('importWorkspace.progressManifests', { count: progress.filesRead })}</span>
+              <span>{t('importWorkspace.progressElapsed', { seconds: Math.round(progress.elapsedMs / 1000) })}</span>
+            </div>
+            {progress.foundCount > 0 && <p className="import-workspace__progress-found">{t('importWorkspace.progressFound', { count: progress.foundCount })}<small>{progress.found.join(' · ')}</small></p>}
+          </div>}
+        </div>}
         {phase === 'planning' && <div className="import-workspace__loading" role="status" aria-live="polite"><span className="import-workspace__spinner" /><h3>{t('importWorkspace.preparingPlan')}</h3><p>{t('importWorkspace.preparingPlanCopy')}</p></div>}
 
         {phase === 'review' && analysis && <div className="import-workspace__review">
+          <section className={`import-workspace__products ${applications.length ? '' : 'is-empty'}`} aria-labelledby="import-workspace-products-title">
+            <span>{t('importWorkspace.whatWeFound')}</span>
+            <h3 id="import-workspace-products-title">{applications.length === 0 ? t('importWorkspace.productsNone') : applications.length === 1 ? t('importWorkspace.productsOne') : t('importWorkspace.productsMany', { count: applications.length })}</h3>
+            <p>{applications.length === 0 ? t('importWorkspace.productsNoneCopy') : t('importWorkspace.productsCopy')}</p>
+            {products.length > 0 && <ul className="import-workspace__product-list">
+              {products.map((product) => <li key={product.id} className="import-product">
+                <div className="import-product__heading">
+                  <strong>{product.name}</strong>
+                  {product.role === 'library' && <em>{t('importWorkspace.libraryProduct')}</em>}
+                  <code title={product.relativePath}>{product.relativePath}</code>
+                </div>
+                <p>{t('importWorkspace.productHas', { platforms: listPlatforms(product) })}</p>
+                <div className="import-product__platforms">
+                  {product.platforms.map((platform) => <span key={platform} className={`import-platform import-platform--${platform}`}>{t(`importWorkspace.platforms.${platform}`)}</span>)}
+                </div>
+                {product.technologies.length > 0 && <small>{product.technologies.join(' · ')}</small>}
+              </li>)}
+            </ul>}
+          </section>
+
           <div className="import-workspace__assessment">
             <div className={`import-workspace__score import-workspace__score--${assessment.classification}`}><strong>{assessment.score}</strong><span>/ 100</span></div>
             <div><span>{t('importWorkspace.assessment')}</span><h3>{t(`importWorkspace.classifications.${assessment.classification}`)}</h3><p>{t(`importWorkspace.readiness.${readiness.status}`)}</p></div>
@@ -152,7 +212,7 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
           {section === 'audit' && <div id="import-workspace-panel-audit" className="import-workspace__panel" role="tabpanel" aria-labelledby="import-workspace-tab-audit">
             <div className="import-workspace__summary">
               <div><span>{t('importWorkspace.layout')}</span><strong>{t(`importWorkspace.layouts.${analysis.layout}`)}</strong></div>
-              <div><span>{t('importWorkspace.detectedApps')}</span><strong>{analysis.targets.length}</strong></div>
+              <div><span>{t('importWorkspace.detectedProducts')}</span><strong>{applications.length}</strong></div>
               <div><span>{t('importWorkspace.packageManagers')}</span><strong>{analysis.packageManagers.join(', ') || t('importWorkspace.noneDetected')}</strong></div>
             </div>
             <div className="import-workspace__checks">
@@ -166,11 +226,11 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
             <fieldset className="import-workspace__targets">
               <legend>{t('importWorkspace.primaryTarget')}</legend>
               <p>{t('importWorkspace.primaryTargetCopy')}</p>
-              {analysis.targets.map((target) => <label key={target.id} className={`import-target ${selectedTargetId === target.id ? 'is-selected' : ''}`}>
-                <input type="radio" name="primary-target" value={target.id} checked={selectedTargetId === target.id} onChange={() => setSelectedTargetId(target.id)} />
-                <span className="import-target__marker" />
-                <span className="import-target__body"><span className="import-target__heading"><strong>{target.name}</strong><em>{t(`importWorkspace.${CONFIDENCE_KEYS[target.confidence] || 'lowConfidence'}`)}</em></span><code>{target.relativePath}</code><span>{target.framework || target.kind} · {target.language || t('importWorkspace.languageUnknown')}</span><small>{target.capabilities.webPreview ? t('importWorkspace.webPreviewReady') : target.capabilities.androidPreview ? t('importWorkspace.androidPreviewReady') : t('importWorkspace.editingOnly')}</small></span>
-              </label>)}
+              {products.map((product) => <div key={product.id} className="import-workspace__product-group">
+                <span className="import-workspace__product-group-name">{product.name}<small>{listPlatforms(product)}</small></span>
+                {product.targetIds.map((id) => analysis.targets.find((target) => target.id === id)).filter(Boolean).map(renderTarget)}
+              </div>)}
+              {ungroupedTargets.map(renderTarget)}
             </fieldset>
             {(analysis.workspaceSignals.length > 0 || analysis.services.length > 0) && <div className="import-workspace__signals"><span>{t('importWorkspace.detectedTools')}</span><p>{[...analysis.workspaceSignals, ...analysis.services].join(' · ')}</p></div>}
           </div>}

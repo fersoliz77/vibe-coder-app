@@ -71,6 +71,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     acknowledgeRecovery: () => ipcRenderer.invoke('projects:acknowledge-recovery'),
     chooseImport: () => ipcRenderer.invoke('projects:choose-import'),
     analyzeImport: (grantId) => ipcRenderer.invoke('projects:analyze-import', grantId),
+    onImportProgress: (callback) => subscribe('projects:import-progress', callback, (event) => [event]),
     planImport: (grantId, choices) => ipcRenderer.invoke('projects:plan-import', grantId, choices),
     confirmImport: (grantId, planId) => ipcRenderer.invoke('projects:confirm-import', grantId, planId),
     cancelImport: (grantId) => ipcRenderer.invoke('projects:cancel-import', grantId),

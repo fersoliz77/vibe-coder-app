@@ -6,7 +6,7 @@ const { validateProjectCwd } = require('../ipc/fsGuards');
 const { writeJsonAtomic } = require('./atomicJson');
 const { analyzeWorkspace } = require('./workspaceAnalyzer');
 const { deriveRequirements } = require('./requirementsManager');
-const { MAX_PROJECTS_FILE_BYTES, normalizeProjectRecord, toPublicImportAnalysis, toPublicProject } = require('./projectContracts');
+const { MAX_PROJECTS_FILE_BYTES, normalizeProjectRecord, toPublicImportAnalysis, toPublicImportProgress, toPublicProject } = require('./projectContracts');
 
 let projectsFilePath;
 let projectsBackupPath;
@@ -220,12 +220,25 @@ function setupProjectHandlers(ipcMain, getMainWindow, {
   });
 
   ipcMain.handle('projects:analyze-import', async (_, grantId) => {
-    const grant = importGrants.get(String(grantId || ''));
+    const id = String(grantId || '');
+    const grant = importGrants.get(id);
     if (!grant || grant.expiresAt <= now()) {
-      importGrants.delete(String(grantId || ''));
+      importGrants.delete(id);
       throw new Error('The import permission expired. Choose the folder again.');
     }
-    grant.analysis = await analyzeImport(grant.projectPath);
+    /*
+     * El analisis ya no tiene un tope de latencia, asi que informa avance
+     * mientras corre y se corta si quien mira cierra el dialogo: cancelar
+     * borra el permiso, y sin permiso el escaneo no sigue ocupando el proceso.
+     */
+    grant.analysis = await analyzeImport(grant.projectPath, {
+      onProgress: (progress) => {
+        const mainWindow = getMainWindow?.();
+        if (!mainWindow || mainWindow.isDestroyed?.()) return;
+        mainWindow.webContents.send('projects:import-progress', toPublicImportProgress(id, progress));
+      },
+      shouldAbort: () => !importGrants.has(id),
+    });
     grant.plan = null;
     return toPublicImportAnalysis(grant.analysis);
   });

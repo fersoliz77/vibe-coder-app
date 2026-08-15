@@ -318,6 +318,49 @@ Object.assign(dictionaries.es.importWorkspace, {
   },
 });
 
+/*
+ * La primera pregunta de quien importa una carpeta es "que hay adentro", no
+ * "cuanto puntua". Este bloque es el que responde eso en palabras: cuantos
+ * productos hay, cuales son y en que plataformas corre cada uno.
+ */
+Object.assign(dictionaries.en.importWorkspace, {
+  whatWeFound: 'What this folder contains',
+  productsNone: 'No application found in this folder',
+  productsOne: 'One product found',
+  productsMany: '{{count}} products found',
+  productsCopy: 'Each product is grouped by its own folder, with the platforms detected inside it.',
+  productsNoneCopy: 'No application manifest was found here. You can still open the folder to edit files and use the terminal.',
+  productHas: 'Runs on {{platforms}}',
+  libraryProduct: 'Shared library',
+  detectedProducts: 'Products',
+  platforms: { web: 'web', mobile: 'mobile', desktop: 'desktop', backend: 'backend', code: 'code', library: 'library' },
+  progressSummarizing: 'Putting the summary together',
+  progressFolders: '{{count}} entries reviewed',
+  progressManifests: '{{count}} manifests read',
+  progressElapsed: '{{seconds}}s',
+  progressFound: '{{count}} application(s) found so far',
+  analyzingCopy: 'Reading bounded project manifests to identify applications, frameworks, and platforms. Large folders take longer: the analysis runs to the end before showing you the result.',
+});
+
+Object.assign(dictionaries.es.importWorkspace, {
+  whatWeFound: 'Qué contiene esta carpeta',
+  productsNone: 'No hay ninguna aplicación en esta carpeta',
+  productsOne: 'Encontramos 1 producto',
+  productsMany: 'Encontramos {{count}} productos',
+  productsCopy: 'Cada producto se agrupa por su carpeta, con las plataformas que detectamos adentro.',
+  productsNoneCopy: 'No encontramos ningún manifiesto de aplicación acá. Igual podés abrir la carpeta para editar archivos y usar la terminal.',
+  productHas: 'Tiene {{platforms}}',
+  libraryProduct: 'Librería compartida',
+  detectedProducts: 'Productos',
+  platforms: { web: 'web', mobile: 'móvil', desktop: 'escritorio', backend: 'backend', code: 'código', library: 'librería' },
+  progressSummarizing: 'Armando el resumen',
+  progressFolders: '{{count}} elementos revisados',
+  progressManifests: '{{count}} manifiestos leídos',
+  progressElapsed: '{{seconds}}s',
+  progressFound: '{{count}} aplicación(es) encontradas hasta ahora',
+  analyzingCopy: 'Leemos manifiestos acotados para identificar aplicaciones, frameworks y plataformas. En carpetas grandes tarda más: el análisis va hasta el final antes de mostrarte el resultado.',
+});
+
 Object.assign(dictionaries.en.sidebar, { requirements: 'Requirements' });
 Object.assign(dictionaries.es.sidebar, { requirements: 'Requerimientos' });
 Object.assign(dictionaries.en.dashboard, { nextRequirementsTitle: 'Finish preparing this project', nextRequirementsCopy: '{{count}} requirement(s) are waiting for review. Nothing changes until you approve one action.', reviewRequirements: 'Review requirements' });

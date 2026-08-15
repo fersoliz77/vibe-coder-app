@@ -182,6 +182,17 @@ function toPublicImportAnalysis(analysis) {
         androidPreview: target.capabilities?.androidPreview === true,
       },
     })),
+    products: (analysis.products || []).slice(0, 128).map((product) => ({
+      id: product.id,
+      name: product.name,
+      relativePath: product.relativePath,
+      role: product.role,
+      platforms: [...(product.platforms || [])],
+      technologies: [...(product.technologies || [])],
+      targetIds: [...(product.targetIds || [])],
+      primaryTargetId: product.primaryTargetId || null,
+      previewable: product.previewable === true,
+    })),
     packageManagers: [...(analysis.packageManagers || [])],
     workspaceSignals: [...(analysis.workspaceSignals || [])],
     services: [...(analysis.services || [])],
@@ -195,6 +206,25 @@ function toPublicImportAnalysis(analysis) {
     runtimes: (analysis.runtimes || []).map((runtime) => ({ runtime: runtime.runtime })),
     git: { detected: analysis.git?.detected === true },
     integrations: (analysis.integrations || []).map((integration) => ({ name: integration.name })),
+  };
+}
+
+/*
+ * El progreso sale mientras el analisis corre, asi que pasa por el mismo filtro
+ * que el resultado: solo rutas relativas, contadores acotados y nombres de
+ * aplicacion. Nada de rutas absolutas ni contenido de archivos.
+ */
+function toPublicImportProgress(grantId, progress) {
+  const counter = (value) => (Number.isSafeInteger(value) && value >= 0 ? value : 0);
+  return {
+    grantId: String(grantId || ''),
+    phase: progress?.phase === 'summarizing' ? 'summarizing' : 'scanning',
+    directory: safeRelativePath(progress?.directory) ? progress.directory : null,
+    entriesVisited: counter(progress?.entriesVisited),
+    filesRead: counter(progress?.filesRead),
+    foundCount: counter(progress?.foundCount),
+    found: (Array.isArray(progress?.found) ? progress.found : []).slice(0, 12).map((name) => String(name).slice(0, 100)),
+    elapsedMs: counter(progress?.elapsedMs),
   };
 }
 
@@ -218,6 +248,7 @@ module.exports = {
   normalizeWorkspace,
   toPublicProject,
   toPublicImportAnalysis,
+  toPublicImportProgress,
   toPublicRequirements,
   toPublicWorkspace,
   toRequirementsState,

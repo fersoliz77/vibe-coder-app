@@ -35,6 +35,121 @@ test('detects multiple web and Flutter applications without executing project co
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+test('groups monorepo manifests into one product per application', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ private: true, workspaces: ['apps/*'] }));
+    write(root, 'apps/admin/package.json', JSON.stringify({ name: 'admin', scripts: { dev: 'next dev' }, dependencies: { next: '15.0.0', react: '19.0.0' } }));
+    write(root, 'apps/mobile/pubspec.yaml', 'name: mobile\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    const result = await analyzeWorkspace(root);
+    const applications = result.products.filter((product) => product.role === 'application');
+    assert.deepEqual(applications.map((product) => product.relativePath), ['apps/admin', 'apps/mobile']);
+    assert.deepEqual(applications.find((product) => product.name === 'admin').platforms, ['web']);
+    assert.deepEqual(applications.find((product) => product.name === 'mobile').platforms, ['mobile']);
+    /* La raiz privada sin script de desarrollo es andamiaje del workspace, no un producto. */
+    assert.deepEqual(result.products.filter((product) => product.role === 'library').map((product) => product.relativePath), ['.']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('one product folder holding a web app and a Flutter app reports both platforms', async () => {
+  const root = fixture();
+  try {
+    write(root, 'mi-app/web/package.json', JSON.stringify({ name: 'mi-app-web', scripts: { dev: 'vite' }, dependencies: { react: '19.0.0' }, devDependencies: { vite: '6.0.0' } }));
+    write(root, 'mi-app/movil/pubspec.yaml', 'name: mi_app_movil\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products.length, 1);
+    const [product] = result.products;
+    assert.equal(product.name, 'mi-app');
+    assert.equal(product.relativePath, 'mi-app');
+    assert.deepEqual(product.platforms, ['web', 'mobile']);
+    assert.equal(product.targetIds.length, 2);
+    assert.equal(product.previewable, true);
+    assert.ok(product.technologies.includes('Flutter'));
+    assert.ok(product.technologies.includes('React'));
+    /* El target primario del producto es el que se puede previsualizar. */
+    assert.equal(result.targets.find((target) => target.id === product.primaryTargetId).capabilities.webPreview, true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a folder without application manifests reports no products', async () => {
+  const root = fixture();
+  try {
+    write(root, 'README.md', '# Solo notas');
+    write(root, 'docs/guia.md', '# Guia');
+    const result = await analyzeWorkspace(root);
+    assert.deepEqual(result.products, []);
+    assert.equal(result.targets[0].kind, 'generic');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a single application at the root is one product named after its manifest', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'tienda', scripts: { dev: 'vite' }, dependencies: { react: '19.0.0', electron: '43.0.0' }, devDependencies: { vite: '6.0.0' } }));
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products.length, 1);
+    assert.equal(result.products[0].name, 'tienda');
+    assert.equal(result.products[0].relativePath, '.');
+    assert.equal(result.products[0].role, 'application');
+    /* Electron es una carcasa de escritorio sobre una interfaz web: son las dos plataformas, no una. */
+    assert.deepEqual(result.products[0].platforms, ['web', 'desktop']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a React Native app is mobile even though it depends on React', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'movil', scripts: { start: 'expo start' }, dependencies: { react: '19.0.0', 'react-native': '0.76.0', expo: '52.0.0' } }));
+    const result = await analyzeWorkspace(root);
+    assert.deepEqual(result.products[0].platforms, ['mobile']);
+    assert.ok(result.products[0].technologies.includes('React Native'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('reports progress while scanning and names each application as it appears', async () => {
+  const root = fixture();
+  try {
+    write(root, 'apps/admin/package.json', JSON.stringify({ name: 'admin', scripts: { dev: 'vite' }, dependencies: { react: '19.0.0' } }));
+    write(root, 'apps/mobile/pubspec.yaml', 'name: mobile\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    const events = [];
+    const result = await analyzeWorkspace(root, { onProgress: (event) => events.push(event) });
+    assert.ok(events.length >= 3);
+    assert.ok(events.every((event) => ['scanning', 'summarizing'].includes(event.phase)));
+    assert.equal(events.at(-1).phase, 'summarizing');
+    /* Cada aplicacion detectada fuerza un evento, sin esperar al proximo intervalo. */
+    assert.deepEqual(events.at(-1).found, ['admin', 'mobile']);
+    assert.equal(events.at(-1).foundCount, 2);
+    assert.ok(events.every((event) => event.directory === null || !path.isAbsolute(event.directory)));
+    assert.ok(events.at(-1).entriesVisited > 0 && events.at(-1).entriesVisited <= result.stats.entriesVisited);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a cancelled analysis stops the scan instead of finishing it in the background', async () => {
+  const root = fixture();
+  try {
+    for (let index = 0; index < 40; index += 1) write(root, `apps/app-${index}/package.json`, JSON.stringify({ name: `app-${index}` }));
+    let scanned = 0;
+    await assert.rejects(
+      analyzeWorkspace(root, { onProgress: () => { scanned += 1; }, shouldAbort: () => scanned >= 1 }),
+      (error) => error.code === 'ANALYSIS_CANCELLED',
+    );
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a normal folder is analyzed completely instead of being cut short by a latency budget', async () => {
+  const root = fixture();
+  try {
+    for (let index = 0; index < 60; index += 1) {
+      write(root, `apps/app-${index}/package.json`, JSON.stringify({ name: `app-${index}`, dependencies: { react: '19.0.0' } }));
+      write(root, `apps/app-${index}/src/config.js`, 'export const url = import.meta.env.VITE_URL;');
+    }
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.complete, true);
+    assert.deepEqual(result.warnings, []);
+    assert.equal(result.products.filter((product) => product.role === 'application').length, 60);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('recognizes backend, deployment, and container markers without reading secrets', async () => {
   const root = fixture();
   try {
