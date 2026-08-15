@@ -4,6 +4,31 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-14
+
+### Scope
+
+- Made external folder import answer what the folder contains before asking the user to decide.
+- Removed the latency budget from workspace analysis and replaced it with reported progress.
+- Added course signals reported from the desktop application.
+- Prepared desktop release `1.1.18`.
+
+### Key Changes
+
+- Grouped detected manifests into products by product folder, treating monorepo containers (`apps/`, `packages/`) as holders of one product per child, and derived each product's platforms, technologies, and runnable target.
+- Reported Electron as desktop plus web and React Native as mobile, deriving platforms from declared shells instead of the target kind, which keeps already-persisted target IDs stable.
+- Replaced the 2500 ms scan cutoff with limits that guard against pathological folders, so a normal folder is analyzed completely instead of returning a partial result.
+- Emitted bounded scan progress over `projects:import-progress` through the same public contract as the analysis, and made cancelling the dialog abort the scan instead of leaving it running.
+- Resolved each declared dependency once per manifest instead of walking `node_modules` twice.
+
+### Validation
+
+- `npm run check` with 410 passing tests, run three consecutive times.
+- Token, font, literal, breakpoint, accessibility, contrast, design-system, build, and bundle-budget checks passed.
+- Product grouping verified against a real multi-product folder, and progress verified end to end on the same folder.
+
+---
+
 ## 2026-08-12
 
 ### Scope

@@ -4,6 +4,9 @@
 
 ### Added
 
+- Plain-language product summary when importing an external folder, grouping manifests into products with the platforms detected inside each one.
+- Live analysis progress during external import, with cancellation that stops the scan instead of leaving it running.
+- Course signals reported from the desktop application so a lesson can confirm its own steps.
 - Project search and persistent favorites keyed only by project ID.
 - Safe Preview repair resolved in the main process from a project ID, with serialized managed-process restart.
 - Versioned editor-tab restoration using validated project-relative paths without drafts or file contents.
@@ -31,6 +34,8 @@
 
 ### Changed
 
+- External workspace analysis runs to completion instead of stopping at a fixed time budget; the remaining limits guard against pathological folders rather than latency.
+- Electron and React Native applications are reported by the platform they actually run on instead of being reported as web.
 - The project list is loaded lazily to keep the initial bundle within its budget.
 - Legacy editor persistence containing absolute paths is removed during configuration migration.
 - Renderer project data now uses minimal public contracts instead of persisted main-process records.
