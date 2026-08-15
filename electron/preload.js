@@ -36,6 +36,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
     exportReport: () => ipcRenderer.invoke('diagnostics:export'),
   },
 
+  /*
+   * Avisa que el alumno hizo algo que una leccion del curso puede querer
+   * confirmar sola. Nunca falla ni devuelve error util: si no hay sesion, no hay
+   * red o la señal no existe, se descarta en silencio. Quien lo llama esta en
+   * medio de abrir una terminal o guardar un archivo y eso no puede romperse por
+   * un reporte.
+   */
+  signals: {
+    record: (signal) => ipcRenderer.invoke('signals:record', signal).catch(() => ({ ok: false })),
+  },
+
   updates: {
     getState: () => ipcRenderer.invoke('updates:get-state'),
     getHistory: () => ipcRenderer.invoke('updates:get-history'),

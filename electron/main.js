@@ -15,7 +15,8 @@ const { getProjectById, initProjectManager, setupProjectHandlers, registerProjec
 const { installAllEnvironment, setupEnvironmentHandlers, cancelEnvironmentInstallation } = require('./services/environmentManager');
 const { setupProjectProvisionerHandlers } = require('./services/projectProvisioner');
 const { setupPreviewHandlers, terminateAllPreviews } = require('./services/previewManager');
-const { setupStoreHandlers } = require('./ipc/storeManager');
+const { getStore, setupStoreHandlers } = require('./ipc/storeManager');
+const { SignalsManager, observeChannels, setupSignalsHandlers } = require('./services/signalsManager');
 const { AuthService, setupAuthHandlers } = require('./auth/authService');
 const { AuthRealtime } = require('./auth/authRealtime');
 const { AdminSignupAlerts } = require('./auth/adminSignupAlerts');
@@ -405,6 +406,12 @@ if (isSandboxSmokeTest) {
     authService,
     getMainWindow: () => mainWindow,
   });
+  /*
+   * Reporta a la base compartida los hechos que una leccion puede querer
+   * confirmar sola. Se construye siempre, aunque no haya sesion: sin sesion
+   * descarta en silencio, y asi quien lo llama no tiene que preguntar nada.
+   */
+  const signalsManager = new SignalsManager({ authService, store: getStore() });
   const revalidateAndNotify = async () => {
     if (!authService.getState().authenticated) return;
     await authService.revalidate();
@@ -490,6 +497,13 @@ if (isSandboxSmokeTest) {
     terminateAllPreviews();
   });
 
+  /*
+   * Antes de que los servicios registren nada: observa los canales que ya
+   * existen para reportar actividad del alumno, sin que ninguno de ellos tenga
+   * que enterarse. Ver services/signalsManager.js.
+   */
+  observeChannels(ipcMain, signalsManager);
+
   // Initialize Managers
   setupStoreHandlers();
   initProjectManager();
@@ -501,6 +515,7 @@ if (isSandboxSmokeTest) {
   // Setup IPC handlers for each subsystem
   setupProjectHandlers(ipcMain, () => mainWindow, { onProjectRemoved: (projectId) => requirementsManager.cancelProject(projectId) });
   setupRequirementsHandlers(ipcMain, requirementsManager);
+  setupSignalsHandlers(ipcMain, signalsManager);
   setupEnvironmentHandlers(ipcMain, () => mainWindow);
   projectProvisioner = setupProjectProvisionerHandlers(ipcMain, () => mainWindow, registerProject);
   setupServiceHandlers(ipcMain, diagnostics);
