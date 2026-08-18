@@ -57,6 +57,12 @@ const ENV_NAME = /^[A-Z_][A-Z0-9_]{1,127}$/;
 const SCRIPT_NAME = /^[A-Za-z0-9:_-]{1,80}$/;
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/)?[a-z0-9][a-z0-9._-]*$/i;
 const PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
+/*
+ * Configuracion que abarca a varios proyectos a la vez. Si esta en la raiz,
+ * alguien armo ese conjunto a proposito: no son proyectos sueltos que quedaron
+ * en la misma carpeta.
+ */
+const SHARED_ROOT_CONFIG = new Set(['firebase.json', 'vercel.json', '.vercel', 'turbo.json', 'nx.json', 'lerna.json', 'docker-compose.yml', 'compose.yaml', 'Dockerfile', 'supabase', 'prisma', 'pnpm-workspace.yaml', 'renovate.json', '.github']);
 const STRUCTURAL_MARKERS = new Set(['.git', 'node_modules', 'pnpm-workspace.yaml', 'turbo.json', 'nx.json', 'lerna.json', 'firebase.json', 'vercel.json', '.vercel', 'Dockerfile', 'compose.yaml', 'docker-compose.yml', 'supabase', 'prisma']);
 
 /*
@@ -96,6 +102,8 @@ const LANGUAGE_BY_EXTENSION = new Map([
   ['.c', 'C'], ['.h', 'C'], ['.cpp', 'C++'], ['.cc', 'C++'], ['.hpp', 'C++'],
   ['.sh', 'Shell'], ['.ps1', 'PowerShell'], ['.sql', 'SQL'], ['.html', 'HTML'], ['.css', 'CSS'],
   ['.scss', 'CSS'], ['.sass', 'CSS'], ['.less', 'CSS'],
+  /* Formatos habituales de curso que faltaban: un cuaderno de Jupyter era una carpeta sin ninguna aplicacion. */
+  ['.ipynb', 'Jupyter'], ['.r', 'R'], ['.ino', 'Arduino'], ['.astro', 'Astro'],
 ]);
 /* Lenguajes de presentacion y datos: acompañan a un stack pero no lo definen solos. */
 const SUPPORTING_LANGUAGES = new Set(['HTML', 'CSS', 'SQL', 'Shell', 'PowerShell']);
@@ -315,7 +323,20 @@ function assessProject({ targets, workspaceSignals, packageManagers, git, warnin
   };
 }
 
+/*
+ * Saltear un enlace simbolico es la guarda haciendo su trabajo, no una falla.
+ * Abrir la carpeta de descargas en Windows produce decenas de LINK_SKIPPED, y
+ * cualquiera de ellos degradaba el estado y le mostraba al alumno un cartel de
+ * analisis parcial cuando no habia faltado nada por mirar.
+ */
+const COVERAGE_WARNINGS = new Set(['SCAN_LIMIT', 'ACCESS_DENIED', 'MALFORMED_MANIFEST']);
+
+function coverageIncomplete(warnings, complete) {
+  return !complete || warnings.some((warning) => COVERAGE_WARNINGS.has(warning.code));
+}
+
 function buildReadiness({ assessment, targets, dependencies, environment, warnings, complete }) {
+  const incomplete = coverageIncomplete(warnings, complete);
   const supportedPreview = targets.some((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
   const installNeeded = dependencies.some((item) => item.installState === 'install-needed');
   const missingEnvironment = environment.names.filter((item) => item.required && !item.configuredLocally).map((item) => item.name);
@@ -325,12 +346,12 @@ function buildReadiness({ assessment, targets, dependencies, environment, warnin
     { id: 'dependencies', status: installNeeded ? 'action' : 'ready' },
     { id: 'environment', status: missingEnvironment.length ? 'action' : 'ready', count: missingEnvironment.length },
     { id: 'preview', status: supportedPreview ? 'ready' : 'optional' },
-    { id: 'analysis', status: complete && !warnings.length ? 'ready' : 'attention' },
+    { id: 'analysis', status: incomplete ? 'attention' : 'ready' },
   ];
   let status = 'ready';
   if (assessment.classification === 'folder') status = 'not-a-project';
   else if (installNeeded || missingEnvironment.length) status = 'configuration-needed';
-  else if (!supportedPreview || warnings.length || !complete || assessment.classification !== 'project') status = 'ready-with-warnings';
+  else if (!supportedPreview || incomplete || assessment.classification !== 'project') status = 'ready-with-warnings';
   return {
     status,
     checks,
@@ -339,13 +360,13 @@ function buildReadiness({ assessment, targets, dependencies, environment, warnin
       installNeeded ? 'INSTALL_DEPENDENCIES' : null,
       missingEnvironment.length ? 'CONFIGURE_ENVIRONMENT' : null,
       !supportedPreview ? 'REVIEW_PREVIEW' : null,
-      !complete ? 'REVIEW_PARTIAL_SCAN' : null,
+      incomplete ? 'REVIEW_PARTIAL_SCAN' : null,
       assessment.classification !== 'project' ? 'CONFIRM_PROJECT_ROOT' : null,
     ]),
   };
 }
 
-function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null, fileSignals = {} }) {
+function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null, fileSignals = {}, derivedFromFiles = false }) {
   const relativePath = toRelative(root, directory);
   return {
     id: targetId(kind, relativePath),
@@ -361,6 +382,7 @@ function target({ root, directory, kind, role = 'application', name, framework, 
     capabilities: { explorer: true, terminal: true, webPreview: false, androidPreview: false, ...capabilities },
     previewProfile,
     fileSignals: { web: false, backend: false, ...fileSignals },
+    derivedFromFiles,
   };
 }
 
@@ -486,7 +508,14 @@ function productRootOf(relativePath) {
  */
 function platformsOf(item) {
   if (item.role === 'package' || item.role === 'workspace-root') return ['library'];
-  const base = PLATFORM_BY_KIND.get(item.kind) || 'code';
+  let base = PLATFORM_BY_KIND.get(item.kind) || 'code';
+  /*
+   * Un `Main.java` de la clase 3 no es un backend. Cuando el target se dedujo
+   * solo de archivos sueltos, sin manifiesto ni servidor detectado, no hay nada
+   * que respalde esa palabra: es codigo, y decir otra cosa le inventa al alumno
+   * una arquitectura que no escribio.
+   */
+  if (base === 'backend' && item.derivedFromFiles && !item.fileSignals?.backend) base = 'code';
   const shells = unique(item.technologies.map((technology) => PLATFORM_BY_TECHNOLOGY.get(technology)));
   if (shells.includes('mobile')) return ['mobile'];
   const platforms = [];
@@ -502,6 +531,7 @@ const KIND_BY_LANGUAGE = new Map([
   ['Python', 'python'], ['Go', 'go'], ['Rust', 'rust'], ['Ruby', 'ruby'], ['PHP', 'php'],
   ['Java', 'jvm'], ['Kotlin', 'jvm'], ['C#', 'dotnet'], ['Swift', 'swift'], ['Dart', 'dart'],
   ['Elixir', 'elixir'], ['C', 'native'], ['C++', 'native'],
+  ['Jupyter', 'python'], ['Astro', 'web'],
 ]);
 
 /*
@@ -524,6 +554,7 @@ function synthesizeTarget(root, found) {
     evidence: [],
     technologies: found.languages,
     fileSignals: { web, backend: false },
+    derivedFromFiles: true,
   });
 }
 
@@ -621,6 +652,7 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   const lockfiles = [];
   const environmentNames = new Map();
   const evidence = new Map();
+  const rootConfig = new Set();
   const gitRoots = [];
   const fingerprintEntries = [];
   let environmentFilesRead = 0;
@@ -700,6 +732,7 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
     if (names.has('supabase')) services.add('Supabase');
     if (names.has('prisma')) services.add('Prisma');
     if (names.has('.git')) gitRoots.push(toRelative(root, directory));
+    if (directory === root) for (const name of names) if (SHARED_ROOT_CONFIG.has(name)) rootConfig.add(name);
 
     for (const entry of entries) {
       if (limitReached()) { markScanLimit(); queue.length = 0; break; }
@@ -860,6 +893,21 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   const layout = deduplicated.length > 1 || workspaceSignals.length ? 'workspace' : deduplicated[0].kind === 'generic' ? 'unknown' : 'single';
   /* Los productos son una lectura de `deduplicated`, no una entrada nueva: quedan fuera del fingerprint para no invalidar los workspaces ya guardados. */
   const products = buildProducts(root, deduplicated);
+  /*
+   * Elegir la carpeta equivocada -- Descargas, Documentos, la carpeta donde se
+   * guardan todos los ejercicios -- daba una lista de quince productos y un
+   * boton para abrir uno, como si fuera un proyecto con quince partes. Para
+   * quien se equivoco, eso es peor que un error: parece que funciono.
+   *
+   * Son proyectos sueltos cuando ninguno esta en la raiz y nada los relaciona:
+   * ni workspace declarado, ni un repositorio que los abarque a todos.
+   */
+  const looseProjects = products.length >= 5
+    && !products.some((product) => product.relativePath === '.')
+    /* Tiene que ser un workspace declarado en la raiz: `workspaceSignals` es global y un solo proyecto anidado que declare el suyo alcanzaba para tapar el caso. */
+    && !workspaceDefinitions.some((definition) => definition.rootPath === '.')
+    && !gitRoots.includes('.')
+    && !rootConfig.size;
   const git = {
     detected: gitRoots.length > 0,
     repositoryKind: gitRoots.length ? 'normal' : 'none',
@@ -932,7 +980,10 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
     analyzedAt: Date.now(),
     name: path.basename(root),
     layout,
+    looseProjects,
     complete,
+    /* Un enlace salteado no deja el analisis incompleto: solo lo dejan los limites, los accesos denegados y un manifiesto ilegible. */
+    analysisIncomplete: coverageIncomplete(warnings, complete),
     fingerprint,
     projectAssessment,
     readiness,

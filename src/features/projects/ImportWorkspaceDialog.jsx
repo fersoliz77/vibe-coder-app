@@ -192,10 +192,10 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
           </div>}
         </div>}
         {(phase === 'review' || phase === 'importing') && analysis && <div className="import-workspace__review">
-          <section className={`import-workspace__products ${applications.length ? '' : 'is-empty'}`} aria-labelledby="import-workspace-products-title">
+          <section className={`import-workspace__products ${applications.length && !analysis.looseProjects ? '' : 'is-empty'}`} aria-labelledby="import-workspace-products-title">
             <span>{t('importWorkspace.whatWeFound')}</span>
-            <h3 id="import-workspace-products-title">{applications.length === 0 ? t('importWorkspace.productsNone') : applications.length === 1 ? t('importWorkspace.productsOne') : t('importWorkspace.productsMany', { count: applications.length })}</h3>
-            <p>{applications.length === 0 ? t('importWorkspace.productsNoneCopy') : choosable ? t('importWorkspace.productsChooseCopy') : t('importWorkspace.productsCopy')}</p>
+            <h3 id="import-workspace-products-title">{analysis.looseProjects ? t('importWorkspace.looseProjects', { count: applications.length }) : applications.length === 0 ? t('importWorkspace.productsNone') : applications.length === 1 ? t('importWorkspace.productsOne') : t('importWorkspace.productsMany', { count: applications.length })}</h3>
+            <p>{analysis.looseProjects ? t('importWorkspace.looseProjectsCopy') : applications.length === 0 ? t('importWorkspace.productsNoneCopy') : choosable ? t('importWorkspace.productsChooseCopy') : t('importWorkspace.productsCopy')}</p>
             {products.length > 0 && <ul className="import-workspace__product-list">
               {products.map((product) => {
                 const chosen = product.targetIds.includes(selectedTargetId);
@@ -263,7 +263,7 @@ export default function ImportWorkspaceDialog({ selection, onCancel, onImported,
             <div className="import-workspace__checks">
               {readiness.checks.map((check) => <div key={check.id}><StatusMark status={check.status} /><span><strong>{t(`importWorkspace.checks.${check.id}`)}</strong><small>{t(`importWorkspace.checkStatuses.${check.status}`, { count: check.count || 0 })}</small></span></div>)}
             </div>
-            {analysis.warnings.length > 0 && <div className="import-workspace__warnings"><strong>{t('importWorkspace.partialAnalysis')}</strong><p>{t('importWorkspace.partialAnalysisCopy')}</p></div>}
+            {analysis.analysisIncomplete && <div className="import-workspace__warnings"><strong>{t('importWorkspace.partialAnalysis')}</strong><p>{t('importWorkspace.partialAnalysisCopy')}</p></div>}
           </div>}
 
           {section === 'structure' && <div id="import-workspace-panel-structure" className="import-workspace__panel" role="tabpanel" aria-labelledby="import-workspace-tab-structure">

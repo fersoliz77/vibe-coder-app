@@ -205,7 +205,8 @@ test('a language with no manifest and no html is reported by its sources', async
     const result = await analyzeWorkspace(root);
     assert.equal(result.products.length, 1);
     assert.equal(result.targets[0].language, 'Python');
-    assert.deepEqual(result.products[0].platforms, ['backend']);
+    /* Un script suelto es codigo: sin manifiesto ni servidor detectado, llamarlo backend le inventa una arquitectura. */
+    assert.deepEqual(result.products[0].platforms, ['code']);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
@@ -265,6 +266,86 @@ test('a real Android project next to a Flutter app is still its own application'
     write(root, 'nativa/app/src/main/AndroidManifest.xml', '<manifest />');
     const result = await analyzeWorkspace(root);
     assert.deepEqual(result.products.map((product) => product.relativePath).sort(), ['movil', 'nativa']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+/*
+ * Casos que llegan de un curso, no de un repositorio concreto.
+ */
+test('a notebook folder is a project, not an empty folder', async () => {
+  const root = fixture();
+  try {
+    write(root, 'analisis.ipynb', '{"cells":[],"nbformat":4}');
+    write(root, 'datos.csv', 'columna,valor');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.products.length, 1);
+    assert.equal(result.targets[0].language, 'Jupyter');
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a first Java or C exercise is code, never a backend', async () => {
+  for (const [file, contents] of [['Main.java', 'public class Main {}'], ['main.c', 'int main(){return 0;}']]) {
+    const root = fixture();
+    try {
+      write(root, file, contents);
+      const result = await analyzeWorkspace(root);
+      assert.deepEqual(result.products[0].platforms, ['code'], file);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('a detected server still reports backend even without any manifest', async () => {
+  const root = fixture();
+  try {
+    write(root, 'app.py', 'from flask import Flask');
+    write(root, 'requirements.txt', 'flask');
+    const result = await analyzeWorkspace(root);
+    assert.deepEqual(result.products[0].platforms, ['backend']);
+    assert.ok(result.products[0].technologies.includes('Flask'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+/*
+ * Saltear un enlace es la guarda funcionando. En Windows aparecen decenas al
+ * abrir cualquier carpeta de usuario y degradaban el estado sin motivo.
+ */
+test('a skipped link is not an incomplete analysis', async () => {
+  const root = fixture();
+  const outside = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'app', scripts: { dev: 'vite' }, dependencies: { react: '19' } }));
+    write(root, 'node_modules/react/package.json', JSON.stringify({ name: 'react' }));
+    try { fs.symlinkSync(outside, path.join(root, 'enlace'), 'junction'); } catch {}
+    const result = await analyzeWorkspace(root);
+    if (!result.warnings.some((warning) => warning.code === 'LINK_SKIPPED')) return;
+    assert.equal(result.analysisIncomplete, false);
+    assert.equal(result.readiness.checks.find((check) => check.id === 'analysis').status, 'ready');
+    assert.ok(!result.readiness.recommendations.includes('REVIEW_PARTIAL_SCAN'));
+  } finally { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true }); }
+});
+
+test('a folder holding unrelated projects is reported as such, and a curated one is not', async () => {
+  const loose = fixture();
+  const curated = fixture();
+  try {
+    for (const roots of [loose, curated]) {
+      for (let index = 0; index < 6; index += 1) {
+        write(roots, `proyecto-${index}/package.json`, JSON.stringify({ name: `proyecto-${index}`, scripts: { dev: 'vite' }, dependencies: { react: '19' } }));
+      }
+    }
+    /* Configuracion compartida en la raiz: alguien armo este conjunto a proposito. */
+    write(curated, 'firebase.json', '{}');
+    assert.equal((await analyzeWorkspace(loose)).looseProjects, true);
+    assert.equal((await analyzeWorkspace(curated)).looseProjects, false);
+  } finally { fs.rmSync(loose, { recursive: true, force: true }); fs.rmSync(curated, { recursive: true, force: true }); }
+});
+
+test('a single project is never reported as a folder of loose projects', async () => {
+  const root = fixture();
+  try {
+    write(root, 'package.json', JSON.stringify({ name: 'app', scripts: { dev: 'vite' }, dependencies: { react: '19' } }));
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.looseProjects, false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

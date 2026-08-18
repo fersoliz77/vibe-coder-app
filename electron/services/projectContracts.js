@@ -158,6 +158,8 @@ function toPublicProject(project, requirements = project?.requirements) {
 function toPublicImportAnalysis(analysis) {
   return {
     layout: analysis.layout,
+    looseProjects: analysis.looseProjects === true,
+    analysisIncomplete: analysis.analysisIncomplete === true,
     recommendedTargetId: analysis.recommendedTargetId,
     projectAssessment: {
       classification: analysis.projectAssessment?.classification,

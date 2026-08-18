@@ -4,6 +4,27 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-18
+
+### Scope
+
+- Measured the analyzer against the shapes a student actually opens, rather than against the repositories at hand.
+- Prepared desktop release `1.1.24`.
+
+### Key Changes
+
+- Added Jupyter, R, Arduino and Astro to the language evidence. A notebook folder, one of the most common shapes in a course, was reported as having no application at all.
+- Stopped calling a file-only project a backend. `Main.java` and `main.c` were described as backends; a target deduced from loose sources now reports code unless a server was actually detected, so a Flask entry point still reports backend.
+- Separated benign warnings from incomplete coverage. Only scan limits, denied access and an unreadable manifest mean the analysis missed something; a skipped link is the guard working. An ordinary Downloads folder produced forty-nine of them and every one degraded readiness.
+- Detected a folder that merely holds unrelated projects: five or more products, none at the root, no workspace declared at the root, no repository covering them and no shared configuration at the root. Each of those conditions was needed — workspace signals and services are collected across the whole tree, so one nested project declaring its own workspace was enough to hide the case, and a real monorepo without a root manifest was flagged until shared root configuration was taken into account.
+
+### Validation
+
+- `npm run check` with 434 passing tests, including notebook, first-exercise, skipped-link and loose-folder cases.
+- Verified against ten synthetic course-shaped projects and five real folders: the misdirected Downloads folder is now reported as loose projects while a real monorepo, a multi-repo workspace and single projects are not.
+
+---
+
 ## 2026-08-16 (mobile scaffolding)
 
 ### Scope

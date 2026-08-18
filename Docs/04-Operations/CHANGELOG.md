@@ -4,6 +4,8 @@
 
 ### Added
 
+- Recognition that a folder holds several unrelated projects rather than one, so choosing the wrong folder says so instead of offering to open fifteen products as if they were parts of one.
+- Jupyter notebooks, R, Arduino and Astro sources are recognised as projects.
 - File-level stack detection, so a project is read even with no declared dependencies: language from its sources, web from an `index.html`, backend from an entry point that starts a server, and databases from schema, migration, and SQLite files.
 - Projects with no manifest at all are now recognised from their sources instead of being reported as an unknown folder, while code confined to helper folders does not turn a documentation repository into an application.
 - The sidebar version is now a control: it shows the installed version and checks for updates on click, with its own spinner and outcome.
@@ -58,6 +60,8 @@
 
 ### Fixed
 
+- A project deduced only from loose source files is now reported as code rather than as a backend. A first Java class or C exercise was being described with an architecture nobody wrote.
+- A skipped symbolic link no longer counts as an incomplete analysis. Opening an ordinary Windows user folder produces dozens of them, and each one downgraded readiness and showed a partial-analysis warning when nothing had been missed.
 - The native platform folders Flutter and React Native generate are no longer read as separate applications. A single Flutter app produced nine, and its generated `CMakeLists.txt` and `web/index.html` made it report backend and web platforms it does not have.
 - Update checks no longer fail for the first minutes after launch. The offline lease keeps access active with an already-stale token, which the updater sent as-is; a rejected token is now refreshed once and the check retried, instead of failing until the periodic revalidation happened to renew it.
 - Each refusal from the update service is now reported as what it is — expired session, inactive subscription, missing asset, unavailable store or service — instead of one message telling everyone to try again, which is the one thing that cannot help most of those cases.

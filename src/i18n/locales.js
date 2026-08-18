@@ -346,6 +346,8 @@ Object.assign(dictionaries.en.importWorkspace, {
   hideDetails: 'Hide the full analysis',
   openNamed: 'Open {{name}}',
   openFolder: 'Open this folder',
+  looseProjects: 'This folder holds {{count}} separate projects',
+  looseProjectsCopy: 'Nothing here ties them together, so this looks like the folder where you keep your projects rather than a project. Pick the one you want to open, or choose another folder.',
 });
 
 Object.assign(dictionaries.es.importWorkspace, {
@@ -371,6 +373,8 @@ Object.assign(dictionaries.es.importWorkspace, {
   hideDetails: 'Ocultar el análisis completo',
   openNamed: 'Abrir {{name}}',
   openFolder: 'Abrir esta carpeta',
+  looseProjects: 'Esta carpeta contiene {{count}} proyectos separados',
+  looseProjectsCopy: 'No hay nada que los relacione entre sí, así que parece la carpeta donde guardás tus proyectos y no un proyecto. Elegí cuál querés abrir, o elegí otra carpeta.',
 });
 
 Object.assign(dictionaries.en.sidebar, { requirements: 'Requirements' });
