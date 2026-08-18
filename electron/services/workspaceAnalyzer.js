@@ -127,6 +127,36 @@ const MAX_ENTRY_SCAN_BYTES = 96 * 1024;
  * sin esta distincion cualquier carpeta con un `.js` suelto pasaba a serlo.
  */
 const HELPER_DIRECTORIES = new Set(['scripts', 'tools', 'bin', 'docs', 'doc', 'examples', 'example', 'samples', 'test', 'tests', '__tests__', 'spec', 'specs', 'fixtures', 'e2e', 'benchmark', 'benchmarks']);
+/*
+ * Flutter y React Native generan solos los proyectos nativos de cada
+ * plataforma, con su `settings.gradle`, su `Runner.xcodeproj` y sus
+ * `CMakeLists.txt`. Leidos de forma aislada parecen aplicaciones distintas: una
+ * sola app Flutter producia nueve, y sus `CMakeLists.txt` de linux y windows
+ * la hacian figurar con backend, y su `web/index.html` con web. Nada de eso lo
+ * decidio nadie, lo escribio la herramienta al crear el proyecto.
+ */
+const FLUTTER_SHELL_DIRECTORIES = new Set(['android', 'ios', 'macos', 'linux', 'windows', 'web']);
+const NATIVE_SHELL_DIRECTORIES = new Set(['android', 'ios']);
+
+function isGeneratedShellPath(shells, relativePath) {
+  for (const shell of shells) {
+    const prefix = shell.root === '.' ? '' : `${shell.root}/`;
+    if (relativePath === shell.root || !relativePath.startsWith(prefix)) continue;
+    if (shell.directories.has(relativePath.slice(prefix.length).split('/')[0])) return true;
+  }
+  return false;
+}
+
+function generatedShellsOf(targets) {
+  const shells = [];
+  for (const item of targets) {
+    if (item.kind === 'flutter') shells.push({ root: item.relativePath, directories: FLUTTER_SHELL_DIRECTORIES });
+    else if (item.technologies.some((technology) => technology === 'React Native' || technology === 'Expo')) {
+      shells.push({ root: item.relativePath, directories: NATIVE_SHELL_DIRECTORIES });
+    }
+  }
+  return shells;
+}
 
 function isHelperDirectory(relativeDirectory) {
   if (relativeDirectory === '.') return false;
@@ -802,12 +832,22 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   }
 
   emitProgress('summarizing', null, true);
-  /* Sin ningun manifiesto todavia puede haber un proyecto real: lo dicen los archivos. */
-  if (!targets.length) {
-    const synthesized = synthesizeTarget(root, aggregateEvidence(evidence, '.'));
-    if (synthesized) targets.push(synthesized);
+  /*
+   * El andamiaje nativo se descarta despues del recorrido y no durante: las
+   * entradas se visitan en orden alfabetico, asi que `android/` se encola antes
+   * de haber leido el `pubspec.yaml` que lo explica.
+   */
+  const shells = generatedShellsOf(targets);
+  if (shells.length) {
+    for (const key of [...evidence.keys()]) if (isGeneratedShellPath(shells, key)) evidence.delete(key);
   }
-  const deduplicated = [...new Map(targets.map((item) => [`${item.kind}:${item.relativePath}`, item])).values()]
+  const owned = targets.filter((item) => !isGeneratedShellPath(shells, item.relativePath));
+  /* Sin ningun manifiesto todavia puede haber un proyecto real: lo dicen los archivos. */
+  if (!owned.length) {
+    const synthesized = synthesizeTarget(root, aggregateEvidence(evidence, '.'));
+    if (synthesized) owned.push(synthesized);
+  }
+  const deduplicated = [...new Map(owned.map((item) => [`${item.kind}:${item.relativePath}`, item])).values()]
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath) || a.kind.localeCompare(b.kind));
   const serverFindings = await scanEntryFiles(deduplicated, evidence, limits);
   for (const item of deduplicated) enrichTarget(item, aggregateEvidence(evidence, item.relativePath), serverFindings);

@@ -4,6 +4,27 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-16 (mobile scaffolding)
+
+### Scope
+
+- Stopped reading generated native platform folders as separate applications.
+- Prepared desktop release `1.1.23`.
+
+### Key Changes
+
+- Discarded targets found under the platform folders Flutter and React Native generate, measured against real repositories: one Flutter app was producing nine applications, and its generated `linux/CMakeLists.txt` and `windows/CMakeLists.txt` mapped to a backend platform while `web/index.html` mapped to web, neither of which anyone chose.
+- Discarded file evidence from those folders too, which is what removed the phantom platforms and left the technology list as Flutter and Dart instead of also C, C++, Swift, Java, Python and Shell.
+- Applied the rule after the walk rather than during it: entries are visited alphabetically, so `android/` is queued before the `pubspec.yaml` that explains it.
+- Scoped the rule to folders inside a Flutter or React Native target, so a standalone Android project beside a Flutter app is still its own application.
+
+### Validation
+
+- `npm run check` with 428 passing tests, including a generated-scaffolding case and a standalone-Android-next-to-Flutter case.
+- Re-measured against five real repositories: three Flutter apps now report mobile with Flutter and Dart, a Next.js app reports web and backend, an Express bridge reports backend, and the dependency-free POS is unchanged.
+
+---
+
 ## 2026-08-16
 
 ### Scope

@@ -226,6 +226,48 @@ test('code that only lives in helper folders does not make a docs repository an 
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
+/*
+ * Flutter escribe solo los proyectos nativos de cada plataforma. Leidos por
+ * separado parecian aplicaciones distintas: una sola app producia nueve, y sus
+ * CMakeLists de linux y windows la hacian figurar con backend.
+ */
+test('the native folders Flutter generates are part of the app, not separate applications', async () => {
+  const root = fixture();
+  try {
+    write(root, 'pubspec.yaml', 'name: courier\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    write(root, 'lib/main.dart', 'void main() {}');
+    write(root, 'android/settings.gradle', "include ':app'\n");
+    write(root, 'android/app/src/main/AndroidManifest.xml', '<manifest />');
+    write(root, 'ios/Runner.xcodeproj/project.pbxproj', '// generated');
+    write(root, 'macos/Runner.xcodeproj/project.pbxproj', '// generated');
+    write(root, 'linux/CMakeLists.txt', 'cmake_minimum_required(VERSION 3.10)');
+    write(root, 'windows/CMakeLists.txt', 'cmake_minimum_required(VERSION 3.14)');
+    write(root, 'linux/flutter/generated_plugin_registrant.cc', '// generated');
+    write(root, 'web/index.html', '<!doctype html>');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.targets.length, 1);
+    assert.equal(result.targets[0].kind, 'flutter');
+    assert.equal(result.products.length, 1);
+    /* Ni backend por los CMakeLists ni web por el index.html del andamiaje. */
+    assert.deepEqual(result.products[0].platforms, ['mobile']);
+    assert.deepEqual(result.products[0].technologies, ['Flutter', 'Dart']);
+    assert.equal(result.targets[0].capabilities.androidPreview, true);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('a real Android project next to a Flutter app is still its own application', async () => {
+  const root = fixture();
+  try {
+    write(root, 'movil/pubspec.yaml', 'name: movil\ndependencies:\n  flutter:\n    sdk: flutter\n');
+    write(root, 'movil/android/settings.gradle', "include ':app'\n");
+    /* Fuera del arbol de la app Flutter, `android/` no es andamiaje de nadie. */
+    write(root, 'nativa/settings.gradle', "include ':app'\n");
+    write(root, 'nativa/app/src/main/AndroidManifest.xml', '<manifest />');
+    const result = await analyzeWorkspace(root);
+    assert.deepEqual(result.products.map((product) => product.relativePath).sort(), ['movil', 'nativa']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('database evidence is reported from files, not only from dependencies', async () => {
   const root = fixture();
   try {

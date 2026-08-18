@@ -58,6 +58,7 @@
 
 ### Fixed
 
+- The native platform folders Flutter and React Native generate are no longer read as separate applications. A single Flutter app produced nine, and its generated `CMakeLists.txt` and `web/index.html` made it report backend and web platforms it does not have.
 - Update checks no longer fail for the first minutes after launch. The offline lease keeps access active with an already-stale token, which the updater sent as-is; a rejected token is now refreshed once and the check retried, instead of failing until the periodic revalidation happened to renew it.
 - Each refusal from the update service is now reported as what it is — expired session, inactive subscription, missing asset, unavailable store or service — instead of one message telling everyone to try again, which is the one thing that cannot help most of those cases.
 - The support report now carries update state and transitions. It previously recorded only differential-download events, so it was empty for the failure it exists to diagnose.
