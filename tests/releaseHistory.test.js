@@ -35,7 +35,9 @@ test('the version acts as the check-for-updates control and reports its own outc
   /* Un resultado siempre vuelve a un estado estable, nunca deja la ruedita colgada. */
   assert.match(sidebar, /clearTimeout\(checkTimerRef\.current\)/);
   assert.match(sidebar, /setCheckState\('idle'\)/);
-  assert.match(sidebar, /aria-label=\{checkLabel\}/);
+  /* Cuando falla, la etiqueta accesible lleva el motivo real y no un "falló" que no dice nada. */
+  assert.match(sidebar, /aria-label=\{checkState === 'error' && failureTitle \? failureTitle : checkLabel\}/);
+  assert.match(sidebar, /settings\.updateErrors\.\$\{checkDetail\}/);
 });
 
 test('the newest release entry matches the version being shipped', () => {

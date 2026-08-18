@@ -58,6 +58,9 @@
 
 ### Fixed
 
+- Update checks no longer fail for the first minutes after launch. The offline lease keeps access active with an already-stale token, which the updater sent as-is; a rejected token is now refreshed once and the check retried, instead of failing until the periodic revalidation happened to renew it.
+- Each refusal from the update service is now reported as what it is — expired session, inactive subscription, missing asset, unavailable store or service — instead of one message telling everyone to try again, which is the one thing that cannot help most of those cases.
+- The support report now carries update state and transitions. It previously recorded only differential-download events, so it was empty for the failure it exists to diagnose.
 - A private package that starts with `npm start` is no longer classified as a shared library. `private: true` means the opposite of a library — it is what applications declare — and only `dev` counted as a run script, so an application starting with `start` was reported as a library and its folder as having no application at all.
 - The sidebar no longer shows a hand-written version that stayed at the first release while the application had already shipped many others.
 - Embedded Courses and Progress now uses the canonical learning origin, and packaging rejects mismatched learning domains.

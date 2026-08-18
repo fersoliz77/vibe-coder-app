@@ -65,6 +65,76 @@ function createHarness(options = {}) {
   return { updater, authService, manager, sent, get prepared() { return prepared; }, get revoked() { return revoked; } };
 }
 
+function httpError(status) {
+  const error = new Error(`Cannot download "https://updates.example.test/stable/latest.yml", status ${status}`);
+  error.statusCode = status;
+  return error;
+}
+
+/*
+ * El lease offline mantiene la policy activa con un access token ya vencido:
+ * el chequeo fallaba durante los primeros minutos de cada arranque hasta que la
+ * revalidacion periodica lo renovaba sola.
+ */
+test('a stale token is refreshed once and the check retried instead of failing', async () => {
+  let attempts = 0;
+  const harness = createHarness({
+    checkForUpdates: async () => {
+      attempts += 1;
+      if (attempts === 1) throw httpError(401);
+      return { isUpdateAvailable: false };
+    },
+  });
+  let revalidated = 0;
+  harness.authService.revalidate = async () => { revalidated += 1; };
+  await harness.manager.handleAuthState({ policy: 'active' });
+  assert.equal(attempts, 2);
+  assert.equal(revalidated, 1);
+  assert.equal(harness.manager.getState().status, 'current');
+});
+
+test('a token that is still rejected after refreshing reports expired access, not a generic failure', async () => {
+  const harness = createHarness({ checkForUpdates: async () => { throw httpError(401); } });
+  let revalidated = 0;
+  harness.authService.revalidate = async () => { revalidated += 1; };
+  await harness.manager.handleAuthState({ policy: 'active' });
+  /* Se renueva una sola vez: sin esto un token invalido daria vueltas indefinidamente. */
+  assert.equal(revalidated, 1);
+  assert.equal(harness.manager.getState().error.code, 'UPDATE_ACCESS_EXPIRED');
+});
+
+test('each refusal from the update service is reported as what it is', async () => {
+  const expected = [
+    [403, 'UPDATE_ACCESS_INACTIVE'],
+    [404, 'UPDATE_ASSET_MISSING'],
+    [502, 'UPDATE_STORAGE_UNAVAILABLE'],
+    [503, 'UPDATE_SERVICE_UNAVAILABLE'],
+  ];
+  for (const [status, code] of expected) {
+    const harness = createHarness({ checkForUpdates: async () => { throw httpError(status); } });
+    await harness.manager.handleAuthState({ policy: 'active' });
+    assert.equal(harness.manager.getState().error.code, code, `status ${status}`);
+  }
+  /* Una suscripcion vencida no se renueva reintentando: no se pide revalidacion. */
+  const forbidden = createHarness({ checkForUpdates: async () => { throw httpError(403); } });
+  let revalidated = 0;
+  forbidden.authService.revalidate = async () => { revalidated += 1; };
+  await forbidden.manager.handleAuthState({ policy: 'active' });
+  assert.equal(revalidated, 0);
+});
+
+test('the diagnostics report carries the update state and its transitions', async () => {
+  const { diagnostics } = require('../electron/diagnostics/logger');
+  const harness = createHarness({ checkForUpdates: async () => { throw httpError(503); } });
+  await harness.manager.handleAuthState({ policy: 'active' });
+  const state = diagnostics.getStates().updates;
+  assert.equal(state.status, 'error');
+  assert.equal(state.errorCode, 'UPDATE_SERVICE_UNAVAILABLE');
+  assert.equal(state.installedVersion, '1.0.0');
+  const transitions = diagnostics.getEvents().filter((event) => event.area === 'updates' && event.event === 'state-transition');
+  assert.ok(transitions.some((event) => event.details.to === 'error' && event.details.errorCode === 'UPDATE_SERVICE_UNAVAILABLE'));
+});
+
 test('private generic feed is encoded and carries the Supabase auth headers', () => {
   assert.deepEqual(buildFeed({
     updateUrl: 'https://updates.example.test/',
@@ -346,7 +416,7 @@ test('update IPC is main-frame guarded and accepts no renderer feed or token arg
   let policy = 'denied';
   const calls = [];
   const manager = {
-    installedVersion: '1.1.21',
+    installedVersion: '1.1.22',
     getState: () => ({ status: 'disabled' }),
     check: (...args) => { calls.push(['check', ...args]); },
     download: (...args) => { calls.push(['download', ...args]); },
@@ -358,8 +428,8 @@ test('update IPC is main-frame guarded and accepts no renderer feed or token arg
 
   assert.deepEqual(await handlers.get('updates:get-state')(trusted), { status: 'disabled' });
   const history = await handlers.get('updates:get-history')(trusted);
-  assert.equal(history.currentVersion, '1.1.21');
-  assert.equal(history.releases[0].version, '1.1.21');
+  assert.equal(history.currentVersion, '1.1.22');
+  assert.equal(history.releases[0].version, '1.1.22');
   assert.throws(() => handlers.get('updates:check')(trusted, 'https://evil', 'token'), (error) => error.code === 'AUTH_POLICY_DENIED');
   policy = 'active';
   await handlers.get('updates:check')(trusted, 'https://evil', 'token');

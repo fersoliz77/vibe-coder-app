@@ -4,6 +4,28 @@ This log records implementation history in chronological order. Each entry shoul
 
 ---
 
+## 2026-08-16
+
+### Scope
+
+- Fixed update checks failing for the first minutes after every launch.
+- Made the update service's refusals distinguishable, and made the support report cover updates.
+- Prepared desktop release `1.1.22`.
+
+### Key Changes
+
+- Refreshed the session once and retried when the update feed rejects the token. The offline lease deliberately keeps the policy active without network, but `getUpdateCredentials()` handed the updater the stored access token unchecked, so every launch had a window where checks failed until the five-minute revalidation renewed it. Diagnosed from a live Worker tail: the first successful `latest.yml` landed at 21:07:06 for a session that started at 21:02:10.
+- Classified the feed failure by its HTTP status instead of collapsing everything into `UPDATE_CHECK_FAILED`, and gave each code its own text. Retrying cannot fix an inactive subscription, and the previous copy told the user to do exactly that.
+- Recorded update state and transitions in diagnostics. The report previously logged only differential-download events, which happen after the point where checks actually fail, so it was empty for the case it exists to diagnose.
+
+### Validation
+
+- `npm run check` with 426 passing tests.
+- Four new update-manager tests: refresh-and-retry, a token still rejected after refreshing, one assertion per refusal status, and the diagnostics state and transition.
+- Verified the release chain end to end against the live Worker: entitlement, GitHub resolution, and ranged installer download all returned Ok.
+
+---
+
 ## 2026-08-15 (stack detection)
 
 ### Scope

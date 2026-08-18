@@ -452,6 +452,33 @@ Object.assign(dictionaries.es.requirements.progress, { analyzing: 'Leyendo el pr
 Object.assign(dictionaries.es.requirements.errors, { disk: 'Liberá espacio y reintentá.', verify: 'Sin verificar. Reintentá sin reinstalar.', incomplete: 'Dependencias incompletas. Volvé a analizar.' });
 
 Object.assign(dictionaries.en.sidebar, { learning: 'Courses and progress' });
+/*
+ * Cada causa se arregla distinto: una suscripcion vencida no se resuelve
+ * reintentando, y un fallo del almacen no es algo que el alumno pueda destrabar.
+ */
+Object.assign(dictionaries.en.settings, {
+  updateErrors: {
+    UPDATE_ACCESS_EXPIRED: 'Your session expired. Sign out and sign in again to receive updates.',
+    UPDATE_ACCESS_INACTIVE: 'Your account does not have an active subscription for updates. Retrying will not change this.',
+    UPDATE_ASSET_MISSING: 'The published update is incomplete. This needs to be fixed at the source.',
+    UPDATE_STORAGE_UNAVAILABLE: 'The update store is not responding. It is not a problem with your computer; try again later.',
+    UPDATE_SERVICE_UNAVAILABLE: 'The update service is unavailable. It is not a problem with your computer; try again later.',
+    UPDATE_SIGNATURE_INVALID: 'The update could not be verified and was rejected. Do not install it manually; report it.',
+    UPDATE_METADATA_INVALID: 'The published update is invalid and was rejected.',
+  },
+});
+Object.assign(dictionaries.es.settings, {
+  updateErrors: {
+    UPDATE_ACCESS_EXPIRED: 'Tu sesión venció. Cerrá sesión y volvé a entrar para recibir actualizaciones.',
+    UPDATE_ACCESS_INACTIVE: 'Tu cuenta no tiene una suscripción vigente para actualizaciones. Reintentar no lo va a cambiar.',
+    UPDATE_ASSET_MISSING: 'La actualización publicada está incompleta. Hay que corregirlo en el origen.',
+    UPDATE_STORAGE_UNAVAILABLE: 'El almacén de actualizaciones no responde. No es un problema de tu equipo; probá más tarde.',
+    UPDATE_SERVICE_UNAVAILABLE: 'El servicio de actualizaciones no está disponible. No es un problema de tu equipo; probá más tarde.',
+    UPDATE_SIGNATURE_INVALID: 'No se pudo verificar la actualización y se rechazó. No la instales a mano; reportalo.',
+    UPDATE_METADATA_INVALID: 'La actualización publicada es inválida y se rechazó.',
+  },
+});
+
 Object.assign(dictionaries.en.sidebar, { version: 'v{{version}}', checkUpdates: 'Check for updates', checkingUpdates: 'Checking for updates', upToDate: 'Up to date', checkFailed: 'Check failed', checkUnavailable: 'Sign in required' });
 Object.assign(dictionaries.es.sidebar, { version: 'v{{version}}', checkUpdates: 'Buscar actualizaciones', checkingUpdates: 'Buscando actualizaciones', upToDate: 'Al día', checkFailed: 'Falló', checkUnavailable: 'Requiere sesión' });
 Object.assign(dictionaries.es.sidebar, { learning: 'Cursos y progreso' });

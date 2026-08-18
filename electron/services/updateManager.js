@@ -95,6 +95,29 @@ function classifyUpdaterLog(level, message) {
   return null;
 }
 
+/*
+ * El Worker tiene cinco formas distintas de negarse y todas terminaban en el
+ * mismo "no se pudo, intenta de nuevo". No se arreglan igual: una suscripcion
+ * vencida no se resuelve reintentando, y un token de GitHub caido no es algo
+ * que el alumno pueda hacer nada al respecto. Distinguirlas es la diferencia
+ * entre un mensaje util y uno que miente.
+ */
+const UPDATE_FEED_ERRORS = new Map([
+  [401, 'UPDATE_ACCESS_EXPIRED'],
+  [403, 'UPDATE_ACCESS_INACTIVE'],
+  [404, 'UPDATE_ASSET_MISSING'],
+  [502, 'UPDATE_STORAGE_UNAVAILABLE'],
+  [503, 'UPDATE_SERVICE_UNAVAILABLE'],
+]);
+
+function feedStatus(error) {
+  const direct = Number(error?.statusCode ?? error?.status);
+  if (Number.isInteger(direct) && direct >= 400 && direct <= 599) return direct;
+  /* electron-updater suele traer el estado solo dentro del mensaje. */
+  const match = /\b(4\d{2}|5\d{2})\b/.exec(String(error?.message || ''));
+  return match ? Number(match[1]) : null;
+}
+
 function buildFeed(credentials) {
   if (!credentials
     || typeof credentials.updateUrl !== 'string'
@@ -199,7 +222,32 @@ class UpdateManager {
 
   publish(state) {
     this.revision += 1;
+    const previous = this.state;
     this.state = { ...state, revision: this.revision };
+    /*
+     * El reporte de soporte no traia nada del updater, que es justamente el
+     * subsistema por el que se pide un reporte. Solo se registraban los saltos
+     * a descarga completa, o sea eventos que ocurren despues del unico punto
+     * donde esto suele fallar.
+     */
+    diagnostics.setState('updates', {
+      status: this.state.status,
+      mandatory: this.state.mandatory,
+      version: this.state.version,
+      errorCode: this.state.error?.code || null,
+      installedVersion: this.installedVersion,
+      eligible: this.eligible,
+      policy: this.policy,
+    });
+    if (previous?.status !== this.state.status || previous?.error?.code !== this.state.error?.code) {
+      diagnostics.log('updates', 'state-transition', {
+        from: previous?.status || null,
+        to: this.state.status,
+        errorCode: this.state.error?.code || null,
+        mandatory: this.state.mandatory,
+        version: this.state.version,
+      });
+    }
     if (this.state.blocking) {
       try { this.onBlockingState(); } catch {}
     }
@@ -341,6 +389,28 @@ class UpdateManager {
     return this.getState();
   }
 
+  /*
+   * El lease offline mantiene la policy en `active` aunque el access token ya
+   * este vencido: para eso existe, para que la app siga usable sin red. Pero el
+   * updater recibia ese token tal cual, Supabase lo rechazaba y el chequeo
+   * fallaba durante los primeros minutos de cada arranque, hasta que la
+   * revalidacion periodica lo renovaba sola. Un 401 no significa "no tenes
+   * acceso": significa "este token esta viejo". Se renueva y se reintenta una
+   * sola vez; si vuelve a fallar, ahi si es un problema de acceso real.
+   */
+  async checkFeed() {
+    try {
+      this.configureFeed();
+      return await this.updater.checkForUpdates();
+    } catch (error) {
+      if (feedStatus(error) !== 401 || typeof this.authService?.revalidate !== 'function') throw error;
+      try { await this.authService.revalidate(); } catch { throw error; }
+      if (!this.isActive()) throw error;
+      this.configureFeed();
+      return await this.updater.checkForUpdates();
+    }
+  }
+
   async check(required = Boolean(this.knownVersion || this.requirementStateInvalid)) {
     this.requireActive();
     if (this.checkPromise) return this.checkPromise;
@@ -352,8 +422,7 @@ class UpdateManager {
     this.publish(this.makeState('checking', { mandatory: required, version: this.knownVersion }));
     this.checkPromise = (async () => {
       try {
-        this.configureFeed();
-        const result = await this.updater.checkForUpdates();
+        const result = await this.checkFeed();
         if (generation !== this.operationGeneration || !this.isActive()) return this.getState();
         if (!this.verifyUpdate(result?.updateInfo)) {
           throw new UpdateManagerError('UPDATE_SIGNATURE_INVALID', 'Update metadata signature is invalid.');
@@ -385,13 +454,16 @@ class UpdateManager {
         this.downloadTelemetry = { ...EMPTY_DOWNLOAD, installerSize };
         this.cancellationToken = result.cancellationToken || null;
         return this.publish(this.makeState('available', { mandatory: true, version }));
-      } catch {
+      } catch (error) {
         if (generation !== this.operationGeneration || !this.isActive()) return this.getState();
         const mandatory = Boolean(required || this.knownVersion || this.requirementStateInvalid);
+        const errorCode = error instanceof UpdateManagerError
+          ? error.code
+          : UPDATE_FEED_ERRORS.get(feedStatus(error)) || 'UPDATE_CHECK_FAILED';
         const state = this.publish(this.makeState('error', {
           mandatory,
           version: this.knownVersion,
-          errorCode: 'UPDATE_CHECK_FAILED',
+          errorCode,
           errorMessage: mandatory
             ? 'The required update is temporarily unavailable. Try again.'
             : 'Updates could not be checked. Try again.',

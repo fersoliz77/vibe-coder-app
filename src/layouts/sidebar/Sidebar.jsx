@@ -103,6 +103,7 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, requir
    * el gate obligatorio ya se apodera de la pantalla al cambiar el estado.
    */
   const [checkState, setCheckState] = useState('idle');
+  const [checkDetail, setCheckDetail] = useState(null);
   const checkTimerRef = useRef(null);
   useEffect(() => () => clearTimeout(checkTimerRef.current), []);
   const settleCheck = (next, holdMs) => {
@@ -118,12 +119,15 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, requir
     try {
       const result = await window.electronAPI.updates.check();
       if (result?.status === 'current') settleCheck('current', 4000);
-      else if (result?.status === 'error') settleCheck('error', 6000);
+      else if (result?.status === 'error') { setCheckDetail(result.error?.code || null); settleCheck('error', 6000); }
       else setCheckState('idle');
     } catch {
+      setCheckDetail(null);
       settleCheck('error', 6000);
     }
   };
+  /* El lateral es angosto: muestra "Falló" y deja el motivo en el tooltip, donde sí entra. */
+  const failureTitle = checkDetail ? t(`settings.updateErrors.${checkDetail}`) : '';
   const checkLabel = checkState === 'checking' ? t('sidebar.checkingUpdates') : t('sidebar.checkUpdates');
 
   return (
@@ -251,8 +255,8 @@ export default function Sidebar({ activeView, onNavigate, connectedCount, requir
           onClick={checkForUpdates}
           disabled={checkState === 'checking'}
           aria-busy={checkState === 'checking'}
-          aria-label={checkLabel}
-          title={checkLabel}
+          aria-label={checkState === 'error' && failureTitle ? failureTitle : checkLabel}
+          title={checkState === 'error' && failureTitle ? failureTitle : checkLabel}
         >
           <span className="sidebar__version-content" role="status">
             {checkState === 'checking' && <span className="sidebar__version-spinner" aria-hidden="true" />}

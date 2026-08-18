@@ -212,6 +212,19 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
     updateToastTimerRef.current = setTimeout(() => setUpdateToast(null), tone === 'error' ? 6000 : 4000);
   };
 
+  /*
+   * Cinco causas distintas terminaban en el mismo "intentá nuevamente", que es
+   * lo unico que no sirve cuando el problema es una suscripcion vencida. Si el
+   * codigo no tiene texto propio se cae al generico.
+   */
+  const updateErrorText = (state) => {
+    const code = state?.error?.code;
+    if (!code) return t('settings.updateCheckFailed');
+    const key = `settings.updateErrors.${code}`;
+    const message = t(key);
+    return message === key ? t('settings.updateCheckFailed') : message;
+  };
+
   const checkForUpdates = async () => {
     if (state.policy !== 'active' || !window.electronAPI?.updates) return;
     setUpdateChecking(true);
@@ -223,7 +236,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
         setUpdateState(result);
       }
       if (result?.status === 'current') showUpdateToast('success', t('settings.updateCurrentToast'));
-      else if (result?.status === 'error' && !result.mandatory) showUpdateToast('error', t('settings.updateCheckFailed'));
+      else if (result?.status === 'error' && !result.mandatory) showUpdateToast('error', updateErrorText(result));
     } catch {
       showUpdateToast('error', t('settings.updateCheckFailed'));
     } finally {
@@ -358,7 +371,7 @@ export default function SettingsPanel({ theme, onSetTheme, onReopenOnboarding, o
                 <div className="settings-update-overview">
                   <div>
                     <strong>{updateBusy ? t('settings.updateChecking') : state.policy === 'active' ? t('settings.updateReady') : t('settings.updateRequiresAccess')}</strong>
-                    <span>{updateState.status === 'error' ? t('settings.updateCheckFailed') : t('settings.updateBackgroundCopy')}</span>
+                    <span>{updateState.status === 'error' ? updateErrorText(updateState) : t('settings.updateBackgroundCopy')}</span>
                   </div>
                   <button className="btn btn--primary" type="button" aria-busy={updateBusy} disabled={updateBusy || state.policy !== 'active' || !window.electronAPI?.updates} onClick={checkForUpdates}>
                     {updateBusy ? t('settings.updateCheckingButton') : t('settings.checkForUpdates')}
