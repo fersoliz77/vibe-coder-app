@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from '../../i18n/I18nContext';
+import { describeLaunch, previewErrorText } from '../../utils/previewLaunch';
 import './PreviewCenter.css';
 
 const INITIAL_WEB = { available: false, state: 'loading', url: null, error: null, logs: [], issues: [], diagnostics: { status: 'idle' }, sync: { state: 'waiting', history: [], changedFiles: [] }, activity: [] };
@@ -74,11 +75,25 @@ export default function PreviewCenter({ project }) {
   }, [api, project.path]);
 
   useEffect(() => { if (logsOpen) logsEnd.current?.scrollIntoView({ block: 'nearest' }); }, [logs, logsOpen]);
+  useEffect(() => { if (staticSyncedAt) setFrameKey((key) => key + 1); }, [staticSyncedAt]);
 
+  /*
+   * Los fallos llegan como codigo, no como frase: se traducen antes de
+   * mostrarlos. Lo que antes veia un alumno era la salida cruda de npm.
+   */
   const act = async (operation) => {
     setActionError('');
-    try { await operation(); } catch (error) { setActionError(error?.message || t('preview.actionFailed')); }
+    try { await operation(); } catch (error) { setActionError(previewErrorText(normalizeError(error), t) || t('preview.actionFailed')); }
   };
+  const launch = describeLaunch(web.launch, t);
+  /*
+   * Un sitio estatico no tiene recarga en caliente: el servidor entrega el
+   * archivo nuevo, pero el iframe sigue mostrando el viejo. Cuando el vigia
+   * confirma el cambio se vuelve a montar, y el alumno ve lo que acaba de
+   * escribir sin apretar nada.
+   */
+  const staticSyncedAt = web.launch?.runtime === 'static' ? web.sync?.lastSyncAt : null;
+  const unavailable = !web.available && web.state !== 'loading';
   const webBusy = ['starting', 'stopping'].includes(web.state);
   const emulatorBusy = ['starting', 'stopping'].includes(android.emulatorState);
   const appBusy = ['starting', 'stopping'].includes(android.appState);
@@ -172,7 +187,13 @@ export default function PreviewCenter({ project }) {
                 <div className="preview-browser-bar"><i/><i/><i/><span>127.0.0.1:4173</span></div>
                 <iframe ref={frameRef} key={frameKey} src="http://127.0.0.1:4173" title={t('preview.webFrameTitle')} sandbox="allow-forms allow-modals allow-popups allow-same-origin allow-scripts" />
               </div>
-            ) : <EmptyState icon="external" busy={['loading', 'starting', 'stopping'].includes(web.state)} title={!web.available && web.state !== 'loading' ? t('preview.noWeb') : web.error || t(`preview.webEmpty.${web.state}`)} copy={!web.available && web.state !== 'loading' ? t('preview.noWebCopy') : t(`preview.webEmptyCopy.${web.state}`)} />}
+            ) : <EmptyState
+              icon="external"
+              busy={['loading', 'starting', 'stopping'].includes(web.state)}
+              title={web.error ? previewErrorText(web.error, t) : unavailable ? launch.title : t(`preview.webEmpty.${web.state}`)}
+              copy={web.error ? t('preview.webEmptyCopy.error') : unavailable ? launch.detail : t(`preview.webEmptyCopy.${web.state}`)}
+              command={!web.error && unavailable ? launch.command : null}
+            />}
           </div>
           <div className={`preview-issues ${issuesOpen ? 'is-open' : ''}`}>
             <button className="preview-issues-toggle" onClick={() => setIssuesOpen((open) => !open)} aria-expanded={issuesOpen}>
@@ -228,6 +249,19 @@ export default function PreviewCenter({ project }) {
   );
 }
 
-function EmptyState({ icon, busy, title, copy }) {
-  return <div className="preview-empty"><div className={`preview-empty-icon ${busy ? 'is-busy' : ''}`}><Icon name={icon} /></div><h2>{title}</h2><p>{copy}</p></div>;
+function EmptyState({ icon, busy, title, copy, command = null }) {
+  return (
+    <div className="preview-empty">
+      <div className={`preview-empty-icon ${busy ? 'is-busy' : ''}`}><Icon name={icon} /></div>
+      <h2>{title}</h2>
+      <p>{copy}</p>
+      {command && <code className="preview-empty-command">{command}</code>}
+    </div>
+  );
+}
+
+/* Electron envuelve el error de IPC; el codigo real esta dentro del mensaje. */
+function normalizeError(error) {
+  const raw = typeof error === 'string' ? error : (error?.message || '');
+  return raw.replace(/^Error invoking remote method '[^']*':\s*/, '').replace(/^(?:Error|UnhandledError):\s*/, '').trim();
 }

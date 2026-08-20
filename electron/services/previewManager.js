@@ -29,6 +29,8 @@ const {
   isValidManagedSerial,
   parseAdbEmulatorSerials,
 } = require('./previewCommands');
+const { planWebLaunch, readIndexHtmlHead } = require('./previewProfiles');
+const { createStaticServer } = require('./previewStaticServer');
 const { AUDIT_SCRIPT, classifyPreviewError, formatDiagnosis } = require('./previewDiagnostics');
 const { sanitizeIssue, sanitizeLog } = require('./previewSanitization');
 
@@ -39,6 +41,23 @@ const ANDROID_BOOT_TIMEOUT_MS = 180_000;
 const MAX_ISSUES = 100;
 const MAX_HISTORY = 20;
 const WATCH_IGNORES = new Set(['node_modules', '.git', 'build', 'dist']);
+/*
+ * Los errores de vista previa viajan al renderer por IPC, y ahi se pierde todo
+ * menos el mensaje. Por eso el mensaje ES el codigo: la pantalla lo traduce a
+ * una frase que un alumno entienda, en su idioma, en vez de mostrar una linea
+ * de npm en ingles.
+ */
+function previewError(code) {
+  return new Error(code);
+}
+
+function classifyRunFailure(run) {
+  const text = (run?.logs || []).slice(-80).map((entry) => entry.line).join(' ');
+  if (/EADDRINUSE|address already in use|port \d+ is (?:already )?in use/i.test(text)) return 'PREVIEW_PORT_BUSY';
+  if (/cannot find module|err_module_not_found|failed to resolve import|is not recognized as an internal|command not found|module_not_found/i.test(text)) return 'PREVIEW_DEPENDENCIES_MISSING';
+  if (/failed to compile|syntaxerror|unexpected token|parse error|module build failed|transform failed/i.test(text)) return 'PREVIEW_CODE_ERROR';
+  return 'PREVIEW_EXITED';
+}
 
 let getMainWindow = () => null;
 let webRun = null;
@@ -128,11 +147,14 @@ function detectProjectTargets(projectCwd) {
   const mobile = path.join(root, 'mobile');
   assertNoLinkedPath(root, nestedWeb);
   assertNoLinkedPath(root, mobile);
-  const webCwd = detectedWeb && fs.existsSync(path.join(detectedWeb, 'package.json'))
-    ? detectedWeb
-    : fs.existsSync(path.join(nestedWeb, 'package.json'))
-    ? nestedWeb
-    : fs.existsSync(path.join(root, 'package.json')) ? root : null;
+  /*
+   * Antes esto exigia `package.json`. Una carpeta con `index.html` y nada mas
+   * es un proyecto web perfectamente valido, y es el primero que hace un
+   * alumno: ahora tambien cuenta.
+   */
+  const hasWebEntry = (directory) => Boolean(directory)
+    && (fs.existsSync(path.join(directory, 'package.json')) || fs.existsSync(path.join(directory, 'index.html')));
+  const webCwd = hasWebEntry(detectedWeb) ? detectedWeb : hasWebEntry(nestedWeb) ? nestedWeb : hasWebEntry(root) ? root : null;
   return {
     projectCwd: root,
     webCwd,
@@ -169,10 +191,41 @@ function appendLog(run, target, stream, chunk) {
   }
 }
 
+/*
+ * En un monorepo las dependencias suelen quedar izadas en la raiz, asi que un
+ * `node_modules` ausente en la subcarpeta no significa que falte instalar.
+ */
+function dependenciesInstalled(webCwd, projectCwd) {
+  return [webCwd, projectCwd].some((directory) => directory && fs.existsSync(path.join(directory, 'node_modules')));
+}
+
+function webLaunchPlan(projectCwd, webCwd) {
+  if (!webCwd) return planWebLaunch({});
+  return planWebLaunch({
+    packageJson: readJson(path.join(webCwd, 'package.json')),
+    dependenciesInstalled: dependenciesInstalled(webCwd, projectCwd),
+    indexHtml: readIndexHtmlHead(webCwd),
+  });
+}
+
+function publicLaunch(plan, projectCwd, webCwd) {
+  return {
+    mode: plan.mode,
+    runtime: plan.runtime,
+    script: plan.script,
+    command: plan.manualCommand ? [...plan.manualCommand] : null,
+    dependenciesInstalled: plan.dependenciesInstalled === true,
+    relativePath: webCwd ? (safeRelativeProjectPath(projectCwd, webCwd) || '.') : null,
+    reason: plan.reason,
+  };
+}
+
 function publicWebStatus(projectCwd, targets) {
   const ownsRun = webRun?.projectCwd === projectCwd;
+  const plan = webLaunchPlan(projectCwd, targets.webCwd);
   return {
-    available: Boolean(targets.webCwd),
+    available: Boolean(targets.webCwd) && ['managed-npm', 'managed-static'].includes(plan.mode),
+    launch: publicLaunch(plan, projectCwd, targets.webCwd),
     state: ownsRun ? webRun.state : 'stopped',
     url: ownsRun && webRun.state === 'ready' ? PREVIEW_URL : null,
     error: ownsRun ? webRun.error : null,
@@ -308,7 +361,7 @@ function waitForWebReady(generation) {
     if (!webRun || generation !== webGeneration || webRun.state !== 'starting') return;
     if (Date.now() >= deadline) {
       webRun.state = 'error';
-      webRun.error = 'The development server did not become ready in time.';
+      webRun.error = 'PREVIEW_TIMEOUT';
       recordPreviewError('web', 'start', null, 'timeout');
       publishWeb();
       return;
@@ -318,27 +371,70 @@ function waitForWebReady(generation) {
   check();
 }
 
+function createWebRun(projectCwd, webCwd, plan) {
+  return {
+    projectCwd, webCwd, plan, state: 'starting', error: null, logs: [], issues: [], activity: [], process: null, server: null, watcher: null,
+    sync: { state: 'waiting', lastSyncAt: null, changedFiles: [], changedCount: 0, compileDurationMs: null, error: null, history: [] },
+  };
+}
+
+function webRunIsLive() {
+  return Boolean((webRun?.process && !webRun.process.killed) || webRun?.server?.listening);
+}
+
+function closeWebServer(run) {
+  const server = run?.server;
+  if (!server) return;
+  run.server = null;
+  try { server.closeAllConnections?.(); } catch {}
+  try { server.close(); } catch {}
+  run.state = 'stopped';
+}
+
+/*
+ * Sitio estatico: se sirve desde el proceso principal, sin npm y sin ejecutar
+ * nada del proyecto. Queda listo apenas el socket escucha, asi que no hay
+ * espera ni sondeo.
+ */
+async function startStaticWeb(projectCwd, targets, plan) {
+  let server;
+  try {
+    server = await createStaticServer(targets.webCwd, { host: PREVIEW_HOST, port: PREVIEW_PORT });
+  } catch (error) {
+    throw previewError(/EADDRINUSE/i.test(String(error?.message || '')) ? 'PREVIEW_PORT_BUSY' : 'PREVIEW_STATIC_UNAVAILABLE');
+  }
+  const run = createWebRun(projectCwd, targets.webCwd, plan);
+  run.server = server;
+  run.state = 'ready';
+  webRun = run;
+  webGeneration += 1;
+  startSourceWatcher(run, targets.webCwd);
+  publishWeb();
+  return publicWebStatus(projectCwd, targets);
+}
+
 async function startWeb(cwd) {
   const projectCwd = validateCwd(cwd);
   const targets = detectProjectTargets(projectCwd);
-  if (!targets.webCwd) throw new Error('No package.json was found in web/ or the project root.');
-  if (webRun?.process && !webRun.process.killed) {
+  if (!targets.webCwd) throw previewError('PREVIEW_NO_WEB_TARGET');
+  if (webRunIsLive()) {
     if (webRun.projectCwd === projectCwd) return publicWebStatus(projectCwd, targets);
-    throw new Error('A web preview is already running for another project.');
+    throw previewError('PREVIEW_BUSY_OTHER_PROJECT');
   }
-  const packageJson = readJson(path.join(targets.webCwd, 'package.json'));
-  const kind = classifyWebScript(packageJson);
-  if (!packageJson?.scripts?.dev) throw new Error('The project does not define an npm dev script.');
-  if (!kind) throw new Error('Unsupported npm dev script. Use exactly "vite" or "next dev".');
+  const plan = webLaunchPlan(projectCwd, targets.webCwd);
+  if (plan.mode === 'managed-static') return startStaticWeb(projectCwd, targets, plan);
+  if (plan.mode !== 'managed-npm') throw previewError(`PREVIEW_${plan.reason || 'NO_MANIFEST'}`);
+  /*
+   * Sin `node_modules` el servidor arranca y muere con un error de npm que no
+   * le dice nada a nadie. Es mejor detenerse antes y nombrar lo que falta.
+   */
+  if (!plan.dependenciesInstalled) throw previewError('PREVIEW_DEPENDENCIES_MISSING');
   const npm = await resolveNpmInvocation();
-  if (!npm) throw new Error('A trusted npm installation could not be resolved.');
+  if (!npm) throw previewError('PREVIEW_NPM_MISSING');
 
-  const run = {
-    projectCwd, webCwd: targets.webCwd, state: 'starting', error: null, logs: [], issues: [], activity: [], process: null, watcher: null,
-    sync: { state: 'waiting', lastSyncAt: null, changedFiles: [], changedCount: 0, compileDurationMs: null, error: null, history: [] },
-  };
+  const run = createWebRun(projectCwd, targets.webCwd, plan);
   webRun = run;
-  const args = [...npm.argsPrefix, ...buildWebDevArgs(kind)];
+  const args = [...npm.argsPrefix, ...buildWebDevArgs(plan)];
   const child = spawn(npm.file, args, {
     cwd: targets.webCwd,
     env: getProcessEnv({ BROWSER: 'none', HOST: PREVIEW_HOST, PORT: String(PREVIEW_PORT) }),
@@ -362,7 +458,7 @@ async function startWeb(cwd) {
     run.process = null;
     if (run.state !== 'stopping') {
       run.state = code === 0 ? 'stopped' : 'error';
-      run.error = code === 0 ? null : `Development server exited with code ${code}.`;
+      run.error = code === 0 ? null : classifyRunFailure(run);
       if (code !== 0) recordPreviewError('web', 'run', null, 'process');
     } else run.state = 'stopped';
     publishWeb();
@@ -381,6 +477,7 @@ function stopWeb(cwd) {
   webRun.state = 'stopping';
   closeSourceWatcher(webRun);
   if (webRun.process) killProcessTree(webRun.process);
+  else if (webRun.server) closeWebServer(webRun);
   else webRun.state = 'stopped';
   publishWeb();
   return publicWebStatus(projectCwd, detectProjectTargets(projectCwd));
@@ -413,6 +510,7 @@ async function repairWeb(projectId) {
       await killProcessTree(run.process);
       await exit;
     }
+    closeWebServer(run);
     if (webRun === run) webRun = null;
   }
   return startWeb(project.path);
@@ -798,6 +896,7 @@ function terminateAllPreviews() {
   androidGeneration += 1;
   closeSourceWatcher(webRun);
   if (webRun?.process) killProcessTree(webRun.process);
+  closeWebServer(webRun);
   if (androidRun?.process) killProcessTree(androidRun.process);
   const emulatorProcess = emulatorRun?.process;
   const tools = getAndroidTools();
@@ -836,7 +935,7 @@ function setupPreviewHandlers(ipcMain, mainWindowProvider, diagnostics) {
   handle('preview:web-repair', 'web', 'repair', (_event, projectId) => serializeWebTransition(() => repairWeb(projectId)));
   handle('preview:web-open-external', 'web', 'open-external', async (_event, cwd) => {
     const status = await getWebStatus(cwd);
-    if (status.state !== 'ready' || !isTrustedPreviewUrl(status.url)) throw new Error('The trusted preview is not ready.');
+    if (status.state !== 'ready' || !isTrustedPreviewUrl(status.url)) throw previewError('PREVIEW_NOT_READY');
     const { shell } = require('electron');
     await shell.openExternal(PREVIEW_URL);
     return true;
@@ -861,6 +960,7 @@ module.exports = {
   buildAdbRotationArgs, buildAdbScreenshotArgs, buildWebDevArgs, classifyWebScript, detectManagedEmulatorSerial, detectProjectTargets,
   isAndroidBootComplete, isConfiguredAvdNameOutput, isIgnoredWatchPath, isTrustedPreviewResourceUrl, isTrustedPreviewUrl, isValidManagedSerial,
   parseAdbEmulatorSerials, safeArtifactPath, safeRelativeProjectPath, sanitizeIssue, sanitizeLog, validateCaptureBounds,
+  classifyRunFailure, webLaunchPlan,
   resolveRepairProject,
   setupPreviewHandlers, terminateAllPreviews,
 };

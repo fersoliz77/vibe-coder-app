@@ -1,21 +1,21 @@
 const { ANDROID_AVD_NAME } = require('./environmentManager');
+const { PREVIEW_HOST, PREVIEW_PORT, classifyWebScript, planWebLaunch } = require('./previewProfiles');
 
-const PREVIEW_HOST = '127.0.0.1';
-const PREVIEW_PORT = 4173;
 const PREVIEW_URL = `http://${PREVIEW_HOST}:${PREVIEW_PORT}`;
 
-function classifyWebScript(packageJson) {
-  const script = String(packageJson?.scripts?.dev || '').trim().toLowerCase();
-  if (!script) return null;
-  if (/^next(?:\.cmd)?\s+dev$/.test(script)) return 'next';
-  if (/^vite(?:\.cmd)?$/.test(script)) return 'vite';
-  return null;
-}
-
-function buildWebDevArgs(kind) {
-  if (kind === 'next') return ['run', 'dev', '--', '-H', PREVIEW_HOST, '-p', String(PREVIEW_PORT)];
-  if (kind === 'vite') return ['run', 'dev', '--', '--host', PREVIEW_HOST, '--port', String(PREVIEW_PORT), '--strictPort'];
-  throw new Error('Unsupported web development server. Only exact Vite and Next.js dev scripts are supported.');
+/*
+ * Los argumentos de host y puerto salen del plan, no de una tabla paralela:
+ * cada servidor de desarrollo los nombra distinto y quien sabe cual usar es
+ * `previewProfiles`. Aca solo se comprueba que el plan sea ejecutable.
+ */
+function buildWebDevArgs(packageJsonOrPlan) {
+  const plan = packageJsonOrPlan && packageJsonOrPlan.mode
+    ? packageJsonOrPlan
+    : planWebLaunch({ packageJson: packageJsonOrPlan });
+  if (plan.mode !== 'managed-npm' || !Array.isArray(plan.npmArgs)) {
+    throw new Error('Unsupported web development server. No managed development script was recognised.');
+  }
+  return [...plan.npmArgs];
 }
 
 function isValidManagedSerial(serial) {

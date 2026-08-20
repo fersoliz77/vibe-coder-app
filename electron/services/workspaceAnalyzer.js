@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { validateProjectCwd, isSubPath } = require('../ipc/fsGuards');
-const { classifyWebScript } = require('./previewCommands');
+const { planWebLaunch, readIndexHtmlHead } = require('./previewProfiles');
 
 const SCHEMA_VERSION = 3;
 /*
@@ -335,9 +335,27 @@ function coverageIncomplete(warnings, complete) {
   return !complete || warnings.some((warning) => COVERAGE_WARNINGS.has(warning.code));
 }
 
-function buildReadiness({ assessment, targets, dependencies, environment, warnings, complete }) {
+/*
+ * Como se levanta el proyecto, en una sola respuesta.
+ *
+ * El target elegido manda; si ese no se puede levantar solo pero otro si, se
+ * informa el que si, porque es lo que el boton de Vista previa va a arrancar.
+ */
+function buildLaunch(targets, primary) {
+  const managed = targets.find((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
+  const chosen = primary?.capabilities?.webPreview || primary?.capabilities?.androidPreview ? primary : managed || primary || targets[0] || null;
+  if (!chosen) return { mode: 'none', runtime: null, command: null, relativePath: '.', reason: 'NO_MANIFEST' };
+  if (chosen.capabilities?.androidPreview) {
+    return { mode: 'managed-android', runtime: 'flutter', command: ['flutter', 'run'], relativePath: chosen.relativePath, reason: null };
+  }
+  const launch = chosen.launch || { mode: 'none', runtime: null, command: null, reason: 'NO_MANIFEST' };
+  return { ...launch, relativePath: chosen.relativePath };
+}
+
+function buildReadiness({ assessment, targets, dependencies, environment, warnings, complete, primary = null }) {
   const incomplete = coverageIncomplete(warnings, complete);
   const supportedPreview = targets.some((item) => item.capabilities.webPreview || item.capabilities.androidPreview);
+  const launch = buildLaunch(targets, primary);
   const installNeeded = dependencies.some((item) => item.installState === 'install-needed');
   const missingEnvironment = environment.names.filter((item) => item.required && !item.configuredLocally).map((item) => item.name);
   const checks = [
@@ -351,22 +369,29 @@ function buildReadiness({ assessment, targets, dependencies, environment, warnin
   let status = 'ready';
   if (assessment.classification === 'folder') status = 'not-a-project';
   else if (installNeeded || missingEnvironment.length) status = 'configuration-needed';
-  else if (!supportedPreview || incomplete || assessment.classification !== 'project') status = 'ready-with-warnings';
+  /*
+   * Que Vibe no pueda arrancar el proyecto solo no es una falla del proyecto.
+   * Antes bajaba el estado a "listo con advertencias" y ademas generaba un
+   * pendiente imposible de completar: el alumno veia un globito rojo para
+   * siempre por tener un `npm start` en vez de Vite. Ahora es informacion:
+   * `launch` dice con que comando se levanta.
+   */
+  else if (incomplete || assessment.classification !== 'project') status = 'ready-with-warnings';
   return {
     status,
     checks,
     missingEnvironment,
+    launch,
     recommendations: unique([
       installNeeded ? 'INSTALL_DEPENDENCIES' : null,
       missingEnvironment.length ? 'CONFIGURE_ENVIRONMENT' : null,
-      !supportedPreview ? 'REVIEW_PREVIEW' : null,
       incomplete ? 'REVIEW_PARTIAL_SCAN' : null,
       assessment.classification !== 'project' ? 'CONFIRM_PROJECT_ROOT' : null,
     ]),
   };
 }
 
-function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null, fileSignals = {}, derivedFromFiles = false }) {
+function target({ root, directory, kind, role = 'application', name, framework, language, confidence, evidence, technologies = [], capabilities = {}, previewProfile = null, launch = null, fileSignals = {}, derivedFromFiles = false }) {
   const relativePath = toRelative(root, directory);
   return {
     id: targetId(kind, relativePath),
@@ -381,6 +406,13 @@ function target({ root, directory, kind, role = 'application', name, framework, 
     technologies: unique(technologies).slice(0, 16),
     capabilities: { explorer: true, terminal: true, webPreview: false, androidPreview: false, ...capabilities },
     previewProfile,
+    /*
+     * Como se levanta este target: si Vibe puede hacerlo solo y, si no puede,
+     * con que comando lo levanta la persona. Antes esto no se guardaba y la
+     * unica respuesta disponible era "no hay perfil administrado", que no le
+     * dice a nadie que tiene que escribir.
+     */
+    launch: launch || { mode: 'none', runtime: null, command: null, reason: 'NO_MANIFEST' },
     fileSignals: { web: false, backend: false, ...fileSignals },
     derivedFromFiles,
   };
@@ -419,15 +451,18 @@ function packageTarget(root, directory, parsed, relativeManifest) {
   if (Object.hasOwn(dependencies, 'typescript') || fs.existsSync(path.join(directory, 'tsconfig.json'))) technologies.push('TypeScript');
   else technologies.push('JavaScript');
   if (Object.hasOwn(dependencies, 'vite')) technologies.push('Vite');
-  const previewProfile = classifyWebScript(parsed);
+  const plan = planWebLaunch({ packageJson: parsed, indexHtml: readIndexHtmlHead(directory) });
+  const previewProfile = plan.mode === 'managed-npm' ? plan.runtime : null;
+  const managedPreview = ['managed-npm', 'managed-static'].includes(plan.mode);
   const evidence = [relativeManifest];
   if (framework) evidence.push(`dependency:${framework}`);
-  if (parsed.scripts?.dev) evidence.push(previewProfile ? `supported-dev-script:${previewProfile}` : 'dev-script-present');
+  if (plan.script) evidence.push(previewProfile ? `supported-script:${plan.script}:${previewProfile}` : `script-present:${plan.script}`);
   return target({
     root, directory, kind, role, name: parsed.name, framework, language: technologies.includes('TypeScript') ? 'TypeScript' : 'JavaScript',
     confidence: framework ? (previewProfile ? 'high' : 'strong') : 'medium', evidence, technologies,
-    capabilities: { webPreview: Boolean(previewProfile) }, previewProfile,
-    fileSignals: { web: false, backend: nodeEntryScript },
+    capabilities: { webPreview: managedPreview }, previewProfile,
+    launch: { mode: plan.mode, runtime: plan.runtime, command: plan.manualCommand, reason: plan.reason },
+    fileSignals: { web: plan.mode === 'managed-static', backend: nodeEntryScript },
   });
 }
 
@@ -543,6 +578,11 @@ function synthesizeTarget(root, found) {
   if (!found.primaryLanguage && !found.markers.has('index.html')) return null;
   const web = found.markers.has('index.html');
   const kind = web ? 'web' : KIND_BY_LANGUAGE.get(found.primaryLanguage) || 'javascript';
+  /*
+   * Una carpeta con `index.html` y sin manifiesto es el primer proyecto de casi
+   * cualquier alumno. Vibe la sirve tal cual, sin ejecutar nada.
+   */
+  const plan = web ? planWebLaunch({ indexHtml: readIndexHtmlHead(root) }) : planWebLaunch({});
   return target({
     root,
     directory: root,
@@ -553,6 +593,8 @@ function synthesizeTarget(root, found) {
     confidence: 'low',
     evidence: [],
     technologies: found.languages,
+    capabilities: { webPreview: plan.mode === 'managed-static' },
+    launch: { mode: plan.mode, runtime: plan.runtime, command: plan.manualCommand, reason: plan.reason },
     fileSignals: { web, backend: false },
     derivedFromFiles: true,
   });
@@ -819,9 +861,10 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
           if (parsed.workspaces) workspaceSignals.push('JavaScript workspace');
           targets.push(detectedTarget);
           recordFound(detectedTarget, directory);
-          const previewProfile = classifyWebScript(parsed);
+          const managedScript = detectedTarget.launch?.mode === 'managed-npm' ? detectedTarget.launch.command?.[2] || null : null;
           for (const name of Object.keys(parsed.scripts || {}).filter((name) => SCRIPT_NAME.test(name)).sort().slice(0, 80)) {
-            scripts.push({ targetId: detectedTarget.id, ecosystem: 'npm', name: name.slice(0, 80), category: scriptCategory(name), executableByIde: name === 'dev' && Boolean(previewProfile), managedPreviewProfile: name === 'dev' ? previewProfile : null });
+            const managed = name === managedScript;
+            scripts.push({ targetId: detectedTarget.id, ecosystem: 'npm', name: name.slice(0, 80), category: scriptCategory(name), executableByIde: managed, managedPreviewProfile: managed ? detectedTarget.previewProfile : null });
           }
           const groups = [
             ['runtime', parsed.dependencies], ['development', parsed.devDependencies], ['peer', parsed.peerDependencies], ['optional', parsed.optionalDependencies],
@@ -968,7 +1011,7 @@ async function analyzeWorkspace(projectPath, { onProgress = null, shouldAbort = 
   }
   const environment = publicEnvironment(environmentNames);
   const projectAssessment = assessProject({ targets: deduplicated, workspaceSignals: workspaceSignalList, packageManagers: packageManagerList, git, warnings });
-  const readiness = buildReadiness({ assessment: projectAssessment, targets: deduplicated, dependencies, environment, warnings, complete });
+  const readiness = buildReadiness({ assessment: projectAssessment, targets: deduplicated, dependencies, environment, warnings, complete, primary: recommended });
   const decisionProfile = {
     layout, complete, packageManagers: packageManagerList, packageManagerDetails: sortedLockfiles, workspaceSignals: workspaceSignalList,
     services: serviceList, integrations, targets: deduplicated, roots, scripts: sortedScripts, dependencies, environment, git, runtimes: sortedRuntimes,

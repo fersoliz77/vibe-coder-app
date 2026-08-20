@@ -30,6 +30,28 @@ function fixture({ workspaceValue = workspace(), onboarding = {} } = {}) {
   return { root, get project() { return project; }, getProjectById: () => project, updateProject };
 }
 
+/*
+ * `REVIEW_PREVIEW` era un pendiente sin accion detras: su descriptor decia
+ * `supported: false`, asi que el boton no llevaba a ningun lado y el globito
+ * del lateral no se apagaba nunca. Un proyecto que Vibe no puede arrancar solo
+ * ya no debe nada.
+ */
+test('a project Vibe cannot start on its own leaves no pending requirement', () => {
+  const project = {
+    id: 'project-manual',
+    primaryTargetId: 'target-root',
+    workspace: {
+      targets: [{ id: 'target-root', relativePath: '.', capabilities: { webPreview: false } }],
+      dependencies: [],
+      readiness: { status: 'ready', missingEnvironment: [], recommendations: [], launch: { mode: 'manual', runtime: null, command: ['npm', 'run', 'start'] } },
+    },
+  };
+  assert.deepEqual(deriveRequirements(project, null, 100).items, []);
+  /* Y el pendiente que dejo una version anterior se apaga solo al reanalizar. */
+  const previous = { revision: 1, items: [{ id: 'req_old', type: 'REVIEW_PREVIEW', status: 'pending', severity: 'advisory', relativePath: '.', detail: {} }] };
+  assert.deepEqual(deriveRequirements(project, previous, 100).items, []);
+});
+
 test('managed npm install uses one-use consent and isolated fixed execution', async () => {
   const state = fixture();
   const calls = [];

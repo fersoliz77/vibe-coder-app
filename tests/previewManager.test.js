@@ -49,24 +49,76 @@ test('preview repair resolves only a bounded project ID in main', () => {
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
-test('web commands use fixed Vite and Next argument conventions', () => {
+test('web development scripts are recognised with their arguments, not by exact text', () => {
   assert.equal(classifyWebScript({ scripts: { dev: 'vite' } }), 'vite');
   assert.equal(classifyWebScript({ scripts: { dev: 'next dev' } }), 'next');
+  /* Lo que hoy genera create-next-app y lo que escribe cualquiera que quiera probar desde el celular. */
+  assert.equal(classifyWebScript({ scripts: { dev: 'next dev --turbopack' } }), 'next');
+  assert.equal(classifyWebScript({ scripts: { dev: 'vite --host 0.0.0.0' } }), 'vite');
+  assert.equal(classifyWebScript({ scripts: { dev: 'cross-env NODE_ENV=development vite --port 3000' } }), 'vite');
+  assert.equal(classifyWebScript({ scripts: { start: 'react-scripts start' } }), 'react-scripts');
+  assert.equal(classifyWebScript({ scripts: { dev: 'npm run serve:web', 'serve:web': 'astro dev' } }), 'astro');
+  /* Lo que se sigue rechazando. */
   assert.equal(classifyWebScript({ scripts: { dev: 'node tools/dev.js' } }), null);
   assert.equal(classifyWebScript({ scripts: { dev: 'echo vite' } }), null);
-  assert.equal(classifyWebScript({ scripts: { dev: 'vite --host 0.0.0.0' } }), null);
   assert.equal(classifyWebScript({ scripts: { dev: 'next dev && echo unsafe' } }), null);
+  assert.equal(classifyWebScript({ scripts: { dev: 'vite | tee log' } }), null);
+  assert.equal(classifyWebScript({ scripts: { dev: 'vite $(whoami)' } }), null);
+  /* Un subcomando que no levanta servidor no cuenta como vista previa. */
+  assert.equal(classifyWebScript({ scripts: { dev: 'vite build' } }), null);
+  assert.equal(classifyWebScript({ scripts: { dev: 'next build' } }), null);
   assert.equal(classifyWebScript({ scripts: {} }), null);
-  assert.deepEqual(buildWebDevArgs('vite'), ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '4173', '--strictPort']);
-  assert.deepEqual(buildWebDevArgs('next'), ['run', 'dev', '--', '-H', '127.0.0.1', '-p', '4173']);
-  assert.equal(buildWebDevArgs('vite').some((value) => /[;&|]/.test(value)), false);
-  assert.throws(() => buildWebDevArgs('generic'), /Unsupported/);
+  assert.deepEqual(buildWebDevArgs({ scripts: { dev: 'vite --host' } }), ['run', 'dev', '--', '--host', '127.0.0.1', '--port', '4173', '--strictPort']);
+  assert.deepEqual(buildWebDevArgs({ scripts: { dev: 'next dev --turbopack' } }), ['run', 'dev', '--', '-H', '127.0.0.1', '-p', '4173']);
+  /* Create React App lee el puerto del entorno: no se le agrega ningun argumento. */
+  assert.deepEqual(buildWebDevArgs({ scripts: { start: 'react-scripts start' } }), ['run', 'start']);
+  assert.equal(buildWebDevArgs({ scripts: { dev: 'vite' } }).some((value) => /[;&|]/.test(value)), false);
+  assert.throws(() => buildWebDevArgs({ scripts: { dev: 'node server.js' } }), /Unsupported/);
+});
+
+test('a folder with only index.html is served by Vibe, a bundler entry point is not', () => {
+  const { planWebLaunch } = require('../electron/services/previewProfiles');
+  assert.equal(planWebLaunch({ indexHtml: '<html><body><h1>Mi pagina</h1></body></html>' }).mode, 'managed-static');
+  /* Servir esto crudo mostraria una pantalla en blanco: es la entrada de un bundler, no una pagina. */
+  assert.equal(planWebLaunch({ indexHtml: '<script type="module" src="/src/main.jsx"></script>' }).mode, 'none');
+  assert.equal(planWebLaunch({ packageJson: { dependencies: { react: '19' } }, indexHtml: '<html></html>' }).mode, 'none');
+  /* Sin perfil administrado se informa el comando real, no un vacio. */
+  const manual = planWebLaunch({ packageJson: { scripts: { start: 'node server.mjs' } } });
+  assert.equal(manual.mode, 'manual');
+  assert.deepEqual(manual.manualCommand, ['npm', 'run', 'start']);
+});
+
+test('preview failures are reported as codes the interface can translate', () => {
+  const { classifyRunFailure } = require('../electron/services/previewManager');
+  const run = (line) => ({ logs: [{ line }] });
+  assert.equal(classifyRunFailure(run('Error: listen EADDRINUSE: address already in use 127.0.0.1:4173')), 'PREVIEW_PORT_BUSY');
+  assert.equal(classifyRunFailure(run("Cannot find module 'vite'")), 'PREVIEW_DEPENDENCIES_MISSING');
+  assert.equal(classifyRunFailure(run('Failed to compile. SyntaxError: Unexpected token')), 'PREVIEW_CODE_ERROR');
+  assert.equal(classifyRunFailure(run('done')), 'PREVIEW_EXITED');
+  assert.equal(classifyPreviewError(new Error('PREVIEW_DEPENDENCIES_MISSING')), 'tooling');
+  assert.equal(classifyPreviewError(new Error('PREVIEW_PORT_BUSY')), 'network');
+});
+
+test('the static preview server never leaves the project folder', () => {
+  const { resolveStaticFile } = require('../electron/services/previewStaticServer');
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-static-'));
+  try {
+    fs.writeFileSync(path.join(root, 'index.html'), '<html></html>');
+    fs.mkdirSync(path.join(root, 'assets'));
+    fs.writeFileSync(path.join(root, 'assets', 'app.css'), 'body{}');
+    assert.equal(resolveStaticFile(root, '/'), path.join(root, 'index.html'));
+    assert.equal(resolveStaticFile(root, '/assets/app.css'), path.join(root, 'assets', 'app.css'));
+    assert.equal(resolveStaticFile(root, '/../../secret.txt'), null);
+    assert.equal(resolveStaticFile(root, '/%2e%2e/%2e%2e/secret.txt'), null);
+    assert.equal(resolveStaticFile(root, '/missing.html'), null);
+    assert.equal(resolveStaticFile(root, '/assets'), null);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('extracted preview command helpers retain the manager command contract', () => {
   assert.equal(previewCommands.PREVIEW_URL, PREVIEW_URL);
   assert.equal(previewCommands.classifyWebScript({ scripts: { dev: ' VITE.CMD ' } }), 'vite');
-  assert.deepEqual(previewCommands.buildWebDevArgs('next'), buildWebDevArgs('next'));
+  assert.deepEqual(previewCommands.buildWebDevArgs({ scripts: { dev: 'next dev' } }), buildWebDevArgs({ scripts: { dev: 'next dev' } }));
   assert.throws(() => previewCommands.buildAdbScreenshotArgs('emulator-5554 & calc'), /Invalid/);
   assert.deepEqual(previewCommands.buildFlutterRunSpawnOptions('mobile', { SAFE: '1' }).stdio, ['pipe', 'pipe', 'pipe']);
   assert.equal(previewCommands.buildFlutterControlInput('reload'), 'r\n');

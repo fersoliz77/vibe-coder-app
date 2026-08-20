@@ -4,6 +4,12 @@ const PROJECT_FIELDS = [
   'name', 'slug', 'type', 'stack', 'backend', 'repositoryVisibility', 'deploymentProvider', 'provisioningStatus',
   'origin', 'registeredAt', 'primaryTargetId', 'workspace', 'onboarding', 'requirements',
 ];
+/*
+ * `REVIEW_PREVIEW` ya no se genera, pero sigue aceptado aca: un registro
+ * guardado por una version anterior lo trae, y rechazar el tipo invalidaria
+ * todo el bloque de requerimientos de ese proyecto. El siguiente analisis lo
+ * descarta solo.
+ */
 const REQUIREMENT_TYPES = new Set(['INSTALL_DEPENDENCIES', 'CONFIGURE_ENVIRONMENT', 'REVIEW_PREVIEW', 'REVIEW_PARTIAL_SCAN', 'CONFIRM_PROJECT_ROOT']);
 const REQUIREMENT_STATUSES = new Set(['pending', 'deferred', 'dismissed', 'completed', 'superseded']);
 const REQUIREMENT_SEVERITIES = new Set(['blocking', 'advisory']);
@@ -133,6 +139,7 @@ function toPublicWorkspace(workspace) {
   if (!workspace) return undefined;
   return {
     analyzedAt: Number.isFinite(workspace.analyzedAt) ? workspace.analyzedAt : null,
+    launch: toPublicLaunch(workspace.readiness?.launch),
     targets: (workspace.targets || []).slice(0, 256).map((target) => ({
       id: target.id,
       name: target.name,
@@ -155,6 +162,18 @@ function toPublicProject(project, requirements = project?.requirements) {
   return result;
 }
 
+/* Como se levanta el proyecto: modo, motor y comando. Sin rutas absolutas. */
+function toPublicLaunch(launch) {
+  const command = Array.isArray(launch?.command) ? launch.command.slice(0, 8).map((part) => String(part).slice(0, 80)) : null;
+  return {
+    mode: safeString(launch?.mode, 40) ? launch.mode : 'none',
+    runtime: safeString(launch?.runtime, 40) ? launch.runtime : null,
+    command: command && command.length ? command : null,
+    relativePath: safeRelativePath(launch?.relativePath) ? launch.relativePath : '.',
+    reason: safeString(launch?.reason, 60) ? launch.reason : null,
+  };
+}
+
 function toPublicImportAnalysis(analysis) {
   return {
     layout: analysis.layout,
@@ -170,6 +189,7 @@ function toPublicImportAnalysis(analysis) {
       status: analysis.readiness?.status,
       checks: (analysis.readiness?.checks || []).map((check) => ({ id: check.id, status: check.status, count: check.count || 0 })),
       recommendations: [...(analysis.readiness?.recommendations || [])],
+      launch: toPublicLaunch(analysis.readiness?.launch),
     },
     targets: (analysis.targets || []).map((target) => ({
       id: target.id,

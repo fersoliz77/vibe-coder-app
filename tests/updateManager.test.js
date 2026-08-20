@@ -429,7 +429,11 @@ test('update IPC is main-frame guarded and accepts no renderer feed or token arg
   assert.deepEqual(await handlers.get('updates:get-state')(trusted), { status: 'disabled' });
   const history = await handlers.get('updates:get-history')(trusted);
   assert.equal(history.currentVersion, '1.1.24');
-  assert.equal(history.releases[0].version, '1.1.24');
+  /*
+   * El historial visible arranca en la version que se esta empaquetando. Se lee
+   * del manifiesto para que un release no obligue a editar este test.
+   */
+  assert.equal(history.releases[0].version, require('../package.json').version);
   assert.throws(() => handlers.get('updates:check')(trusted, 'https://evil', 'token'), (error) => error.code === 'AUTH_POLICY_DENIED');
   policy = 'active';
   await handlers.get('updates:check')(trusted, 'https://evil', 'token');

@@ -19,8 +19,31 @@ const AUDIT_SCRIPT = `(() => {
   return issues.slice(0, 100);
 })()`;
 
+/*
+ * Los fallos propios de la vista previa viajan como codigo, no como frase, para
+ * que la pantalla los traduzca. Se clasifican por ese codigo; el resto sigue
+ * cayendo en las heuristicas de texto de siempre.
+ */
+const CODE_CATEGORIES = new Map([
+  ['PREVIEW_TIMEOUT', 'timeout'],
+  ['PREVIEW_NPM_MISSING', 'tooling'],
+  ['PREVIEW_DEPENDENCIES_MISSING', 'tooling'],
+  ['PREVIEW_NO_WEB_TARGET', 'validation'],
+  ['PREVIEW_NO_MANIFEST', 'validation'],
+  ['PREVIEW_NO_START_SCRIPT', 'validation'],
+  ['PREVIEW_SCRIPT_NOT_RECOGNIZED', 'validation'],
+  ['PREVIEW_SCRIPT_NOT_SINGLE_COMMAND', 'validation'],
+  ['PREVIEW_BUSY_OTHER_PROJECT', 'validation'],
+  ['PREVIEW_NOT_READY', 'validation'],
+  ['PREVIEW_PORT_BUSY', 'network'],
+  ['PREVIEW_STATIC_UNAVAILABLE', 'network'],
+  ['PREVIEW_CODE_ERROR', 'process'],
+  ['PREVIEW_EXITED', 'process'],
+]);
+
 function classifyPreviewError(error) {
   const message = String(error?.message || error || '');
+  if (CODE_CATEGORIES.has(message)) return CODE_CATEGORIES.get(message);
   if (/timed? out|in time|within \d+ seconds/i.test(message)) return 'timeout';
   if (/not found|not installed|could not be resolved|no package|no mobile/i.test(message)) return 'tooling';
   if (/invalid|unsafe|outside|unsupported|registered/i.test(message)) return 'validation';
@@ -34,4 +57,4 @@ function formatDiagnosis(issues) {
   return lines.length ? lines.join('\n') : 'Preview diagnostics: no issues detected.';
 }
 
-module.exports = { AUDIT_SCRIPT, classifyPreviewError, formatDiagnosis };
+module.exports = { AUDIT_SCRIPT, CODE_CATEGORIES, classifyPreviewError, formatDiagnosis };

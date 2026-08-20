@@ -17,7 +17,14 @@ const PUBLIC_ERROR_CODES = new Set([
   'ACTION_STALE', 'ACTION_NOT_SUPPORTED', 'ACTION_BUSY', 'ACTION_FAILED', 'ACTION_CANCELLED', 'GUIDANCE_UNAVAILABLE',
   'CLIPBOARD_UNAVAILABLE', 'CANCELLED', 'DISK_SPACE_LOW', 'ACTION_VERIFY_FAILED', 'ACTION_VERIFY_INCOMPLETE',
 ]);
-const REQUIREMENT_TYPES = new Set(['INSTALL_DEPENDENCIES', 'CONFIGURE_ENVIRONMENT', 'REVIEW_PREVIEW', 'REVIEW_PARTIAL_SCAN', 'CONFIRM_PROJECT_ROOT']);
+/*
+ * `REVIEW_PREVIEW` ya no existe. Era un pendiente sin accion detras: su
+ * descriptor declaraba `supported: false`, asi que el boton "Revisar accion"
+ * no llevaba a ningun lado y el globito rojo del lateral no se podia apagar
+ * nunca. Que Vibe no pueda arrancar un proyecto solo es informacion -- vive en
+ * `readiness.launch`, con el comando real -- no una tarea del alumno.
+ */
+const REQUIREMENT_TYPES = new Set(['INSTALL_DEPENDENCIES', 'CONFIGURE_ENVIRONMENT', 'REVIEW_PARTIAL_SCAN', 'CONFIRM_PROJECT_ROOT']);
 function manualInstallCommand(item) {
   if (item.manager === 'npm') return ['npm', 'install'];
   if (item.manager === 'pnpm') return item.detail?.lockfile ? ['pnpm', 'install', '--frozen-lockfile'] : ['pnpm', 'install'];
@@ -71,7 +78,6 @@ function deriveRequirements(project, previous = project.requirements, generatedA
   }
   const missingEnvironment = project.workspace?.readiness?.missingEnvironment || [];
   if (missingEnvironment.length) candidates.push({ id: stableId('CONFIGURE_ENVIRONMENT'), type: 'CONFIGURE_ENVIRONMENT', status: 'pending', severity: 'blocking', actionMode: 'manual', targetId: null, relativePath: '.', detail: { count: missingEnvironment.length, names: missingEnvironment.slice(0, 100) } });
-  if (project.workspace?.readiness?.recommendations?.includes('REVIEW_PREVIEW')) candidates.push({ id: stableId('REVIEW_PREVIEW'), type: 'REVIEW_PREVIEW', status: 'pending', severity: 'advisory', actionMode: 'manual', targetId: project.primaryTargetId || null, relativePath: targetFor(project, project.primaryTargetId)?.relativePath || '.', detail: {} });
   if (project.workspace?.readiness?.recommendations?.includes('REVIEW_PARTIAL_SCAN')) candidates.push({ id: stableId('REVIEW_PARTIAL_SCAN'), type: 'REVIEW_PARTIAL_SCAN', status: 'pending', severity: 'advisory', actionMode: 'metadata', targetId: null, relativePath: '.', detail: {} });
   if (project.workspace?.readiness?.recommendations?.includes('CONFIRM_PROJECT_ROOT') && !project.onboarding?.acknowledgedLowConfidence) candidates.push({ id: stableId('CONFIRM_PROJECT_ROOT'), type: 'CONFIRM_PROJECT_ROOT', status: 'pending', severity: 'blocking', actionMode: 'metadata', targetId: null, relativePath: '.', detail: {} });
 
@@ -185,7 +191,6 @@ function installDescriptor(project, item) {
 function descriptorFor(project, item) {
   if (item.type === 'INSTALL_DEPENDENCIES') return installDescriptor(project, item);
   if (item.type === 'CONFIGURE_ENVIRONMENT') return { supported: false, actionType: 'MANUAL_ENVIRONMENT_SETUP', display: { names: item.detail.names }, effects: { projectFilesMayChange: true, dependencyDirectoryMayChange: false, temporaryCacheMayChange: false, networkAccess: false, projectCodeMayExecute: false, appMetadataChanges: false }, reversible: 'manual', warning: 'SECRET_VALUES_STAY_USER_OWNED' };
-  if (item.type === 'REVIEW_PREVIEW') return { supported: false, actionType: 'OPEN_PREVIEW', destination: 'preview', display: {}, effects: { projectFilesMayChange: false, dependencyDirectoryMayChange: false, temporaryCacheMayChange: false, networkAccess: false, projectCodeMayExecute: true, appMetadataChanges: false }, reversible: 'not-applicable', warning: 'PROJECT_CODE_REQUIRES_SEPARATE_START' };
   return { supported: true, actionType: 'ACKNOWLEDGE_REQUIREMENT', display: {}, effects: { projectFilesMayChange: false, dependencyDirectoryMayChange: false, temporaryCacheMayChange: false, networkAccess: false, projectCodeMayExecute: false, appMetadataChanges: true }, reversible: 'yes', warning: null };
 }
 

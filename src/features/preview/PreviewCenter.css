@@ -36,6 +36,8 @@
 .preview-empty-icon { width: 52px; height: 52px; display: grid; place-items: center; margin: 0 auto var(--vc-space-4); border: 1px solid var(--vc-line); border-radius: var(--vc-radius-xl); color: var(--vc-accent); background: var(--accent-gradient-soft); }
 .preview-empty-icon svg { width: 23px; }.preview-empty-icon.is-busy { animation: preview-pulse 1.2s infinite; }
 .preview-empty h2 { font-size: var(--vc-text-lg); margin-bottom: 6px; }.preview-empty p { color: var(--vc-text-2); font-size: var(--vc-text-xs); }
+/* El comando que hay que escribir se muestra como comando, no como prosa. */
+.preview-empty-command { display: inline-block; margin-top: var(--vc-space-4); padding: var(--vc-space-2) var(--vc-space-3); border: 1px solid var(--vc-line); border-radius: var(--vc-radius-md); background: var(--vc-surface-2); color: var(--vc-text-1); font-family: var(--vc-font-mono); font-size: var(--vc-text-xs); user-select: all; }
 .android-workspace { gap: var(--vc-space-3); overflow: auto; padding-top: var(--vc-space-6); }
 .android-device-card, .android-run-card { border: 1px solid var(--vc-line); border-radius: var(--vc-radius-xl); background: linear-gradient(135deg, var(--vc-surface-2), transparent), var(--vc-surface-3); }
 .android-device-card { display: grid; grid-template-columns: 94px 1fr auto; gap: var(--vc-space-6); align-items: center; padding: var(--vc-space-6); }

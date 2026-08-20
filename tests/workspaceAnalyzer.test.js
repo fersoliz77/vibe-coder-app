@@ -15,6 +15,47 @@ function write(root, relativePath, content) {
   fs.writeFileSync(target, content);
 }
 
+/*
+ * Esto antes salia como "sin vista previa administrada" y generaba un pendiente
+ * que el alumno no podia completar. Ahora el analisis contesta como se levanta
+ * cada proyecto, y cuando no lo puede levantar Vibe dice el comando real.
+ */
+test('the analysis answers how each project is started', async () => {
+  const cases = [
+    ['pagina', { 'index.html': '<html><body><h1>Hola</h1></body></html>' }, { mode: 'managed-static', runtime: 'static', command: null }],
+    ['next', { 'package.json': JSON.stringify({ name: 'n', scripts: { dev: 'next dev --turbopack' }, dependencies: { next: '15.0.0' } }) }, { mode: 'managed-npm', runtime: 'next', command: ['npm', 'run', 'dev'] }],
+    ['cra', { 'package.json': JSON.stringify({ name: 'c', scripts: { start: 'react-scripts start' }, dependencies: { 'react-scripts': '5.0.0' } }) }, { mode: 'managed-npm', runtime: 'react-scripts', command: ['npm', 'run', 'start'] }],
+    ['pos', { 'package.json': JSON.stringify({ name: 'p', scripts: { start: 'node server.mjs' }, dependencies: { express: '4.0.0' } }), 'server.mjs': 'http.createServer()' }, { mode: 'manual', runtime: null, command: ['npm', 'run', 'start'] }],
+  ];
+  for (const [name, files, expected] of cases) {
+    const root = fixture();
+    try {
+      for (const [file, content] of Object.entries(files)) write(root, file, content);
+      const result = await analyzeWorkspace(root);
+      const launch = result.readiness.launch;
+      assert.equal(launch.mode, expected.mode, name);
+      assert.equal(launch.runtime, expected.runtime, name);
+      assert.deepEqual(launch.command, expected.command, name);
+      /* Ninguno de estos casos deja un pendiente que no se pueda completar. */
+      assert.equal(result.readiness.recommendations.includes('REVIEW_PREVIEW'), false, name);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  }
+});
+
+test('a plain HTML page is a project Vibe can show, not an unusable folder', async () => {
+  const root = fixture();
+  try {
+    write(root, 'index.html', '<html><body><h1>Mi primera pagina</h1></body></html>');
+    write(root, 'estilos.css', 'body { color: red; }');
+    const result = await analyzeWorkspace(root);
+    assert.equal(result.projectAssessment.classification, 'project');
+    assert.equal(result.targets[0].capabilities.webPreview, true);
+    assert.equal(result.readiness.status, 'ready');
+    assert.deepEqual(result.readiness.recommendations, []);
+    assert.deepEqual(result.products.map((product) => product.platforms), [['web']]);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
 test('detects multiple web and Flutter applications without executing project code', async () => {
   const root = fixture();
   try {

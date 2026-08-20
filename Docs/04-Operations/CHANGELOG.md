@@ -4,6 +4,8 @@
 
 ### Added
 
+- Preview for a folder that only holds `index.html`: Vibe serves it itself, without running any project code, which is the first project almost every student writes.
+- A plain answer to how a project starts. When Vibe cannot start it, the real command from the project's own manifest is shown instead of a message about a missing managed profile.
 - Recognition that a folder holds several unrelated projects rather than one, so choosing the wrong folder says so instead of offering to open fifteen products as if they were parts of one.
 - Jupyter notebooks, R, Arduino and Astro sources are recognised as projects.
 - File-level stack detection, so a project is read even with no declared dependencies: language from its sources, web from an `index.html`, backend from an entry point that starts a server, and databases from schema, migration, and SQLite files.
@@ -60,6 +62,10 @@
 
 ### Fixed
 
+- Preview no longer requires the development script to read exactly `vite` or `next dev`. The script is now read as a command, so `next dev --turbopack` (what `create-next-app` generates today), `vite --host`, Create React App, Astro, Nuxt, Angular, SvelteKit, Vue CLI, Gatsby, Remix, webpack and Parcel all start from the same button. Chained scripts are still refused, because there is no way to know which command the added arguments would reach.
+- A project Vibe cannot start on its own no longer becomes a requirement that can never be completed. Its action declared itself unsupported, so the review button led nowhere while the sidebar kept a badge the student could not clear.
+- Repository and deployment are no longer shown as pending on a project that was opened from disk and never provisioned. A local point-of-sale application owed nobody a GitHub link.
+- Preview failures now say what happened in the student's own language -- libraries not installed, port already taken, code that does not compile -- instead of forwarding a raw npm line or one generic retry message.
 - A project deduced only from loose source files is now reported as code rather than as a backend. A first Java class or C exercise was being described with an architecture nobody wrote.
 - A skipped symbolic link no longer counts as an incomplete analysis. Opening an ordinary Windows user folder produces dozens of them, and each one downgraded readiness and showed a partial-analysis warning when nothing had been missed.
 - The native platform folders Flutter and React Native generate are no longer read as separate applications. A single Flutter app produced nine, and its generated `CMakeLists.txt` and `web/index.html` made it report backend and web platforms it does not have.

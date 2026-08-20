@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthContext';
 import ClaudeIcon from '../../components/icons/ClaudeIcon';
 import OpenCodeIcon from '../../components/icons/OpenCodeIcon';
 import { useI18n } from '../../i18n/I18nContext';
+import { describeLaunch } from '../../utils/previewLaunch';
 import './Dashboard.css';
 
 const INITIAL_WEB = { available: null, state: 'loading', issues: [], diagnostics: { status: 'idle' }, sync: { history: [] }, activity: [] };
@@ -119,7 +120,16 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const deliveryState = vercel?.checking ? 'loading' : vercel?.connected && vercel?.projectLinked === true ? 'ready' : 'attention';
   const issueCount = Array.isArray(web.issues) ? web.issues.length : 0;
   const previewHasProblems = web.state === 'stopped' || web.state === 'error' || issueCount > 0 || web.diagnostics?.status === 'error';
-  const deliveryNeedsSetup = deliveryState === 'attention';
+  /*
+   * Un proyecto que el alumno abrio de su disco nunca se aprovisiono: no tiene
+   * repositorio ni despliegue porque nadie se los creo. Mostrarlos igual, con
+   * la palabra "pendiente" al lado, le hacia creer que debia algo. Solo se
+   * muestran si Vibe los creo, o si de verdad hay algo vinculado.
+   */
+  const provisionedByVibe = Boolean(currentProject) && currentProject.origin !== 'imported';
+  const showRepository = provisionedByVibe || Boolean(github?.project);
+  const showDelivery = provisionedByVibe || Boolean(vercel?.project);
+  const deliveryNeedsSetup = showDelivery && deliveryState === 'attention';
   const pendingRequirements = (currentProject?.requirements?.items || []).filter((item) => item.status === 'pending');
   /*
    * Capa basica y capa completa.
@@ -181,6 +191,8 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
   const repositoryVisibility = currentProject?.repositoryVisibility === 'private'
     ? t('dashboard.privateVisibility')
     : t('dashboard.visibilityUnavailable');
+  /* Lo que si aplica a cualquier proyecto: con que se levanta. */
+  const launchSummary = describeLaunch(web.launch, t);
 
   return (
     <div className="dashboard">
@@ -224,8 +236,9 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                   <article><span>{t('dashboard.projectType')}</span><strong>{projectType}</strong><small>{projectStack}</small></article>
                   {workspaceTargets.length > 0 && <article><span>{t('dashboard.projectTargets')}</span><strong>{t('dashboard.targetCount', { count: workspaceTargets.length })}</strong><small>{workspaceTargets.map((target) => target.name).join(' · ')}</small></article>}
                   <article><span>{t('dashboard.projectBackend')}</span><strong>{currentProject.backend ? currentProject.backend[0].toUpperCase() + currentProject.backend.slice(1) : t('dashboard.notConfigured')}</strong><small>{backendService?.project || (backendService?.projectLinked ? t('dashboard.linkedProject') : t('dashboard.linkPending'))}</small></article>
-                  <article><span>{t('dashboard.projectRepository')}</span><strong>{github?.project || t('dashboard.linkPending')}</strong><small>{repositoryVisibility}</small></article>
-                  <article><span>{t('dashboard.projectDelivery')}</span><strong>{vercel?.project || t('dashboard.linkPending')}</strong><small>{vercel?.projectLinked ? t('dashboard.vercelLinked') : t('dashboard.vercelPending')}</small></article>
+                  <article><span>{t('dashboard.projectLaunch')}</span><strong>{launchSummary.title}</strong><small>{launchSummary.command ? `${t('dashboard.launchCommandLabel')}: ${launchSummary.command}` : launchSummary.detail}</small></article>
+                  {showRepository && <article><span>{t('dashboard.projectRepository')}</span><strong>{github?.project || t('dashboard.linkPending')}</strong><small>{repositoryVisibility}</small></article>}
+                  {showDelivery && <article><span>{t('dashboard.projectDelivery')}</span><strong>{vercel?.project || t('dashboard.linkPending')}</strong><small>{vercel?.projectLinked ? t('dashboard.vercelLinked') : t('dashboard.vercelPending')}</small></article>}
                   <article><span>{t('dashboard.projectGit')}</span><strong>{gitService?.project || t('dashboard.notConfigured')}</strong><small>{git.state === 'ready' && git.entries.length ? t('dashboard.changeCount', { count: git.entries.length }) : git.state === 'ready' ? t('dashboard.clean') : t('dashboard.statusUnavailable')}</small></article>
                   <article><span>{currentProject.origin === 'imported' ? t('dashboard.projectRegistered') : t('dashboard.projectDates')}</span><strong>{currentProject.registeredAt || currentProject.createdAt ? formatDate(currentProject.registeredAt || currentProject.createdAt, { dateStyle: 'medium' }) : t('dashboard.statusUnavailable')}</strong><small>{currentProject.lastOpened ? t('dashboard.lastOpened', { date: formatDate(currentProject.lastOpened, { dateStyle: 'medium', timeStyle: 'short' }) }) : t('dashboard.lastOpenedUnavailable')}</small></article>
                   <article className="project-details__path"><span>{t('dashboard.projectLocation')}</span><strong title={currentProject.path}>{currentProject.path}</strong></article>
@@ -236,7 +249,7 @@ export default function Dashboard({ services, onOpenTerminal, onOpenClaude, onOp
                 <button type="button" onClick={onOpenPreview} className={`health-item is-${previewHasProblems ? 'attention' : web.state === 'ready' ? 'ready' : 'neutral'}`}><span>{t('dashboard.previewHealth')}</span><strong>{issueCount ? t('dashboard.issueCount', { count: issueCount }) : statusLabel(web.state, 'webStates')}</strong></button>
                 <button type="button" onClick={onOpenFiles} className={`health-item is-${git.state === 'ready' && !git.entries.length ? 'ready' : git.state === 'ready' ? 'attention' : 'neutral'}`}><span>{t('dashboard.gitHealth')}</span><strong>{git.state === 'loading' ? t('dashboard.checking') : git.state === 'unavailable' ? t('dashboard.statusUnavailable') : git.entries.length ? t('dashboard.changeCount', { count: git.entries.length }) : t('dashboard.clean')}</strong></button>
                 <button type="button" onClick={revealServices} className="health-item"><span>{t('dashboard.servicesHealth')}</span><strong>{t('dashboard.connectedCount', { connected: connectedCount, total: serviceList.length })}</strong></button>
-                <button type="button" onClick={revealServices} className={`health-item is-${deliveryState}`}><span>{t('dashboard.deliveryHealth')}</span><strong>{deliveryState === 'loading' ? t('dashboard.checking') : deliveryState === 'ready' ? t('dashboard.deliveryReady') : t('dashboard.deliveryNotReady')}</strong></button>
+                {showDelivery && <button type="button" onClick={revealServices} className={`health-item is-${deliveryState}`}><span>{t('dashboard.deliveryHealth')}</span><strong>{deliveryState === 'loading' ? t('dashboard.checking') : deliveryState === 'ready' ? t('dashboard.deliveryReady') : t('dashboard.deliveryNotReady')}</strong></button>}
               </section>}
 
               <div className="dashboard__outcome-grid">

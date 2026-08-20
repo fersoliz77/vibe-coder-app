@@ -494,3 +494,83 @@ Object.assign(dictionaries.en.dashboard, { projectRegistered: 'Imported' });
 Object.assign(dictionaries.es.dashboard, { projectRegistered: 'Importado' });
 Object.assign(dictionaries.en.updates, { evaluatingMode: 'Checking whether this update can reuse files already on your PC...', differentialMode: 'Optimized update · approximately {{saved}} of the full installer reused', fullMode: 'Full installer download required', fullFallbackMode: 'Full download required because the optimized update was unavailable', calculating: 'calculating' });
 Object.assign(dictionaries.es.updates, { evaluatingMode: 'Comprobando si esta actualización puede reutilizar archivos que ya están en tu PC...', differentialMode: 'Actualización optimizada · se reutilizan aproximadamente {{saved}} del instalador completo', fullMode: 'Se requiere descargar el instalador completo', fullFallbackMode: 'Se requiere la descarga completa porque la actualización optimizada no estuvo disponible', calculating: 'calculando' });
+
+/*
+ * Como se levanta un proyecto, contado sin jerga. Un alumno no sabe que es un
+ * "perfil administrado"; si sabe leer "Vibe lo inicia solo" o "escribi esto en
+ * la terminal".
+ */
+Object.assign(dictionaries.en, { launch: {
+  managed: 'Vibe starts it for you',
+  managedCopy: 'Detected {{runtime}}. Press Start preview and it opens right here.',
+  managedStatic: 'Vibe starts it for you',
+  managedStaticCopy: 'It is a web page. Vibe serves it directly, without running any project code.',
+  managedAndroid: 'Vibe starts it for you',
+  managedAndroidCopy: 'Open Preview, start the Android device and run the app.',
+  manual: 'You start it from the terminal',
+  manualCopy: 'Vibe cannot start this project on its own. Open the Terminal and run:',
+  none: 'There is nothing to start yet',
+  reasons: {
+    NO_MANIFEST: 'This folder has no page and no start command, so there is nothing to show yet.',
+    NO_START_SCRIPT: 'The package.json does not define a start command.',
+    SCRIPT_NOT_RECOGNIZED: 'The start command is not one Vibe knows how to drive.',
+    SCRIPT_NOT_SINGLE_COMMAND: 'The start command chains several commands, so Vibe cannot drive it safely.',
+  },
+} });
+Object.assign(dictionaries.es, { launch: {
+  managed: 'Vibe lo inicia solo',
+  managedCopy: 'Detectamos {{runtime}}. Apretá Iniciar vista previa y se abre acá mismo.',
+  managedStatic: 'Vibe lo inicia solo',
+  managedStaticCopy: 'Es una página web. Vibe la muestra directamente, sin ejecutar código del proyecto.',
+  managedAndroid: 'Vibe lo inicia solo',
+  managedAndroidCopy: 'Entrá a Vista previa, iniciá el dispositivo Android y ejecutá la app.',
+  manual: 'Lo iniciás vos desde la terminal',
+  manualCopy: 'Vibe no puede iniciar este proyecto solo. Abrí la Terminal y escribí:',
+  none: 'Todavía no hay nada para iniciar',
+  reasons: {
+    NO_MANIFEST: 'Esta carpeta no tiene una página ni un comando de inicio, así que todavía no hay nada para mostrar.',
+    NO_START_SCRIPT: 'El package.json no define un comando de inicio.',
+    SCRIPT_NOT_RECOGNIZED: 'El comando de inicio no es uno que Vibe sepa manejar.',
+    SCRIPT_NOT_SINGLE_COMMAND: 'El comando de inicio encadena varios comandos, así que Vibe no puede manejarlo con seguridad.',
+  },
+} });
+
+/*
+ * Cada fallo de la vista previa dice que paso y que hacer. Antes llegaba el
+ * texto crudo de npm, en ingles, dentro de un mensaje generico.
+ */
+Object.assign(dictionaries.en.preview, { errors: {
+  PREVIEW_NO_WEB_TARGET: 'No web page or application was found in this folder.',
+  PREVIEW_BUSY_OTHER_PROJECT: 'A preview is already running for another project. Stop that one first.',
+  PREVIEW_NO_MANIFEST: 'This folder has no page and no start command, so there is nothing to preview.',
+  PREVIEW_NO_START_SCRIPT: 'This project does not define a start command in its package.json.',
+  PREVIEW_SCRIPT_NOT_RECOGNIZED: 'Vibe cannot start this project on its own. Open the Terminal and start it from there.',
+  PREVIEW_SCRIPT_NOT_SINGLE_COMMAND: 'The start command chains several commands, so Vibe cannot drive it safely. Start it from the Terminal.',
+  PREVIEW_DEPENDENCIES_MISSING: 'The project libraries are not installed yet. Install the dependencies and try again.',
+  PREVIEW_NPM_MISSING: 'Node.js could not be found on this computer. Install it from Setup Center.',
+  PREVIEW_PORT_BUSY: 'Port 4173 is already in use by another program. Close it and try again.',
+  PREVIEW_STATIC_UNAVAILABLE: 'The preview server could not be started on this computer.',
+  PREVIEW_TIMEOUT: 'The project took too long to respond. Check the runtime logs.',
+  PREVIEW_CODE_ERROR: 'The project has an error and could not compile. The runtime logs say which file.',
+  PREVIEW_EXITED: 'The project stopped on its own. Check the runtime logs.',
+  PREVIEW_NOT_READY: 'The preview is not running yet.',
+} });
+Object.assign(dictionaries.es.preview, { errors: {
+  PREVIEW_NO_WEB_TARGET: 'No encontramos una página ni una aplicación web en esta carpeta.',
+  PREVIEW_BUSY_OTHER_PROJECT: 'Ya hay una vista previa corriendo para otro proyecto. Detené esa primero.',
+  PREVIEW_NO_MANIFEST: 'Esta carpeta no tiene una página ni un comando de inicio, así que no hay nada para mostrar.',
+  PREVIEW_NO_START_SCRIPT: 'Este proyecto no define un comando de inicio en su package.json.',
+  PREVIEW_SCRIPT_NOT_RECOGNIZED: 'Vibe no puede iniciar este proyecto solo. Abrí la Terminal e iniciálo desde ahí.',
+  PREVIEW_SCRIPT_NOT_SINGLE_COMMAND: 'El comando de inicio encadena varios comandos y Vibe no puede manejarlo con seguridad. Iniciálo desde la Terminal.',
+  PREVIEW_DEPENDENCIES_MISSING: 'Todavía no están instaladas las librerías del proyecto. Instalá las dependencias y probá de nuevo.',
+  PREVIEW_NPM_MISSING: 'No encontramos Node.js en esta computadora. Instalálo desde el Centro de instalación.',
+  PREVIEW_PORT_BUSY: 'El puerto 4173 ya lo está usando otro programa. Cerrálo y probá de nuevo.',
+  PREVIEW_STATIC_UNAVAILABLE: 'No se pudo iniciar el servidor de vista previa en esta computadora.',
+  PREVIEW_TIMEOUT: 'El proyecto tardó demasiado en responder. Mirá los registros de ejecución.',
+  PREVIEW_CODE_ERROR: 'El proyecto tiene un error y no pudo compilar. Los registros de ejecución dicen en qué archivo.',
+  PREVIEW_EXITED: 'El proyecto se detuvo solo. Mirá los registros de ejecución.',
+  PREVIEW_NOT_READY: 'La vista previa todavía no está corriendo.',
+} });
+
+Object.assign(dictionaries.en.dashboard, { projectLaunch: 'How it starts', launchCommandLabel: 'Terminal command' });
+Object.assign(dictionaries.es.dashboard, { projectLaunch: 'Cómo se levanta', launchCommandLabel: 'Comando de terminal' });
