@@ -74,6 +74,7 @@ export default function PreviewCenter({ project }) {
     return () => { cancelled = true; offWeb?.(); offAndroid?.(); offLog?.(); };
   }, [api, project.path]);
 
+  const staticSyncedAt = web.launch?.runtime === 'static' ? web.sync?.lastSyncAt : null;
   useEffect(() => { if (logsOpen) logsEnd.current?.scrollIntoView({ block: 'nearest' }); }, [logs, logsOpen]);
   useEffect(() => { if (staticSyncedAt) setFrameKey((key) => key + 1); }, [staticSyncedAt]);
 
@@ -92,7 +93,6 @@ export default function PreviewCenter({ project }) {
    * confirma el cambio se vuelve a montar, y el alumno ve lo que acaba de
    * escribir sin apretar nada.
    */
-  const staticSyncedAt = web.launch?.runtime === 'static' ? web.sync?.lastSyncAt : null;
   const unavailable = !web.available && web.state !== 'loading';
   const webBusy = ['starting', 'stopping'].includes(web.state);
   const emulatorBusy = ['starting', 'stopping'].includes(android.emulatorState);

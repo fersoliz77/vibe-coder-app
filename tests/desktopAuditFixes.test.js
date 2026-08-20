@@ -84,3 +84,10 @@ test('navigation accessibility and lazy loading contracts are present', () => {
   assert.match(source('src/App.jsx'), /lazy\(\(\) => import/);
   assert.doesNotMatch(source('src/App.jsx'), /Preload OpenCode in background/);
 });
+
+test('preview declares static sync state before using it in a hook dependency', () => {
+  const preview = source('src/features/preview/PreviewCenter.jsx');
+  const declaration = preview.indexOf('const staticSyncedAt =');
+  const dependency = preview.indexOf('}, [staticSyncedAt]);');
+  assert.ok(declaration >= 0 && dependency > declaration);
+});
