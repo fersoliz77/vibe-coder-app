@@ -74,7 +74,15 @@ jobs:
       - name: Run the full local gate
         run: npm run check
 
+      # Empaquetar en cada push gastaba minutos de Windows sin agregar
+      # informacion: `npm run check` ya compila la aplicacion, y el instalador
+      # de verdad lo arma el workflow de release. Lo unico que este paso agrega
+      # es comprobar la configuracion de electron-builder, y eso solo importa
+      # cuando efectivamente se va a publicar algo.
+      #
+      # Los tests y todas las compuertas siguen corriendo en cada push.
       - name: Build unpacked non-deployable Windows CI smoke artifact
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         run: npm run package:dir
 
       # Este es el que llena la cuota: `dist-electron/` es la app desempaquetada
@@ -86,6 +94,7 @@ jobs:
       # una corrida puntual, asi que baja a dos dias y deja de subir la app
       # desempaquetada: con `dist/` alcanza para mirar que se genero.
       - name: Upload non-deployable Windows smoke build
+        if: ${{ startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
