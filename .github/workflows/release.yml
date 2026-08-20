@@ -10,6 +10,14 @@ on:
         description: Existing vX.Y.Z tag to publish
         required: true
         type: string
+      runner:
+        description: Release execution runner
+        required: true
+        default: github-hosted
+        type: choice
+        options:
+          - github-hosted
+          - self-hosted
 
 permissions:
   contents: write
@@ -20,7 +28,7 @@ concurrency:
 
 jobs:
   publish:
-    runs-on: windows-latest
+    runs-on: ${{ github.event_name == 'workflow_dispatch' && inputs.runner == 'self-hosted' && fromJSON('["self-hosted","Windows","X64"]') || 'windows-latest' }}
     timeout-minutes: 50
     environment: production
     env:
