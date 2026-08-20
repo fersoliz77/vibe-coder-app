@@ -36,6 +36,11 @@ function isInside(root, candidate) {
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
 }
 
+function containsPrivatePath(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative.split(path.sep).some((segment) => segment.startsWith('.'));
+}
+
 /**
  * Traduce la URL pedida a un archivo real dentro de la carpeta, o `null`.
  *
@@ -49,6 +54,8 @@ function resolveStaticFile(root, requestUrl, { statSync = fs.lstatSync, realpath
   if (!decoded || decoded.includes('\0')) return null;
   const candidate = path.resolve(rootReal, decoded.replace(/^[/\\]+/, ''));
   if (!isInside(rootReal, candidate)) return null;
+  /* El navegador no necesita secretos, metadatos de Git ni artefactos de Vibe. */
+  if (containsPrivatePath(rootReal, candidate)) return null;
   if (!existsSync(candidate)) return null;
   let stats;
   try { stats = statSync(candidate); } catch { return null; }

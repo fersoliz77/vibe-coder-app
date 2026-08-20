@@ -58,6 +58,8 @@ test('web development scripts are recognised with their arguments, not by exact 
   assert.equal(classifyWebScript({ scripts: { dev: 'cross-env NODE_ENV=development vite --port 3000' } }), 'vite');
   assert.equal(classifyWebScript({ scripts: { start: 'react-scripts start' } }), 'react-scripts');
   assert.equal(classifyWebScript({ scripts: { dev: 'npm run serve:web', 'serve:web': 'astro dev' } }), 'astro');
+  assert.deepEqual(buildWebDevArgs({ scripts: { dev: 'npm run serve:web', 'serve:web': 'astro dev' } }), ['run', 'dev', '--', '--', '--host', '127.0.0.1', '--port', '4173']);
+  assert.deepEqual(buildWebDevArgs({ scripts: { dev: 'npm run serve:web', 'serve:web': 'npm run astro', astro: 'astro dev' } }), ['run', 'dev', '--', '--', '--', '--host', '127.0.0.1', '--port', '4173']);
   /* Lo que se sigue rechazando. */
   assert.equal(classifyWebScript({ scripts: { dev: 'node tools/dev.js' } }), null);
   assert.equal(classifyWebScript({ scripts: { dev: 'echo vite' } }), null);
@@ -104,10 +106,16 @@ test('the static preview server never leaves the project folder', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-static-'));
   try {
     fs.writeFileSync(path.join(root, 'index.html'), '<html></html>');
+    fs.writeFileSync(path.join(root, '.env'), 'PRIVATE_TOKEN=secret');
+    fs.mkdirSync(path.join(root, '.git'));
+    fs.writeFileSync(path.join(root, '.git', 'config'), '[remote "origin"]');
     fs.mkdirSync(path.join(root, 'assets'));
     fs.writeFileSync(path.join(root, 'assets', 'app.css'), 'body{}');
     assert.equal(resolveStaticFile(root, '/'), path.join(root, 'index.html'));
     assert.equal(resolveStaticFile(root, '/assets/app.css'), path.join(root, 'assets', 'app.css'));
+    assert.equal(resolveStaticFile(root, '/.env'), null);
+    assert.equal(resolveStaticFile(root, '/%2eenv'), null);
+    assert.equal(resolveStaticFile(root, '/.git/config'), null);
     assert.equal(resolveStaticFile(root, '/../../secret.txt'), null);
     assert.equal(resolveStaticFile(root, '/%2e%2e/%2e%2e/secret.txt'), null);
     assert.equal(resolveStaticFile(root, '/missing.html'), null);
@@ -181,6 +189,21 @@ test('mobile-suite targets prefer web/ and require mobile/pubspec.yaml', () => {
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
+});
+
+test('a nested primary target keeps its manual launch information at runtime', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vibe-preview-manual-'));
+  try {
+    const nested = path.join(root, 'apps', 'api');
+    fs.mkdirSync(nested, { recursive: true });
+    fs.writeFileSync(path.join(nested, 'package.json'), JSON.stringify({ scripts: { start: 'node server.mjs' } }));
+    const projects = [{
+      path: root,
+      primaryTargetId: 'api',
+      workspace: { targets: [{ id: 'api', relativePath: 'apps/api', capabilities: { webPreview: false }, launch: { mode: 'manual' } }] },
+    }];
+    assert.equal(detectProjectTargets(root, projects).webCwd, nested);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 
 test('preview logs remove terminal controls, project paths, and excessive output', () => {

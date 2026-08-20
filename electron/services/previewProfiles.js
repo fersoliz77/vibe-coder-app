@@ -122,7 +122,7 @@ function resolveScriptTokens(scripts, name, depth = 0) {
   if (['npm', 'pnpm', 'yarn', 'bun'].includes(head) && stripped[1] === 'run' && stripped[2]) {
     return resolveScriptTokens(scripts, stripped[2], depth + 1);
   }
-  return stripped;
+  return { tokens: stripped, delegationDepth: depth };
 }
 
 /**
@@ -135,10 +135,10 @@ function findManagedScript(packageJson) {
   if (!scripts || typeof scripts !== 'object') return null;
   for (const name of SCRIPT_PREFERENCE) {
     if (typeof scripts[name] !== 'string') continue;
-    const tokens = resolveScriptTokens(scripts, name);
-    if (!tokens) continue;
-    const runtime = matchRuntime(tokens);
-    if (runtime) return { script: name, runtime, tokens };
+    const resolved = resolveScriptTokens(scripts, name);
+    if (!resolved) continue;
+    const runtime = matchRuntime(resolved.tokens);
+    if (runtime) return { script: name, runtime, tokens: resolved.tokens, delegationDepth: resolved.delegationDepth };
   }
   return null;
 }
@@ -178,11 +178,12 @@ function planWebLaunch({ packageJson = null, dependenciesInstalled = false, inde
   const managed = findManagedScript(packageJson);
   if (managed) {
     const extra = managed.runtime.args(host, port);
+    const delegationSeparators = Array(managed.delegationDepth).fill('--');
     return {
       mode: 'managed-npm',
       runtime: managed.runtime.id,
       script: managed.script,
-      npmArgs: extra.length ? ['run', managed.script, '--', ...extra] : ['run', managed.script],
+      npmArgs: extra.length ? ['run', managed.script, '--', ...delegationSeparators, ...extra] : ['run', managed.script],
       usesEnvironmentPort: ENV_PORT_RUNTIMES.has(managed.runtime.id),
       manualCommand: ['npm', 'run', managed.script],
       dependenciesInstalled,

@@ -129,12 +129,13 @@ function readJson(filePath) {
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
 }
 
-function detectProjectTargets(projectCwd) {
+function detectProjectTargets(projectCwd, projects = getProjects()) {
   const root = path.resolve(projectCwd);
-  const project = getProjects().find((entry) => path.resolve(entry.path) === root);
+  const project = projects.find((entry) => path.resolve(entry.path) === root);
   const detectedTargets = Array.isArray(project?.workspace?.targets) ? project.workspace.targets : [];
   const primary = detectedTargets.find((target) => target.id === project?.primaryTargetId);
-  const firstWeb = [primary, ...detectedTargets].find((target) => target?.capabilities?.webPreview);
+  const firstWeb = [primary, ...detectedTargets].find((target) => target?.capabilities?.webPreview
+    || ['managed-npm', 'managed-static', 'manual'].includes(target?.launch?.mode));
   const firstMobile = [primary, ...detectedTargets].find((target) => target?.kind === 'flutter' && target?.capabilities?.androidPreview);
   const resolveDetected = (target) => target && target.relativePath
     ? path.resolve(root, target.relativePath === '.' ? '' : target.relativePath)
