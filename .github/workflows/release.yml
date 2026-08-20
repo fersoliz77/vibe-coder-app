@@ -49,7 +49,7 @@ jobs:
           cache: npm
 
       - name: Validate release identity and secrets
-        shell: pwsh
+        shell: powershell
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref_name }}
         run: |
@@ -62,7 +62,7 @@ jobs:
           "RELEASE_VERSION=$($package.version)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Validate release secrets
-        shell: pwsh
+        shell: powershell
         env:
           VIBE_SUPABASE_URL: ${{ secrets.VIBE_SUPABASE_URL }}
           VIBE_SUPABASE_ANON_KEY: ${{ secrets.VIBE_SUPABASE_ANON_KEY }}
@@ -92,14 +92,14 @@ jobs:
         run: npm run release:sign-update
 
       - name: Verify installer structure
-        shell: pwsh
+        shell: powershell
         run: |
           $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $application = 'dist-electron/win-unpacked/Vibe IDE Code.exe'
           npm run release:verify-installer -- "$installer" "$application"
 
       - name: Generate and validate release evidence
-        shell: pwsh
+        shell: powershell
         env:
           VIBE_SUPABASE_URL: ${{ secrets.VIBE_SUPABASE_URL }}
         run: |
@@ -118,7 +118,7 @@ jobs:
 
       - name: Record release evidence
         if: ${{ !cancelled() }}
-        shell: pwsh
+        shell: powershell
         run: |
           $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
           $blockmap = "$installer.blockmap"
