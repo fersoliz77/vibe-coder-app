@@ -76,6 +76,9 @@ jobs:
       - name: Install locked dependencies
         run: npm ci
 
+      - name: Ensure Electron binary is installed
+        run: node node_modules/electron/install.js
+
       - name: Run complete quality gate
         run: npm run check
 
@@ -117,7 +120,7 @@ jobs:
         run: npm run release:publish
 
       - name: Record release evidence
-        if: ${{ !cancelled() }}
+        if: ${{ success() }}
         shell: powershell
         run: |
           $installer = "dist-electron/Vibe-IDE-Code-Setup-$env:RELEASE_VERSION.exe"
